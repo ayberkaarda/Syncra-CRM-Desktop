@@ -481,6 +481,24 @@ Aşağıdaki tüm uçlar (aksi belirtilmedikçe) `auth:sanctum` + `EnsureUserIsA
 | `PATCH /api/saved-views/{savedView}` | Kayıtlı görünümü günceller. | Yalnızca görünümün SAHİBİ (`is_shared` bunu değiştirmez) | — |
 | `DELETE /api/saved-views/{savedView}` | Kayıtlı görünümü siler. | Yalnızca görünümün SAHİBİ | — |
 
+#### Masaüstü Senkronizasyonu (Faz F1 — cihaz belirteci + delta senkron)
+
+Bağlayıcı sözleşme: `docs/DESKTOP-SYNC-PROTOCOL.md`. Masaüstü istemcisi SPA oturum çerezi ile değil, **bearer token** ile kimlik doğrular. SPA'nın kendi `/broadcasting/auth`'u değişmemiştir; masaüstü `/api/broadcasting/auth`'taki ikinci kaydı kullanır.
+
+| Metot + Yol | Ne yapar | Gereken izin | Not |
+| --- | --- | --- | --- |
+| `POST /api/auth/device` | Cihaz belirteci üretir (`desktop` ability, süresiz) | **Public** — auth zinciri yok | `throttle:login` ile aynı anahtarlı kilitleme (email+IP, 5/dk, 1→60 dk üstel). `device_fingerprint` başına tek token; eskisi silinir. Hatalar: `401 INVALID_CREDENTIALS`, `403 USER_INACTIVE`, `423 LOCKED_OUT` |
+| `GET /api/me/devices` | Çağıranın kendi cihazlarını listeler | izin gerekmez | `password.changed` grubunun İÇİNDE — şifre değiştirmek zorunda olan kullanıcı cihaz yönetemez |
+| `DELETE /api/me/devices/{token}` | Çağıranın kendi token'ını iptal eder | izin gerekmez | Başkasının token'ı için `404` |
+| `GET /api/sync/manifest` | Protokol sürümü, izinli tablolar, efektif izinler, politika sınırları | `desktop` ability + cihaz belirteci | `throttle:30,1,sync`. `.view` izni olmayan modül `tables`'ta hiç yoktur — anahtarı bile gönderilmez |
+| `POST /api/sync/pull` | `sync_version` ile keyset delta + tombstone'lar | `desktop` ability + cihaz belirteci | `throttle:30,1,sync`. Yanıt 5 MB'da `has_more=true` ile kesilir; `next_cursor` gönderilen SON satırda durur |
+| `POST /api/sync/push` | Mutasyon batch'ini mevcut Action/Service/Policy katmanından geçirerek uygular | `desktop` ability + cihaz belirteci | `throttle:20,1,sync-push`; batch ≤ 200 mutasyon, ≤ 2 MB. Kısmi `200` meşrudur: `results`'ta olmayan `seq` istemcide kuyrukta kalır |
+| `GET\|POST /api/broadcasting/auth` | Bearer ile kanal yetkilendirmesi | — | İkinci kayıt; SPA'nın `/broadcasting/auth`'una dokunulmadı |
+
+Sync route zinciri: `auth:sanctum` + `active` + `password.changed` + `ability:desktop` + `device.token`. Sonuncusu gereksiz değildir: Sanctum her cookie oturumuna `can()`'i koşulsuz `true` dönen bir `TransientToken` verir, dolayısıyla `ability:desktop` tek başına bir SPA oturumunu **dışarıda tutmaz**.
+
+Yeni hata kodları: `ONLINE_ONLY`, `UNRESOLVED_REFERENCE`, `FIELD_CONFLICT`, `RECORD_DELETED`, `PROTOCOL_VERSION_MISMATCH`, `PUSH_BATCH_TOO_LARGE`, `INVALID_MUTATION`, `ABILITY_REQUIRED`, `LOCKED_OUT`, `USER_INACTIVE`.
+
 ## ER Diyagramı
 
 Okunabilirlik için şema beş mantıksal gruba bölünmüştür (40+ tablonun tek diyagramda tüm kolonlarıyla gösterilmesi okunamaz bir sonuç üretir). Her varlık kutusunda yalnızca PK, FK'lar ve tabloyu tanımlayan 3-6 kolon gösterilir — tam kolon dökümü için `docs/DATABASE.md`. Gruplar arası FK'lar (ör. `deals.company_id → companies.id`) ilgili diyagramın altında düz metinle not edilir; `USERS` yalnızca ilişki çizmek gerektiğinde diğer diyagramlarda küçültülmüş (yalnızca `id`/`email`) hâliyle tekrarlanır — tam tanımı yalnızca Diyagram A'dadır.

@@ -603,6 +603,47 @@ Kolon dökümü gerekmez — Laravel'in kendi standart tabloları, hiçbiri iş 
 
 ---
 
+### 2.7 Senkronizasyon Altyapısı (masaüstü istemcisi)
+
+> Bağlayıcı sözleşme: `docs/DESKTOP-SYNC-PROTOCOL.md`. Bu bölüm yalnızca şemayı belgeler.
+
+#### Yeni tablolar
+
+| Tablo | Kolonlar | Not |
+|---|---|---|
+| `sync_counter` | `id TINYINT PK CHECK (id=1)`, `value BIGINT UNSIGNED` | Tek satırlı global monoton sayaç. `UPDATE sync_counter SET value = LAST_INSERT_ID(value+1)` ile atomik artar. Bu satırın kilidi tüm yazma yollarını serileştirir — **bu kasıtlıdır**: commit sırası = versiyon sırası garantisi, keyset cursor'ın satır atlamamasının ön koşuludur (protokol §2.4). |
+| `sync_deletions` | `id BIGINT UNSIGNED AI PK`, `table_name VARCHAR(64)`, `row_key VARCHAR(191)`, `sync_version BIGINT UNSIGNED`, `deleted_at TIMESTAMP`, index `(table_name, sync_version)` | Hard delete edilen satırların mezar taşları. Yalnız **dört** tablo yazar: `tags`, `notifications`, `conversation_user`, `price_list_items` (protokol §2.7 / P19). Üyelik testi: "tablo hard delete ediyor mu". |
+| `sync_idempotency` | `idempotency_key CHAR(36) PK`, `user_id BIGINT UNSIGNED FK`, `result_json JSON`, `created_at TIMESTAMP`, index `(user_id)`, `(created_at)` | Push mutasyonlarının tekrar tespiti; kayıtlı sonuç `duplicate` yanıtında aynen döner. |
+
+#### Mevcut tablolara eklenen kolonlar
+
+| Ekleme | Kapsam | Not |
+|---|---|---|
+| `sync_version BIGINT UNSIGNED NOT NULL DEFAULT 0` + `idx_<t>_sync_version` | **22 tablo** (13 RW + 9 RO) | Delta cursor'ı. `updated_at`'e dokunulmaz. Satır başına **tekil** olmak zorundadır (protokol §2.5) — aksi hâlde `LIMIT` sınırına denk gelen ikinci satır bir daha dönmez. |
+| `client_id CHAR(36) NULL` + `uq_<t>_client_id` | **12 RW tablo** | Offline oluşturulan kayıtların istemci kimliği. **HARİÇ:** `notifications` (PK zaten uuid), `taggables` / `quote_items` / `custom_field_values` (sahip satırın payload'ına gömülüler, ayrı sync tablosu değiller — protokol §1.4/§1.5). Index yalnız FK çözümü için değil, **mutasyon hedefi çözümü** için de kullanılır (protokol §4.3 P18). |
+| `device_fingerprint CHAR(64) NULL` + index, `device_platform VARCHAR(16) NULL` | `personal_access_tokens` | Cihaz başına tek token kuralı ve `GET /api/me/devices` yanıtının `platform` alanı. |
+| `channel VARCHAR(16) DEFAULT 'web'` | `session_logs` | `web` \| `desktop`. |
+
+#### Veritabanı trigger'ları — projedeki TEK trigger seti
+
+`conversation_user_sync_version_bi` (BEFORE INSERT), `..._bu` (BEFORE UPDATE), `..._ad` (AFTER DELETE).
+
+Bu tablo, `sync_version`'ı observer ile alamayan tek tablodur: tüm mutasyon yüzeyi ham SQL'dir (`Services/Chat/ChatReadState.php:71,104,129,144` + `ConversationService`/`MessageService`'teki query-builder yazımları) ve Laravel 12'de `attach()/detach()/sync()` **hiçbir model event'i üretmez**. Eloquent'e çevirmek `GREATEST(...)` ve cross-member `+1` atomikliğini bozardı.
+
+`BEFORE UPDATE` dalı **NULL-safe (`<=>`) no-op guard'ı** taşır: senkronlanan kolonların hiçbiri değişmediyse sayaç bump'lanmaz. Bu olmasa değer değiştirmeyen bir UPDATE bile sahte delta üretirdi (protokol §2.4 P4b).
+
+> **DİKKAT:** `pint` ve PHPStan trigger'ları görmez. `conversation_user` şemasında değişiklik yapan her migration bu üç trigger'ı elden geçirmelidir.
+
+#### FK cascade kilidi
+
+Kapsam tablolarının `DELETE_RULE` haritası artık `tests/Feature/Sync/SyncSchemaTest.php` ile `information_schema.REFERENTIAL_CONSTRAINTS` üzerinden kilitlidir. Yeni bir `CASCADE` eklemek testi kırar — çünkü FK cascade ile silinen satır **ne trigger ne Eloquent event'i** tetikler (deneyle doğrulandı) ve sessiz veri kaybı doğururdu. Bugün tüm cascade zincirleri yalnızca soft delete sayesinde ölüdür; test bu tesadüfü sözleşmeye çevirir (protokol §2.8 P16).
+
+#### Retention
+
+`php artisan logs:prune` iki yeni hedef alır: **`sync_deletions` 90 gün**, **`sync_idempotency` 7 gün** (`config/syncra.php`).
+
+---
+
 ## 3. Tasarım Kararları
 
 **`deals.position` neden string (fractional index) ve `deals.version` neden var:**

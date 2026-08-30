@@ -21,4 +21,5 @@ npm-debug.log*
 /tmp/
 *.tmp
 
-# Bunlar kurulu şerit skill'leridir; commit edilip edilmeyecekleri karara bağlanacak.
+***REMOVED***
+# ekip geneli hook'lar ve izinler commit edilir (SYNCDESKTOP §0.2 / docs/ENGINEERING-RULES.md §8).
