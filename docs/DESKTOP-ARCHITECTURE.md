@@ -1042,3 +1042,19 @@ Hepsi ya "uygulama çalışmaz" sınıfı teknik zorunluluk ya da şartnamedeki 
 | §13/6 `index.html` şablonlama | **HİÇ** | Tek satırlık fark için build makinesi eklemek net karmaşıklık artışı. |
 | §13/5 tray conflict bildirimi | **SONRA — kapsam genişletmesi, kullanıcı onayı gerekir** | Şartnamenin bildirim listesi kapalı küme; F5 sonrası Conflict Inbox gerçek kullanımda görülünce yeniden sunulur. |
 | İlk tray'e küçültmede tek seferlik ipucu (D-8'den) | **SONRA — kapsam genişletmesi, kullanıcı onayı gerekir** | UX iyileştirmesi ama şartnamede yok; F5-1 raporunda tekrar sunulur. |
+
+---
+
+## E.5 F3a BULGUSU — `DataSource` dikişinin yeri (A4 ile dokunuş listesi çelişiyor)
+
+**Durum:** F3a'da (commit öncesi, `feat/desktop-platform`) `DataSource` alanları `typeof import('../features/<domain>/api/<x>Api')` ile tiplendi. Bu **geçici bir iskelettir ve F3b'de değiştirilecektir.**
+
+**Sorun:** O modüller React hook'ları export ediyor (`useDeals`, `useCreateDeal`, …). Bu tiple `DataSource`'un desktop implementasyonu hook'ları yeniden yazmak zorunda kalır — K1'in ("UI yeniden yazımı yok") ve KARAR A4'ün ("hook paylaşımlı kalır, yalnız `queryFn` delege eder") tam olarak engellemek istediği şey. Web'de fark edilmez çünkü `data.deals` modülün kendisidir (özdeşlik); desktop'ta sonsuz regres olur: paylaşılan hook `platform.data.deals.useDeals`'i çağırır, o da kendisidir.
+
+**Kök neden ve asıl bulgu:** ~15 feature api modülünde düz `fetchX`/`xRequest` fonksiyonları **modül-private**. Doğru bir `DataSource` yazmak o modülleri açmayı gerektiriyor. Yani:
+
+> **KARAR A4, §3.7'deki "6-7 dosyalık dokunuş listesi" tahminiyle çelişir.** F0 keşfi "hiçbir bileşen API katmanını bypass etmiyor" derken haklıydı, ama dikişin *nerede* atılacağı hafife alınmıştı: **axios/echo seviyesinde** 6 dosya yeter, **per-domain veri arayüzü seviyesinde** yetmez — A4'ün gerektirdiği delegasyon ~15 dosya daha demektir.
+
+**KARAR A19 — F3b'nin 1. maddesi.** `DataSource` fiil-bazlı yeniden tanımlanır (`list/get/create/update/delete` + alana özgü `assign`, `move`, `convert`, `timeline`, `status`…) ve ~15 feature modülünde düz fonksiyonlar export edilir. **Bu bir kapsam genişletmesi DEĞİLDİR** — A4'ün zaten gerektirdiği iştir, yalnızca tahmin yanlıştı. §3.7'nin dokunuş listesi bu sayıyla güncellenir.
+
+**Bugün kırılan bir şey yok:** `platform/*` hiçbir entry noktasından import edilmediği için çıktı inert; JS bundle'a girmediği doğrulandı (hash karşılaştırmasıyla). Risk, `desktop.ts` bu temelin üstüne kurulursa yeniden yazılmasıdır.

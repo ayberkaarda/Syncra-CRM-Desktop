@@ -481,6 +481,24 @@ Every endpoint below (unless noted otherwise) passes through the `auth:sanctum` 
 | `PATCH /api/saved-views/{savedView}` | Updates a saved view. | Only the view's OWNER (`is_shared` does not change this) | — |
 | `DELETE /api/saved-views/{savedView}` | Deletes a saved view. | Only the view's OWNER | — |
 
+#### Desktop Sync (Phase F1 — device token + delta sync)
+
+Binding contract: `docs/DESKTOP-SYNC-PROTOCOL.md`. The desktop client authenticates with a **bearer token**, not the SPA session cookie. The SPA's own `/broadcasting/auth` is unchanged; the desktop client uses the second registration at `/api/broadcasting/auth`.
+
+| Method + Path | What it does | Required permission | Note |
+| --- | --- | --- | --- |
+| `POST /api/auth/device` | Issues a device token (`desktop` ability, no expiry) | **Public** — no auth chain | Same keyed lockout as `throttle:login` (email+IP, 5/min, escalating 1→60 min). One token per `device_fingerprint`; the previous one is deleted. Errors: `401 INVALID_CREDENTIALS`, `403 USER_INACTIVE`, `423 LOCKED_OUT` |
+| `GET /api/me/devices` | Lists the caller's own devices | no permission required | Inside the `password.changed` group — a user who must change their password cannot manage devices |
+| `DELETE /api/me/devices/{token}` | Revokes one of the caller's own tokens | no permission required | `404` for anyone else's token |
+| `GET /api/sync/manifest` | Protocol version, permitted tables, effective permissions, policy limits | `desktop` ability + device token | `throttle:30,1,sync`. A module without `.view` permission is absent from `tables` — the key itself is not sent |
+| `POST /api/sync/pull` | Keyset delta by `sync_version`, plus tombstones | `desktop` ability + device token | `throttle:30,1,sync`. Response is truncated at 5 MB with `has_more=true`; `next_cursor` stops at the last row actually sent |
+| `POST /api/sync/push` | Applies a mutation batch through the existing Action/Service/Policy layer | `desktop` ability + device token | `throttle:20,1,sync-push`; batch ≤ 200 mutations, ≤ 2 MB. Partial `200` is legal: a `seq` missing from `results` stays queued on the client |
+| `GET\|POST /api/broadcasting/auth` | Channel authorization over bearer | — | Second registration; the SPA's `/broadcasting/auth` is untouched |
+
+Sync route chain: `auth:sanctum` + `active` + `password.changed` + `ability:desktop` + `device.token`. The last one is not redundant: Sanctum hands every cookie session a `TransientToken` whose `can()` returns `true` unconditionally, so `ability:desktop` alone would **not** keep an SPA session out.
+
+New error codes: `ONLINE_ONLY`, `UNRESOLVED_REFERENCE`, `FIELD_CONFLICT`, `RECORD_DELETED`, `PROTOCOL_VERSION_MISMATCH`, `PUSH_BATCH_TOO_LARGE`, `INVALID_MUTATION`, `ABILITY_REQUIRED`, `LOCKED_OUT`, `USER_INACTIVE`.
+
 ## ER Diagram
 
 Okunabilirlik için şema beş mantıksal gruba bölünmüştür (40+ tablonun tek diyagramda tüm kolonlarıyla gösterilmesi okunamaz bir sonuç üretir). Her varlık kutusunda yalnızca PK, FK'lar ve tabloyu tanımlayan 3-6 kolon gösterilir — tam kolon dökümü için `docs/DATABASE.md`. Gruplar arası FK'lar (ör. `deals.company_id → companies.id`) ilgili diyagramın altında düz metinle not edilir; `USERS` yalnızca ilişki çizmek gerektiğinde diğer diyagramlarda küçültülmüş (yalnızca `id`/`email`) hâliyle tekrarlanır — tam tanımı yalnızca Diyagram A'dadır.

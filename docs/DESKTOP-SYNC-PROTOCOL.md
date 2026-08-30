@@ -202,7 +202,15 @@ UPDATE sync_counter SET value = @n;
 | conversation_user | **Hayır** (`detach()` query-builder DELETE) | **`AFTER DELETE` trigger — tek yol** | `conversation_id:user_id` |
 | taggables | — | **Tombstone yazılmaz** (§1.4) | — |
 
-Sonuç: `sync_deletions`'a yalnızca **`tags`, `notifications`, `conversation_user`** girer. Gömülü üç tablo (§1.5) tombstone yüzeyinden tamamen çıkmıştır.
+**KARAR P19 (F1 bulgusu ile düzeltildi):** Yukarıdaki liste RW tabloları düşünülerek yazılmıştı; **RO tarafındaki hard-delete yüzeyi sayılmamıştı.** `price_list_items` §4.1'de RO pull setindedir ve hard delete edilir (`PriceListRepository:200`) — tombstone olmadan istemcinin lokal aynası **hiç küçülemez**, silinen bir fiyat satırı sonsuza dek yanlış fiyat gösterir. `SyncDeletionObserver` `PriceListItem`'a da bağlanır, `row_key = id`.
+
+*(Yanlış hesap riski yok: `quotes.calculate` §8'de online-only. Etki liste/detay ekranlarındaki bayat fiyatla sınırlı — ama yine de sessiz bir tutarsızlık.)*
+
+Sonuç: `sync_deletions`'a **`tags`, `notifications`, `conversation_user`, `price_list_items`** girer. Gömülü üç tablo (§1.5) tombstone yüzeyinden tamamen çıkmıştır.
+
+**KARAR P20 — `deal.move` payload alan adı `to_stage_id`'dir.** `SYNCDESKTOP.md` §4.4 örneğindeki `pipeline_stage_id` **yanlıştır**. Gerçek sözleşme `Http/Requests/Deals/MoveDealRequest.php:44`'te `to_stage_id` olarak tanımlı ve K7 gereği mevcut sözleşme kazanır. `deals.pipeline_stage_id` **kolonu** ayrı bir şeydir ve doğrudur (satır payload'ında ve crate'in FK haritasında öyle kalır); karışmamalıdır.
+
+> **F3 yükümlülüğü:** crate'in `tests/push_flow.rs:81` fixture'ı yanlış şekli sabitliyor; `mutate()` çağrısını yazan bunu kopyalamamalı. Fixture F3'te düzeltilecek.
 
 **`conversation_user` `row_key` gerekçesi:** surrogate `id` yerine `(conversation_id, user_id)` kullanılır — üye ayrılıp yeniden katılırsa yeni bir `id` doğar; istemci pivot'u mantıksal anahtarla adreslemelidir.
 
@@ -351,6 +359,16 @@ Route::prefix('sync')
 > `results` dizisinde `seq`'i bulunmayan her mutasyon **işlenmemiş sayılır**; istemcide `queued` durumunda kalır ve sonraki turda yeniden gönderilir.
 
 Bu, yeni bir hata kodu veya statü gerektirmez — `idempotency_key` tekrar gönderimi güvenli kılar. İstemci tarafı karşılığı §6'daki push sonuç işleyicisidir.
+
+**KARAR P17 — `op=delete` `occurred_at` ve `payload` TAŞIMAZ.** `SYNCDESKTOP.md` §4.4'teki örnek zaten böyledir. Gerekçe: `ConflictDetector`'ın alan bazlı algoritması `occurred_at`'i yalnızca `activity_log.created_at` ile kıyaslamak için kullanır ve bu **yalnız `op=update`** için geçerlidir; delete'te çakışma kararı `base_sync_version` karşılaştırmasıyla verilir. Sunucu tarafı bu iki alanı delete'te **zorunlu kılmaz** (validation opsiyonel kabul eder).
+
+**KARAR P18 — `update`/`action`/`delete` `client_id` ile adreslenebilir.** Mutasyonda `server_id` yoksa `client_id` zorunludur.
+
+Zorunlu durum: offline oluşturulup henüz push edilmemiş bir kayda action uygulanması (görev oluştur → tamamla). Outbox coalescing create+update'i katlar, ama `action` ayrı bir topolojik seviyedir (§5.4: `action(5)`, kendi entity'sinin create'inden sonra) ve aynı batch'te create'i takip edebilir — o anda `server_id` henüz yoktur.
+
+Sunucu hedefi, §4.4'ün FK çözümlemesi için zaten kurduğu mekanizmayla çözer: (a) aynı batch'te daha önce oluşturulmuş `client_id → server_id` eşlemesi, (b) DB'de `client_id` UNIQUE araması. Çözülemezse `rejected` + `code=UNRESOLVED_REFERENCE` (yeni kod gerekmez).
+
+> Sonuç: `client_id` UNIQUE index'i yalnızca FK çözümü için değil, **mutasyon hedefi çözümü** için de kullanılır.
 
 ### 4.4 Hata kodları
 
