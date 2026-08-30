@@ -1,0 +1,276 @@
+{
+  "filters": {
+    "searchPlaceholder": "Search ticket number, subject...",
+    "searchAria": "Search tickets",
+    "statusAria": "Status filter",
+    "priorityAria": "Priority filter",
+    "assignedAria": "Assignee filter",
+    "companyAria": "Company filter",
+    "categoryAria": "Category filter",
+    "tagAria": "Tag filter",
+    "allStatuses": "All statuses",
+    "allPriorities": "All priorities",
+    "allAssignees": "All assignees",
+    "allCompanies": "All companies",
+    "allCategories": "All categories",
+    "allTags": "All tags",
+    "slaBreachedOnly": "SLA breaches only",
+    "fromDateAria": "Start date",
+    "toDateAria": "End date"
+  },
+  "list": {
+    "breadcrumbHome": "Home",
+    "breadcrumbCurrent": "Tickets",
+    "title": "Tickets",
+    "subtitle_one": "{{count}} ticket (filtered)",
+    "subtitle_other": "{{count}} tickets (filtered)",
+    "newTicket": "New Ticket",
+    "summaryLabel": "Overall summary (independent of active filters):",
+    "stats": {
+      "total": "Total",
+      "breached": "SLA breaches",
+      "atRisk": "At risk",
+      "avgResolution": "Avg. resolution time"
+    },
+    "avgResolutionNoData": "No data",
+    "avgResolutionMinutes_one": "{{count}} min",
+    "avgResolutionMinutes_other": "{{count}} min",
+    "avgResolutionHours": "{{hours}} hours",
+    "loadError": "Something went wrong while loading tickets.",
+    "retry": "Try again",
+    "empty": {
+      "title": "No tickets found",
+      "description": "No ticket matches your search or filter criteria."
+    },
+    "columns": {
+      "ticketNumber": "Ticket No.",
+      "subject": "Subject",
+      "priority": "Priority",
+      "status": "Status",
+      "sla": "SLA",
+      "companyContact": "Company / Contact",
+      "assignee": "Assignee",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "actions": {
+      "detail": "Detail",
+      "edit": "Edit",
+      "editLockedTooltip": "You are not the owner of this ticket, you cannot edit it.",
+      "assign": "Assign",
+      "delete": "Delete"
+    },
+    "deleteModal": {
+      "title": "Delete ticket",
+      "description": "This action cannot be undone. The ticket will be permanently deleted.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "confirmText": "Are you sure you want to delete ticket <bold>{{ticketNumber}} — {{subject}}</bold>?"
+    }
+  },
+  "detail": {
+    "backToList": "Tickets",
+    "assign": "Assign",
+    "edit": "Edit",
+    "editLockedTooltip": "You are not the owner of this ticket, you cannot edit it.",
+    "delete": "Delete",
+    "loadError": "Something went wrong while loading the ticket.",
+    "retry": "Try again",
+    "fields": {
+      "company": "Company",
+      "contact": "Contact",
+      "assignee": "Assignee",
+      "creator": "Creator"
+    },
+    "unassignedAssignee": "Unassigned",
+    "descriptionLabel": "Description",
+    "tagsLabel": "Tags",
+    "noTags": "No tags.",
+    "customFieldsTitle": "Custom Fields",
+    "timestampsTitle": "Timestamps",
+    "timestamps": {
+      "created": "Created",
+      "firstResponse": "First Response",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "slaDue": "SLA Due",
+      "slaTargetHours": "SLA Target Duration"
+    },
+    "noResponseYet": "No response yet",
+    "slaTargetHoursValue": "{{hours}} hours",
+    "deleteModal": {
+      "title": "Delete ticket",
+      "description": "This action cannot be undone. The ticket will be permanently deleted.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "confirmText": "Are you sure you want to delete ticket <bold>{{ticketNumber}} — {{subject}}</bold>?"
+    }
+  },
+  "form": {
+    "titleCreate": "New Ticket",
+    "titleEdit": "Edit Ticket",
+    "cancel": "Cancel",
+    "submitCreate": "Create",
+    "submitEdit": "Save",
+    "newTicketHint": "The ticket number and status are determined by the server; new tickets are always created with status \"{{status}}\".",
+    "subjectLabel": "Subject",
+    "descriptionLabel": "Description",
+    "priorityLabel": "Priority",
+    "priorityChangedWarning": "The SLA target will be recalculated; the ticket may become breached immediately (raising priority shortens the target).",
+    "categoryLabel": "Category",
+    "categoryPlaceholder": "Choose a category or type one",
+    "contactLabel": "Contact",
+    "contactHint": "If a company is selected, the contact list is filtered to that company.",
+    "contactLoading": "Loading…",
+    "contactNone": "No contact",
+    "assigneeLabel": "Assignee",
+    "unassignedOption": "Unassigned",
+    "validation": {
+      "subjectRequired": "Subject is required.",
+      "descriptionRequired": "Description is required."
+    }
+  },
+  "companyCombobox": {
+    "label": "Company",
+    "placeholder": "Search company...",
+    "clearAria": "Clear company selection",
+    "clearOption": "No company / clear",
+    "loading": "Loading…",
+    "empty": "No results found"
+  },
+  "customFields": {
+    "sectionTitle": "Custom Fields",
+    "selectPlaceholder": "Select…",
+    "noOptions": "No options defined."
+  },
+  "tagSelect": {
+    "label": "Tags",
+    "trigger": "Select tags...",
+    "loading": "Loading…",
+    "empty": "No tags found",
+    "removeAria": "Remove {{name}} tag"
+  },
+  "assign": {
+    "title": "Assign Ticket",
+    "description": "Choose the assignee for <bold>{{ticketNumber}} — {{subject}}</bold>.",
+    "cancel": "Cancel",
+    "submit": "Assign",
+    "forbidden": "You do not have permission to access the user list.",
+    "unassignedOption": "Unassigned (return to pool)",
+    "assigneeLabel": "Assignee"
+  },
+  "sla": {
+    "pausedLabel": "Paused",
+    "breachedLabel": "Breached",
+    "breachedHistorical": "Breached (historical)",
+    "metStatus": "Met",
+    "resolvedWithinTarget": "Resolved within the SLA target.",
+    "resolvedBreached": "Resolved after exceeding the SLA target (historical breach).",
+    "noInfo": "No SLA information available.",
+    "targetLabel": "Target: {{hours}} hours",
+    "pausedHint": "The SLA timer stops while the ticket is \"{{status}}\"; the countdown does not continue.",
+    "units": {
+      "day": "d",
+      "hour": "h",
+      "minute": "min",
+      "second": "sec"
+    }
+  },
+  "activity": {
+    "notesTitle": "Notes",
+    "notesSubtitle_one": "{{count}} note — internal note, does not trigger \"First Response\"",
+    "notesSubtitle_other": "{{count}} notes — internal notes, do not trigger \"First Response\"",
+    "addNote": "Add Note",
+    "notesLoadError": "Something went wrong while loading notes.",
+    "retry": "Try again",
+    "noNotes": "No notes added yet.",
+    "unknownUser": "Unknown",
+    "interactionsTitle": "Interactions",
+    "interactionsSubtitle_one": "{{count}} record — call/email/meeting",
+    "interactionsSubtitle_other": "{{count}} records — call/email/meeting",
+    "addInteraction": "Add Interaction",
+    "interactionsLoadError": "Something went wrong while loading interactions.",
+    "noInteractions": "No interactions recorded yet.",
+    "durationMinutes_one": "{{count}} min",
+    "durationMinutes_other": "{{count}} min",
+    "outcomeLabel": "Outcome: {{outcome}}",
+    "form": {
+      "titleNote": "Add Note",
+      "titleInteraction": "Log Interaction",
+      "descriptionNote": "This is an internal note; it does not count as a response given to the customer and does NOT trigger the ticket's \"First Response\" timestamp.",
+      "descriptionInteraction": "A call/email/meeting is a response given to the customer — if the ticket doesn't have a \"First Response\" timestamp yet, this record triggers it.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "titleFieldLabel": "Title",
+      "titlePlaceholder": "e.g. Summary of customer call",
+      "typeLabel": "Type",
+      "subjectLabel": "Subject",
+      "occurredAtLabel": "Occurred At",
+      "durationLabel": "Duration (minutes)",
+      "outcomeFieldLabel": "Outcome",
+      "bodyLabelNote": "Note Content",
+      "bodyLabelInteraction": "Description",
+      "validation": {
+        "titleRequired": "Title is required.",
+        "subjectRequired": "Subject is required.",
+        "bodyRequired": "Note content is required.",
+        "occurredAtRequired": "Occurred at date is required.",
+        "occurredAtFuture": "Activity date cannot be in the future.",
+        "durationRange": "Duration must be between 0 and 1440 minutes."
+      }
+    }
+  },
+  "tasks": {
+    "title": "Tasks",
+    "subtitle_one": "{{count}} task",
+    "subtitle_other": "{{count}} tasks",
+    "add": "Add Task",
+    "loadError": "Something went wrong while loading tasks.",
+    "retry": "Try again",
+    "empty": "No tasks linked to this ticket.",
+    "dueLabel": "Due: {{value}}",
+    "form": {
+      "title": "Add Task to Ticket",
+      "cancel": "Cancel",
+      "submit": "Create",
+      "titleFieldLabel": "Title",
+      "descriptionLabel": "Description",
+      "dueLabel": "Due",
+      "reminderLabel": "Reminder",
+      "reminderHint": "Choose a due date first.",
+      "priorityLabel": "Priority",
+      "statusLabel": "Status",
+      "assigneeLabel": "Assignee",
+      "unassignedOption": "Unassigned",
+      "autoLinkedHint": "This task is automatically linked to ticket ({{ticketNumber}}).",
+      "validation": {
+        "titleRequired": "Title is required.",
+        "reminderAfterDue": "The reminder cannot be after the due date."
+      }
+    }
+  },
+  "status": {
+    "changeLabel": "Change status:",
+    "terminalHint": "Status \"{{status}}\" is terminal; this ticket's status can no longer be changed.",
+    "ownershipLockedHint": "You are not the owner of this ticket, you cannot change its status.",
+    "resolveModal": {
+      "title": "Mark Ticket as Resolved",
+      "description": "Adding a resolution note isn't required but is recommended — if you add one, it's saved to the ticket as an internal note.",
+      "cancel": "Cancel",
+      "confirm": "Mark as Resolved",
+      "noteLabel": "Resolution Note (optional)",
+      "notePlaceholder": "How was the issue resolved?",
+      "defaultNoteSubject": "Resolution note"
+    },
+    "toastNoteFailed": "Status updated but the note could not be saved: {{error}}"
+  },
+  "toast": {
+    "created": "Ticket created.",
+    "updated": "Ticket updated.",
+    "deleted": "Ticket deleted.",
+    "statusUpdated": "Status updated.",
+    "assignUpdated": "Ticket assignment updated.",
+    "slaWarning": "{{ticketNumber}} — SLA target approaching: {{subject}}",
+    "slaBreached": "{{ticketNumber}} — SLA breached: {{subject}}"
+  }
+}

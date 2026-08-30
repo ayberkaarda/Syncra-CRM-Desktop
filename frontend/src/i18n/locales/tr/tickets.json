@@ -1,0 +1,276 @@
+{
+  "filters": {
+    "searchPlaceholder": "Talep no, konu ara...",
+    "searchAria": "Talep ara",
+    "statusAria": "Durum filtresi",
+    "priorityAria": "Öncelik filtresi",
+    "assignedAria": "Atanan filtresi",
+    "companyAria": "Firma filtresi",
+    "categoryAria": "Kategori filtresi",
+    "tagAria": "Etiket filtresi",
+    "allStatuses": "Tüm durumlar",
+    "allPriorities": "Tüm öncelikler",
+    "allAssignees": "Tüm atananlar",
+    "allCompanies": "Tüm firmalar",
+    "allCategories": "Tüm kategoriler",
+    "allTags": "Tüm etiketler",
+    "slaBreachedOnly": "Sadece SLA ihlalleri",
+    "fromDateAria": "Başlangıç tarihi",
+    "toDateAria": "Bitiş tarihi"
+  },
+  "list": {
+    "breadcrumbHome": "Anasayfa",
+    "breadcrumbCurrent": "Destek Talepleri",
+    "title": "Destek Talepleri",
+    "subtitle_one": "{{count}} talep (filtrelenmiş)",
+    "subtitle_other": "{{count}} talep (filtrelenmiş)",
+    "newTicket": "Yeni Talep",
+    "summaryLabel": "Genel özet (aktif filtrelerden bağımsız):",
+    "stats": {
+      "total": "Toplam",
+      "breached": "SLA ihlali",
+      "atRisk": "Risk altında",
+      "avgResolution": "Ort. çözüm süresi"
+    },
+    "avgResolutionNoData": "Veri yok",
+    "avgResolutionMinutes_one": "{{count}} dk",
+    "avgResolutionMinutes_other": "{{count}} dk",
+    "avgResolutionHours": "{{hours}} saat",
+    "loadError": "Talepler yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "empty": {
+      "title": "Talep bulunamadı",
+      "description": "Arama veya filtre kriterlerinizle eşleşen destek talebi yok."
+    },
+    "columns": {
+      "ticketNumber": "Talep No",
+      "subject": "Konu",
+      "priority": "Öncelik",
+      "status": "Durum",
+      "sla": "SLA",
+      "companyContact": "Firma / Kişi",
+      "assignee": "Atanan",
+      "created": "Oluşturma",
+      "actions": "İşlemler"
+    },
+    "actions": {
+      "detail": "Detay",
+      "edit": "Düzenle",
+      "editLockedTooltip": "Bu talebin sahibi değilsiniz, düzenleyemezsiniz.",
+      "assign": "Ata",
+      "delete": "Sil"
+    },
+    "deleteModal": {
+      "title": "Talebi sil",
+      "description": "Bu işlem geri alınamaz. Talep kalıcı olarak silinecek.",
+      "cancel": "Vazgeç",
+      "confirm": "Sil",
+      "confirmText": "<bold>{{ticketNumber}} — {{subject}}</bold> adlı talebi silmek istediğinize emin misiniz?"
+    }
+  },
+  "detail": {
+    "backToList": "Destek Talepleri",
+    "assign": "Ata",
+    "edit": "Düzenle",
+    "editLockedTooltip": "Bu talebin sahibi değilsiniz, düzenleyemezsiniz.",
+    "delete": "Sil",
+    "loadError": "Talep yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "fields": {
+      "company": "Firma",
+      "contact": "Kişi",
+      "assignee": "Atanan",
+      "creator": "Oluşturan"
+    },
+    "unassignedAssignee": "Atanmamış",
+    "descriptionLabel": "Açıklama",
+    "tagsLabel": "Etiketler",
+    "noTags": "Etiket yok.",
+    "customFieldsTitle": "Özel Alanlar",
+    "timestampsTitle": "Zaman Damgaları",
+    "timestamps": {
+      "created": "Oluşturma",
+      "firstResponse": "İlk Yanıt",
+      "resolved": "Çözüm",
+      "closed": "Kapanış",
+      "slaDue": "SLA Hedefi",
+      "slaTargetHours": "SLA Hedef Süresi"
+    },
+    "noResponseYet": "Henüz yanıt verilmedi",
+    "slaTargetHoursValue": "{{hours}} saat",
+    "deleteModal": {
+      "title": "Talebi sil",
+      "description": "Bu işlem geri alınamaz. Talep kalıcı olarak silinecek.",
+      "cancel": "Vazgeç",
+      "confirm": "Sil",
+      "confirmText": "<bold>{{ticketNumber}} — {{subject}}</bold> adlı talebi silmek istediğinize emin misiniz?"
+    }
+  },
+  "form": {
+    "titleCreate": "Yeni Talep",
+    "titleEdit": "Talebi Düzenle",
+    "cancel": "Vazgeç",
+    "submitCreate": "Oluştur",
+    "submitEdit": "Kaydet",
+    "newTicketHint": "Talep numarası ve durum sunucu tarafından belirlenir; yeni talepler her zaman \"{{status}}\" durumunda oluşturulur.",
+    "subjectLabel": "Konu",
+    "descriptionLabel": "Açıklama",
+    "priorityLabel": "Öncelik",
+    "priorityChangedWarning": "SLA hedefi yeniden hesaplanacak; talep anında ihlale düşebilir (öncelik yükseltmesi hedefi kısaltır).",
+    "categoryLabel": "Kategori",
+    "categoryPlaceholder": "Kategori seçin veya yazın",
+    "contactLabel": "Kişi",
+    "contactHint": "Firma seçilirse kişi listesi o firmaya göre filtrelenir.",
+    "contactLoading": "Yükleniyor…",
+    "contactNone": "Kişi yok",
+    "assigneeLabel": "Atanan",
+    "unassignedOption": "Atanmamış",
+    "validation": {
+      "subjectRequired": "Konu zorunludur.",
+      "descriptionRequired": "Açıklama zorunludur."
+    }
+  },
+  "companyCombobox": {
+    "label": "Firma",
+    "placeholder": "Firma ara...",
+    "clearAria": "Firma seçimini temizle",
+    "clearOption": "Firma yok / temizle",
+    "loading": "Yükleniyor…",
+    "empty": "Sonuç bulunamadı"
+  },
+  "customFields": {
+    "sectionTitle": "Özel Alanlar",
+    "selectPlaceholder": "Seçin…",
+    "noOptions": "Seçenek tanımlı değil."
+  },
+  "tagSelect": {
+    "label": "Etiketler",
+    "trigger": "Etiket seç...",
+    "loading": "Yükleniyor…",
+    "empty": "Etiket bulunamadı",
+    "removeAria": "{{name}} etiketini kaldır"
+  },
+  "assign": {
+    "title": "Talep Ata",
+    "description": "<bold>{{ticketNumber}} — {{subject}}</bold> için atanan kişiyi seçin.",
+    "cancel": "Vazgeç",
+    "submit": "Ata",
+    "forbidden": "Kullanıcı listesine erişim izniniz yok.",
+    "unassignedOption": "Atanmamış (havuza bırak)",
+    "assigneeLabel": "Atanan"
+  },
+  "sla": {
+    "pausedLabel": "Duraklatıldı",
+    "breachedLabel": "İhlal",
+    "breachedHistorical": "İhlal (tarihsel)",
+    "metStatus": "Karşılandı",
+    "resolvedWithinTarget": "SLA hedefi içinde çözüldü.",
+    "resolvedBreached": "SLA hedefi aşılarak çözüldü (tarihsel ihlal).",
+    "noInfo": "SLA bilgisi mevcut değil.",
+    "targetLabel": "Hedef: {{hours}} saat",
+    "pausedHint": "Talep \"{{status}}\" durumundayken SLA sayacı durur; sayaç geri sayıma devam etmez.",
+    "units": {
+      "day": "g",
+      "hour": "s",
+      "minute": "dk",
+      "second": "sn"
+    }
+  },
+  "activity": {
+    "notesTitle": "Notlar",
+    "notesSubtitle_one": "{{count}} not — iç not, \"İlk Yanıt\"ı tetiklemez",
+    "notesSubtitle_other": "{{count}} not — iç not, \"İlk Yanıt\"ı tetiklemez",
+    "addNote": "Not Ekle",
+    "notesLoadError": "Notlar yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "noNotes": "Henüz not eklenmedi.",
+    "unknownUser": "Bilinmiyor",
+    "interactionsTitle": "Etkileşimler",
+    "interactionsSubtitle_one": "{{count}} kayıt — arama/e-posta/toplantı",
+    "interactionsSubtitle_other": "{{count}} kayıt — arama/e-posta/toplantı",
+    "addInteraction": "Etkileşim Ekle",
+    "interactionsLoadError": "Etkileşimler yüklenirken bir hata oluştu.",
+    "noInteractions": "Henüz etkileşim kaydedilmedi.",
+    "durationMinutes_one": "{{count}} dk",
+    "durationMinutes_other": "{{count}} dk",
+    "outcomeLabel": "Sonuç: {{outcome}}",
+    "form": {
+      "titleNote": "Not Ekle",
+      "titleInteraction": "Etkileşim Kaydet",
+      "descriptionNote": "Bu bir iç nottur; müşteriye verilmiş bir yanıt sayılmaz ve talebin \"İlk Yanıt\" zaman damgasını TETİKLEMEZ.",
+      "descriptionInteraction": "Arama/e-posta/toplantı müşteriye verilen bir yanıttır — talebin henüz \"İlk Yanıt\" damgası yoksa bu kayıt onu tetikler.",
+      "cancel": "Vazgeç",
+      "save": "Kaydet",
+      "titleFieldLabel": "Başlık",
+      "titlePlaceholder": "ör. Müşteriyle görüşme özeti",
+      "typeLabel": "Tür",
+      "subjectLabel": "Konu",
+      "occurredAtLabel": "Gerçekleşme Tarihi",
+      "durationLabel": "Süre (dakika)",
+      "outcomeFieldLabel": "Sonuç",
+      "bodyLabelNote": "Not İçeriği",
+      "bodyLabelInteraction": "Açıklama",
+      "validation": {
+        "titleRequired": "Başlık zorunludur.",
+        "subjectRequired": "Konu zorunludur.",
+        "bodyRequired": "Not içeriği zorunludur.",
+        "occurredAtRequired": "Gerçekleşme tarihi zorunludur.",
+        "occurredAtFuture": "Aktivite tarihi gelecekte olamaz.",
+        "durationRange": "Süre 0 ile 1440 dakika arasında olmalıdır."
+      }
+    }
+  },
+  "tasks": {
+    "title": "Görevler",
+    "subtitle_one": "{{count}} görev",
+    "subtitle_other": "{{count}} görev",
+    "add": "Görev Ekle",
+    "loadError": "Görevler yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "empty": "Bu talebe bağlı görev yok.",
+    "dueLabel": "Vade: {{value}}",
+    "form": {
+      "title": "Talebe Görev Ekle",
+      "cancel": "Vazgeç",
+      "submit": "Oluştur",
+      "titleFieldLabel": "Başlık",
+      "descriptionLabel": "Açıklama",
+      "dueLabel": "Vade",
+      "reminderLabel": "Hatırlatıcı",
+      "reminderHint": "Önce vade tarihi seçin.",
+      "priorityLabel": "Öncelik",
+      "statusLabel": "Durum",
+      "assigneeLabel": "Atanan",
+      "unassignedOption": "Atanmamış",
+      "autoLinkedHint": "Bu görev otomatik olarak talebe ({{ticketNumber}}) bağlanır.",
+      "validation": {
+        "titleRequired": "Başlık zorunludur.",
+        "reminderAfterDue": "Hatırlatıcı, vade tarihinden sonra olamaz."
+      }
+    }
+  },
+  "status": {
+    "changeLabel": "Durumu değiştir:",
+    "terminalHint": "\"{{status}}\" durumu terminaldir; bu talebin durumu artık değiştirilemez.",
+    "ownershipLockedHint": "Bu talebin sahibi değilsiniz, durumunu değiştiremezsiniz.",
+    "resolveModal": {
+      "title": "Talebi Çözüldü Olarak İşaretle",
+      "description": "Çözüm notu eklemek zorunlu değildir ama önerilir — eklerseniz talebe iç not olarak kaydedilir.",
+      "cancel": "Vazgeç",
+      "confirm": "Çözüldü Olarak İşaretle",
+      "noteLabel": "Çözüm Notu (opsiyonel)",
+      "notePlaceholder": "Sorun nasıl çözüldü?",
+      "defaultNoteSubject": "Çözüm notu"
+    },
+    "toastNoteFailed": "Durum güncellendi ama not kaydedilemedi: {{error}}"
+  },
+  "toast": {
+    "created": "Talep oluşturuldu.",
+    "updated": "Talep güncellendi.",
+    "deleted": "Talep silindi.",
+    "statusUpdated": "Durum güncellendi.",
+    "assignUpdated": "Talep ataması güncellendi.",
+    "slaWarning": "{{ticketNumber}} — SLA hedefi yaklaşıyor: {{subject}}",
+    "slaBreached": "{{ticketNumber}} — SLA ihlal edildi: {{subject}}"
+  }
+}

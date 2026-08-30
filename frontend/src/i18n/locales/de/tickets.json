@@ -1,0 +1,276 @@
+{
+  "filters": {
+    "searchPlaceholder": "Ticketnummer, Betreff suchen...",
+    "searchAria": "Tickets durchsuchen",
+    "statusAria": "Statusfilter",
+    "priorityAria": "Prioritätsfilter",
+    "assignedAria": "Filter nach Zuständigem",
+    "companyAria": "Unternehmensfilter",
+    "categoryAria": "Kategoriefilter",
+    "tagAria": "Tag-Filter",
+    "allStatuses": "Alle Status",
+    "allPriorities": "Alle Prioritäten",
+    "allAssignees": "Alle Zuständigen",
+    "allCompanies": "Alle Unternehmen",
+    "allCategories": "Alle Kategorien",
+    "allTags": "Alle Tags",
+    "slaBreachedOnly": "Nur SLA-Verletzungen",
+    "fromDateAria": "Startdatum",
+    "toDateAria": "Enddatum"
+  },
+  "list": {
+    "breadcrumbHome": "Startseite",
+    "breadcrumbCurrent": "Tickets",
+    "title": "Tickets",
+    "subtitle_one": "{{count}} Ticket (gefiltert)",
+    "subtitle_other": "{{count}} Tickets (gefiltert)",
+    "newTicket": "Neues Ticket",
+    "summaryLabel": "Gesamtübersicht (unabhängig von aktiven Filtern):",
+    "stats": {
+      "total": "Gesamt",
+      "breached": "SLA-Verletzungen",
+      "atRisk": "Gefährdet",
+      "avgResolution": "Durchschn. Lösungszeit"
+    },
+    "avgResolutionNoData": "Keine Daten",
+    "avgResolutionMinutes_one": "{{count}} Min.",
+    "avgResolutionMinutes_other": "{{count}} Min.",
+    "avgResolutionHours": "{{hours}} Std.",
+    "loadError": "Beim Laden der Tickets ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen",
+    "empty": {
+      "title": "Keine Tickets gefunden",
+      "description": "Kein Ticket entspricht Ihren Such- oder Filterkriterien."
+    },
+    "columns": {
+      "ticketNumber": "Ticketnr.",
+      "subject": "Betreff",
+      "priority": "Priorität",
+      "status": "Status",
+      "sla": "SLA",
+      "companyContact": "Unternehmen / Kontakt",
+      "assignee": "Zuständig",
+      "created": "Erstellt",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "detail": "Details",
+      "edit": "Bearbeiten",
+      "editLockedTooltip": "Sie sind nicht der Besitzer dieses Tickets und können es nicht bearbeiten.",
+      "assign": "Zuweisen",
+      "delete": "Löschen"
+    },
+    "deleteModal": {
+      "title": "Ticket löschen",
+      "description": "Diese Aktion kann nicht rückgängig gemacht werden. Das Ticket wird dauerhaft gelöscht.",
+      "cancel": "Abbrechen",
+      "confirm": "Löschen",
+      "confirmText": "Möchten Sie das Ticket <bold>{{ticketNumber}} — {{subject}}</bold> wirklich löschen?"
+    }
+  },
+  "detail": {
+    "backToList": "Tickets",
+    "assign": "Zuweisen",
+    "edit": "Bearbeiten",
+    "editLockedTooltip": "Sie sind nicht der Besitzer dieses Tickets und können es nicht bearbeiten.",
+    "delete": "Löschen",
+    "loadError": "Beim Laden des Tickets ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen",
+    "fields": {
+      "company": "Unternehmen",
+      "contact": "Kontakt",
+      "assignee": "Zuständig",
+      "creator": "Ersteller"
+    },
+    "unassignedAssignee": "Nicht zugewiesen",
+    "descriptionLabel": "Beschreibung",
+    "tagsLabel": "Tags",
+    "noTags": "Keine Tags.",
+    "customFieldsTitle": "Benutzerdefinierte Felder",
+    "timestampsTitle": "Zeitstempel",
+    "timestamps": {
+      "created": "Erstellt",
+      "firstResponse": "Erste Antwort",
+      "resolved": "Gelöst",
+      "closed": "Geschlossen",
+      "slaDue": "SLA-Frist",
+      "slaTargetHours": "SLA-Zielzeit"
+    },
+    "noResponseYet": "Noch keine Antwort",
+    "slaTargetHoursValue": "{{hours}} Std.",
+    "deleteModal": {
+      "title": "Ticket löschen",
+      "description": "Diese Aktion kann nicht rückgängig gemacht werden. Das Ticket wird dauerhaft gelöscht.",
+      "cancel": "Abbrechen",
+      "confirm": "Löschen",
+      "confirmText": "Möchten Sie das Ticket <bold>{{ticketNumber}} — {{subject}}</bold> wirklich löschen?"
+    }
+  },
+  "form": {
+    "titleCreate": "Neues Ticket",
+    "titleEdit": "Ticket bearbeiten",
+    "cancel": "Abbrechen",
+    "submitCreate": "Erstellen",
+    "submitEdit": "Speichern",
+    "newTicketHint": "Ticketnummer und Status werden vom Server festgelegt; neue Tickets werden immer mit dem Status \"{{status}}\" erstellt.",
+    "subjectLabel": "Betreff",
+    "descriptionLabel": "Beschreibung",
+    "priorityLabel": "Priorität",
+    "priorityChangedWarning": "Das SLA-Ziel wird neu berechnet; das Ticket kann sofort in Verzug geraten (eine höhere Priorität verkürzt die Zielzeit).",
+    "categoryLabel": "Kategorie",
+    "categoryPlaceholder": "Kategorie auswählen oder eingeben",
+    "contactLabel": "Kontakt",
+    "contactHint": "Wenn ein Unternehmen ausgewählt ist, wird die Kontaktliste nach diesem Unternehmen gefiltert.",
+    "contactLoading": "Wird geladen…",
+    "contactNone": "Kein Kontakt",
+    "assigneeLabel": "Zuständig",
+    "unassignedOption": "Nicht zugewiesen",
+    "validation": {
+      "subjectRequired": "Betreff ist erforderlich.",
+      "descriptionRequired": "Beschreibung ist erforderlich."
+    }
+  },
+  "companyCombobox": {
+    "label": "Unternehmen",
+    "placeholder": "Unternehmen suchen...",
+    "clearAria": "Unternehmensauswahl löschen",
+    "clearOption": "Kein Unternehmen / löschen",
+    "loading": "Wird geladen…",
+    "empty": "Keine Ergebnisse gefunden"
+  },
+  "customFields": {
+    "sectionTitle": "Benutzerdefinierte Felder",
+    "selectPlaceholder": "Auswählen…",
+    "noOptions": "Keine Optionen definiert."
+  },
+  "tagSelect": {
+    "label": "Tags",
+    "trigger": "Tags auswählen...",
+    "loading": "Wird geladen…",
+    "empty": "Keine Tags gefunden",
+    "removeAria": "Tag {{name}} entfernen"
+  },
+  "assign": {
+    "title": "Ticket zuweisen",
+    "description": "Wählen Sie den Zuständigen für <bold>{{ticketNumber}} — {{subject}}</bold>.",
+    "cancel": "Abbrechen",
+    "submit": "Zuweisen",
+    "forbidden": "Sie haben keine Berechtigung, auf die Benutzerliste zuzugreifen.",
+    "unassignedOption": "Nicht zugewiesen (in den Pool zurücklegen)",
+    "assigneeLabel": "Zuständig"
+  },
+  "sla": {
+    "pausedLabel": "Pausiert",
+    "breachedLabel": "Verletzt",
+    "breachedHistorical": "Verletzt (historisch)",
+    "metStatus": "Eingehalten",
+    "resolvedWithinTarget": "Innerhalb des SLA-Ziels gelöst.",
+    "resolvedBreached": "Nach Überschreitung des SLA-Ziels gelöst (historische Verletzung).",
+    "noInfo": "Keine SLA-Informationen verfügbar.",
+    "targetLabel": "Ziel: {{hours}} Std.",
+    "pausedHint": "Der SLA-Zähler stoppt, solange das Ticket den Status \"{{status}}\" hat; der Countdown läuft nicht weiter.",
+    "units": {
+      "day": "T",
+      "hour": "Std",
+      "minute": "Min",
+      "second": "Sek"
+    }
+  },
+  "activity": {
+    "notesTitle": "Notizen",
+    "notesSubtitle_one": "{{count}} Notiz — interne Notiz, löst \"Erste Antwort\" nicht aus",
+    "notesSubtitle_other": "{{count}} Notizen — interne Notizen, lösen \"Erste Antwort\" nicht aus",
+    "addNote": "Notiz hinzufügen",
+    "notesLoadError": "Beim Laden der Notizen ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen",
+    "noNotes": "Noch keine Notizen hinzugefügt.",
+    "unknownUser": "Unbekannt",
+    "interactionsTitle": "Interaktionen",
+    "interactionsSubtitle_one": "{{count}} Eintrag — Anruf/E-Mail/Meeting",
+    "interactionsSubtitle_other": "{{count}} Einträge — Anruf/E-Mail/Meeting",
+    "addInteraction": "Interaktion hinzufügen",
+    "interactionsLoadError": "Beim Laden der Interaktionen ist ein Fehler aufgetreten.",
+    "noInteractions": "Noch keine Interaktionen erfasst.",
+    "durationMinutes_one": "{{count}} Min.",
+    "durationMinutes_other": "{{count}} Min.",
+    "outcomeLabel": "Ergebnis: {{outcome}}",
+    "form": {
+      "titleNote": "Notiz hinzufügen",
+      "titleInteraction": "Interaktion erfassen",
+      "descriptionNote": "Dies ist eine interne Notiz; sie zählt nicht als Antwort an den Kunden und löst NICHT den Zeitstempel \"Erste Antwort\" des Tickets aus.",
+      "descriptionInteraction": "Ein Anruf/eine E-Mail/ein Meeting ist eine Antwort an den Kunden — wenn das Ticket noch keinen Zeitstempel \"Erste Antwort\" hat, löst dieser Eintrag ihn aus.",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "titleFieldLabel": "Titel",
+      "titlePlaceholder": "z. B. Zusammenfassung des Kundengesprächs",
+      "typeLabel": "Typ",
+      "subjectLabel": "Betreff",
+      "occurredAtLabel": "Zeitpunkt",
+      "durationLabel": "Dauer (Minuten)",
+      "outcomeFieldLabel": "Ergebnis",
+      "bodyLabelNote": "Notizinhalt",
+      "bodyLabelInteraction": "Beschreibung",
+      "validation": {
+        "titleRequired": "Titel ist erforderlich.",
+        "subjectRequired": "Betreff ist erforderlich.",
+        "bodyRequired": "Notizinhalt ist erforderlich.",
+        "occurredAtRequired": "Zeitpunkt ist erforderlich.",
+        "occurredAtFuture": "Das Aktivitätsdatum darf nicht in der Zukunft liegen.",
+        "durationRange": "Die Dauer muss zwischen 0 und 1440 Minuten liegen."
+      }
+    }
+  },
+  "tasks": {
+    "title": "Aufgaben",
+    "subtitle_one": "{{count}} Aufgabe",
+    "subtitle_other": "{{count}} Aufgaben",
+    "add": "Aufgabe hinzufügen",
+    "loadError": "Beim Laden der Aufgaben ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen",
+    "empty": "Keine Aufgaben mit diesem Ticket verknüpft.",
+    "dueLabel": "Fällig: {{value}}",
+    "form": {
+      "title": "Aufgabe zum Ticket hinzufügen",
+      "cancel": "Abbrechen",
+      "submit": "Erstellen",
+      "titleFieldLabel": "Titel",
+      "descriptionLabel": "Beschreibung",
+      "dueLabel": "Fällig",
+      "reminderLabel": "Erinnerung",
+      "reminderHint": "Wählen Sie zuerst ein Fälligkeitsdatum.",
+      "priorityLabel": "Priorität",
+      "statusLabel": "Status",
+      "assigneeLabel": "Zuständig",
+      "unassignedOption": "Nicht zugewiesen",
+      "autoLinkedHint": "Diese Aufgabe wird automatisch mit dem Ticket ({{ticketNumber}}) verknüpft.",
+      "validation": {
+        "titleRequired": "Titel ist erforderlich.",
+        "reminderAfterDue": "Die Erinnerung darf nicht nach dem Fälligkeitsdatum liegen."
+      }
+    }
+  },
+  "status": {
+    "changeLabel": "Status ändern:",
+    "terminalHint": "Der Status \"{{status}}\" ist final; der Status dieses Tickets kann nicht mehr geändert werden.",
+    "ownershipLockedHint": "Sie sind nicht der Besitzer dieses Tickets und können seinen Status nicht ändern.",
+    "resolveModal": {
+      "title": "Ticket als gelöst markieren",
+      "description": "Eine Lösungsnotiz ist nicht erforderlich, aber empfohlen — wenn Sie eine hinzufügen, wird sie als interne Notiz im Ticket gespeichert.",
+      "cancel": "Abbrechen",
+      "confirm": "Als gelöst markieren",
+      "noteLabel": "Lösungsnotiz (optional)",
+      "notePlaceholder": "Wie wurde das Problem gelöst?",
+      "defaultNoteSubject": "Lösungsnotiz"
+    },
+    "toastNoteFailed": "Status aktualisiert, aber die Notiz konnte nicht gespeichert werden: {{error}}"
+  },
+  "toast": {
+    "created": "Ticket erstellt.",
+    "updated": "Ticket aktualisiert.",
+    "deleted": "Ticket gelöscht.",
+    "statusUpdated": "Status aktualisiert.",
+    "assignUpdated": "Ticketzuweisung aktualisiert.",
+    "slaWarning": "{{ticketNumber}} — SLA-Ziel rückt näher: {{subject}}",
+    "slaBreached": "{{ticketNumber}} — SLA verletzt: {{subject}}"
+  }
+}

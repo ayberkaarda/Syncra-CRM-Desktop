@@ -1,0 +1,207 @@
+{
+  "breadcrumb": {
+    "home": "Accueil",
+    "quotes": "Devis"
+  },
+  "fields": {
+    "title": "Titre",
+    "deal": "Opportunité",
+    "company": "Entreprise",
+    "contact": "Contact",
+    "validUntil": "Valide Jusqu'au",
+    "notes": "Notes",
+    "terms": "Conditions",
+    "creator": "Créé par",
+    "createdAt": "Créé le",
+    "sentAt": "Envoyé le",
+    "acceptedAt": "Accepté le",
+    "rejectedAt": "Refusé le"
+  },
+  "actions": {
+    "detail": "Détails",
+    "edit": "Modifier",
+    "pdf": "PDF",
+    "pdfDownload": "Télécharger le PDF",
+    "revise": "Réviser",
+    "createRevision": "Créer une révision",
+    "delete": "Supprimer",
+    "send": "Envoyer",
+    "changeStatus": "Changer le statut",
+    "openNewTab": "Ouvrir dans un nouvel onglet"
+  },
+  "retry": "Réessayer",
+  "list": {
+    "title": "Devis",
+    "subtitle_one": "{{count}} devis (filtré)",
+    "subtitle_other": "{{count}} devis (filtrés)",
+    "createButton": "Nouveau Devis",
+    "searchPlaceholder": "Rechercher numéro de devis, titre...",
+    "searchAria": "Rechercher des devis",
+    "statusAria": "Filtre de statut",
+    "companyAria": "Filtre d'entreprise",
+    "dealAria": "Filtre d'opportunité",
+    "expiredOnly": "Expirés uniquement",
+    "fromDateAria": "Date de début",
+    "toDateAria": "Date de fin",
+    "allStatuses": "Tous les statuts",
+    "allCompanies": "Toutes les entreprises",
+    "allDeals": "Toutes les opportunités",
+    "loadError": "Une erreur s'est produite lors du chargement des devis.",
+    "emptyTitle": "Aucun devis trouvé",
+    "emptyDescription": "Aucun devis ne correspond à vos critères de recherche ou de filtre.",
+    "columns": {
+      "quoteNumber": "N° Devis",
+      "title": "Titre",
+      "companyContact": "Entreprise / Contact",
+      "deal": "Opportunité",
+      "status": "Statut",
+      "total": "Total",
+      "validUntil": "Validité",
+      "items": "Lignes",
+      "actions": "Actions"
+    }
+  },
+  "deleteModal": {
+    "title": "Supprimer le devis",
+    "description": "Cette action est irréversible. Le devis sera définitivement supprimé.",
+    "confirmText": "Êtes-vous sûr de vouloir supprimer <bold>{{number}} — {{title}}</bold> ?"
+  },
+  "statusModal": {
+    "title": "Changer le statut du devis",
+    "newStatusLabel": "Nouveau Statut",
+    "reasonLabel": "Motif (optionnel)"
+  },
+  "form": {
+    "titleCreate": "Nouveau Devis",
+    "cardTitleEdit": "{{number}} — Modifier",
+    "loadError": "Une erreur s'est produite lors du chargement du devis.",
+    "lockedFieldHint": "Ne peut plus être modifié après l'envoi.",
+    "contactNone": "Aucun contact",
+    "priceListLabel": "Liste de Prix",
+    "priceListDefaultOption": "(Liste de prix par défaut)",
+    "priceListDefaultSuffix": "{{name}} (par défaut)",
+    "itemsTitle": "Lignes",
+    "itemsLockedHint": "Lecture seule car cela affecte le montant — les modifications nécessitent une révision.",
+    "discountTitle": "Remise",
+    "discountLockedHint": "Ne peut plus être modifié après l'envoi.",
+    "discountTypeLabel": "Type de Remise",
+    "discountAmountOption": "Montant Fixe",
+    "discountPercentOption": "Pourcentage",
+    "discountValueLabel": "Valeur de la Remise",
+    "totalsTitle": "Totaux",
+    "validation": {
+      "titleRequired": "Le titre du devis est obligatoire."
+    },
+    "lockedBanner": {
+      "statusText": "Ce devis est au statut « {{status}} ». <bold>Ne peut pas être modifié :</bold> lignes, remise, entreprise, contact. <bold>Peut être modifié :</bold> titre, opportunité, date de validité, notes, conditions — il s'agit uniquement d'informations de présentation/administratives, elles n'affectent pas le montant du devis et sont enregistrées avec le bouton « Enregistrer » habituel.",
+      "revisableHint": "Si vous devez modifier les lignes ou la remise, créez une nouvelle révision.",
+      "notRevisableHint": "Une révision ne peut pas être créée car ce devis a été accepté (un engagement accepté ne peut pas être annulé) — ouvrez un nouveau devis indépendant si une modification affectant le montant est nécessaire."
+    },
+    "priceListChangeModal": {
+      "title": "Liste de prix modifiée",
+      "description": "Voulez-vous également mettre à jour les prix des lignes basées sur des produits existantes selon la nouvelle liste de prix ? Les lignes libres (sans produit) ne sont pas affectées par cette opération. Si vous ne mettez pas à jour, les lignes existantes conservent leurs anciens prix — seuls les produits ajoutés à partir de maintenant utiliseront la nouvelle liste.",
+      "keepPrices": "Non, conserver les prix actuels",
+      "updatePrices": "Oui, mettre à jour",
+      "note": "Cette action est irréversible ; cependant, si vous quittez le formulaire sans enregistrer, aucune modification ne sera appliquée.",
+      "pricesUpdated": "Les prix des lignes basées sur des produits ont été mis à jour selon la nouvelle liste."
+    }
+  },
+  "itemsEditor": {
+    "emptyMessage": "Aucune ligne ajoutée pour le moment.",
+    "emptyHint": "Commencez par rechercher un produit ci-dessous ou en ajoutant une ligne libre.",
+    "columns": {
+      "order": "Ordre",
+      "item": "Ligne",
+      "quantity": "Quantité",
+      "unitPrice": "Prix Unitaire",
+      "discountPercent": "Remise %",
+      "taxRate": "TVA %",
+      "lineTotal": "Total Ligne",
+      "actions": "Actions"
+    },
+    "moveUp": "Déplacer vers le haut",
+    "moveDown": "Déplacer vers le bas",
+    "nameLabel": "Nom de la ligne",
+    "namePlaceholder": "Nom de la ligne",
+    "descriptionLabel": "Description de la ligne",
+    "descriptionPlaceholder": "Description (optionnel)",
+    "quantityLabel": "Quantité",
+    "unitPriceLabel": "Prix unitaire",
+    "discountPercentLabel": "Pourcentage de remise de la ligne",
+    "taxRateLabel": "Taux de TVA",
+    "removeItem": "Supprimer la ligne",
+    "addProductLabel": "Ajouter un Produit",
+    "addProductPlaceholder": "Rechercher et ajouter un produit...",
+    "addFreeItem": "Ajouter une Ligne Libre"
+  },
+  "totals": {
+    "calculating": "Calcul en cours…",
+    "subtotal": "Sous-total (HT)",
+    "discountRow": "Remise ({{label}})",
+    "discountPercent": "{{value}} de remise",
+    "discountFixed": "Remise à montant fixe",
+    "taxTotal": "Total TVA",
+    "taxBreakdownTitle": "Récapitulatif de la Base TVA",
+    "taxBreakdownColumns": {
+      "rate": "Taux",
+      "net": "Net",
+      "discountShare": "Part de Remise",
+      "base": "Base",
+      "tax": "TVA"
+    },
+    "grandTotal": "Total Général"
+  },
+  "detail": {
+    "revisionNoteWithParent": "Ceci est la révision {{revision}} de <link>{{quoteNumber}}</link>.",
+    "revisionNoteNoParent": "Ceci est la révision {{revision}} du devis parent.",
+    "siblingsLabel": "Autres révisions de ce devis :",
+    "revisionBadge": "Révision {{revision}}",
+    "loadError": "Une erreur s'est produite lors du chargement du devis.",
+    "expiredSuffix": " (expiré)",
+    "itemsCount_one": "{{count}} ligne",
+    "itemsCount_other": "{{count}} lignes",
+    "itemsTable": {
+      "columns": {
+        "position": "#",
+        "item": "Ligne",
+        "quantity": "Quantité",
+        "unitPrice": "Prix Unitaire",
+        "discountPercent": "Remise %",
+        "taxRate": "TVA %",
+        "lineTotal": "Total Ligne"
+      },
+      "empty": "Ce devis n'a pas encore de lignes."
+    },
+    "notesTermsTitle": "Notes et Conditions",
+    "pdfPreviewTitle": "Aperçu PDF",
+    "pdfPreview": {
+      "iframeTitle": "Aperçu PDF du Devis",
+      "error": "Échec du chargement du PDF du devis : {{message}}",
+      "errorHint": "Vous pouvez ouvrir le PDF directement via le lien « Ouvrir dans un nouvel onglet » ci-dessus."
+    }
+  },
+  "companyCombobox": {
+    "label": "Entreprise",
+    "placeholder": "Rechercher une entreprise...",
+    "clearAria": "Effacer la sélection d'entreprise",
+    "clearOption": "Aucune entreprise / effacer",
+    "loading": "Chargement…",
+    "empty": "Aucun résultat trouvé"
+  },
+  "dealCombobox": {
+    "label": "Opportunité",
+    "placeholder": "Rechercher une opportunité...",
+    "clearAria": "Effacer la sélection d'opportunité",
+    "clearOption": "Aucune opportunité / effacer",
+    "loading": "Chargement…",
+    "empty": "Aucun résultat trouvé"
+  },
+  "toast": {
+    "created": "Devis créé.",
+    "updated": "Devis mis à jour.",
+    "deleted": "Devis supprimé.",
+    "sent": "Devis envoyé.",
+    "statusChanged": "Statut du devis mis à jour.",
+    "revised": "Révision créée : {{number}}"
+  }
+}

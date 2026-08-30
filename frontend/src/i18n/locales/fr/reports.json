@@ -1,0 +1,102 @@
+{
+  "breadcrumb": { "home": "Accueil", "reports": "Rapports" },
+  "page": {
+    "title": "Rapports",
+    "subtitle": "Analysez la performance commerciale, la répartition par utilisateur et par source"
+  },
+  "tabs": {
+    "salesPerformance": "Performance commerciale",
+    "userPerformance": "Performance des utilisateurs",
+    "sourceAnalysis": "Analyse des sources",
+    "conversion": "Conversion"
+  },
+  "dateRange": {
+    "presets": {
+      "today": "Aujourd'hui",
+      "last7": "7 derniers jours",
+      "last30": "30 derniers jours",
+      "last90": "90 derniers jours"
+    },
+    "menuAria": "Période",
+    "fromLabel": "Début",
+    "toLabel": "Fin"
+  },
+  "export": {
+    "button": "Exporter",
+    "menuAria": "Format d'export",
+    "csv": "CSV",
+    "excel": "Excel"
+  },
+  "groupBy": { "day": "Jour", "week": "Semaine", "month": "Mois" },
+  "noRecords": "Aucun enregistrement trouvé.",
+  "salesPerformance": {
+    "userFilterAria": "Filtre utilisateur",
+    "allUsers": "Tous les utilisateurs",
+    "emptyTitle": "Aucune donnée de vente pour cette période",
+    "emptyDescription": "Aucun enregistrement ne correspond aux filtres sélectionnés.",
+    "tooltipWonLost": "{{won}} gagnées · {{lost}} perdues",
+    "columns": {
+      "period": "Période",
+      "revenue": "Revenu",
+      "won": "Gagnées",
+      "lost": "Perdues",
+      "deals": "Total des opportunités"
+    },
+    "totalsRow": "Total"
+  },
+  "userPerformance": {
+    "unknownUser": "Utilisateur inconnu",
+    "emptyTitle": "Aucune donnée de performance utilisateur pour cette période",
+    "emptyDescription": "Aucune opportunité attribuée n'a été trouvée sur la période sélectionnée.",
+    "tooltipWonConversion": "{{won}} gagnées · {{rate}} % de conversion",
+    "columns": {
+      "user": "Utilisateur",
+      "revenue": "Revenu",
+      "won": "Gagnées",
+      "lost": "Perdues",
+      "openDeals": "Opportunités ouvertes",
+      "openDealsValue": "Valeur des opportunités ouvertes",
+      "conversion": "Conversion",
+      "avgDeal": "Opportunité moy.",
+      "activities": "Activités"
+    }
+  },
+  "sourceAnalysis": {
+    "unknownSource": "Inconnu",
+    "emptyTitle": "Aucune donnée de source pour cette période",
+    "emptyDescription": "Aucun prospect avec une source renseignée n'a été trouvé sur la période sélectionnée.",
+    "tooltipLeadsConversion": "{{leads}} prospects · {{rate}} % de conversion",
+    "columns": {
+      "source": "Source",
+      "leads": "Prospects",
+      "converted": "Convertis",
+      "conversion": "Conversion",
+      "revenue": "Revenu"
+    }
+  },
+  "conversion": {
+    "totalLeads": "Total des prospects",
+    "converted": "Convertis",
+    "conversionRate": "Taux de conversion",
+    "avgConversionTime": "Durée moy. de conversion",
+    "avgConversionTimeValue": "{{days}} jours",
+    "emptyTitle": "Aucune donnée de conversion pour cette période",
+    "emptyDescription": "Aucun prospect n'a été créé sur la période sélectionnée.",
+    "tooltipShare": "{{value}} % de part",
+    "columns": {
+      "status": "Statut",
+      "count": "Nombre de prospects"
+    }
+  },
+  "rateInfo": {
+    "open": "Les opportunités ouvertes ont été converties en {{currency}} au taux du {{date}}.",
+    "closedFrozen": "Les opportunités conclues sont figées au taux du jour de clôture (un chiffre stable).",
+    "closedConverted": "Les opportunités conclues sont figées au taux du jour de clôture ; pour l'affichage, elles ont été converties en {{currency}} au taux du {{date}} (ce chiffre peut varier avec le taux actuel).",
+    "stale_one": "Le taux de change utilisé date de {{count}} jour et peut ne plus être à jour.",
+    "stale_other": "Le taux de change utilisé date de {{count}} jours et peut ne plus être à jour.",
+    "unconvertedOpen_one": "{{count}} devise n'a pas pu être convertie faute de taux ; elle compte pour 0 dans les totaux.",
+    "unconvertedOpen_other": "{{count}} devises n'ont pas pu être converties faute de taux ; elles comptent pour 0 dans les totaux.",
+    "unconvertedClosed_one": "{{count}} opportunité conclue n'a pas de montant figé et est exclue du revenu.",
+    "unconvertedClosed_other": "{{count}} opportunités conclues n'ont pas de montant figé et sont exclues du revenu."
+  }
+}

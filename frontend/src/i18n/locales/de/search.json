@@ -1,0 +1,15 @@
+{
+  "palette": {
+    "title": "Befehlspalette",
+    "inputPlaceholder": "Datensätze, Kontakte oder Benutzer suchen...",
+    "inputAriaLabel": "Datensätze durchsuchen",
+    "resultsAria": "Suchergebnisse",
+    "prompt": "Mindestens 2 Zeichen eingeben, um zu suchen",
+    "loading": "Suche läuft…",
+    "empty": "Keine Ergebnisse gefunden",
+    "error": "Bei der Suche ist ein Fehler aufgetreten",
+    "hintNavigate": "↑↓ navigieren",
+    "hintSelect": "↵ auswählen",
+    "hintClose": "esc schließen"
+  }
+}

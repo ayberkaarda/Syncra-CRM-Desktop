@@ -1,0 +1,109 @@
+{
+  "breadcrumb": {
+    "home": "Startseite",
+    "users": "Benutzer"
+  },
+  "list": {
+    "title": "Benutzer",
+    "subtitle_one": "{{count}} Benutzer",
+    "subtitle_other": "{{count}} Benutzer",
+    "createButton": "Neuer Benutzer",
+    "searchPlaceholder": "Nach Name oder E-Mail suchen...",
+    "searchAria": "Benutzer suchen",
+    "roleFilterAria": "Rollenfilter",
+    "statusFilterAria": "Statusfilter",
+    "allRoles": "Alle Rollen",
+    "allStatuses": "Alle",
+    "loadError": "Beim Laden der Benutzer ist ein Fehler aufgetreten.",
+    "emptyTitle": "Keine Benutzer gefunden",
+    "emptyDescription": "Kein Benutzer entspricht Ihren Such- oder Filterkriterien.",
+    "columns": {
+      "user": "Benutzer",
+      "role": "Rolle",
+      "department": "Abteilung",
+      "status": "Status",
+      "lastLogin": "Letzte Anmeldung",
+      "actions": "Aktionen"
+    },
+    "neverLoggedIn": "Nie angemeldet",
+    "actions": {
+      "edit": "Bearbeiten",
+      "resetPassword": "Passwort zurücksetzen",
+      "activate": "Aktivieren",
+      "deactivate": "Deaktivieren",
+      "delete": "Löschen"
+    }
+  },
+  "status": {
+    "active": "Aktiv",
+    "inactive": "Inaktiv"
+  },
+  "deleteModal": {
+    "title": "Benutzer löschen",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Der Benutzer wird dauerhaft gelöscht.",
+    "confirmText": "Möchten Sie <bold>{{name}}</bold> ({{email}}) wirklich löschen?"
+  },
+  "deactivateModal": {
+    "title": "Benutzer deaktivieren",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden — die Sitzung des Benutzers wird sofort beendet und er kann sich erst nach erneuter Aktivierung wieder anmelden.",
+    "confirmText": "Möchten Sie <bold>{{name}}</bold> wirklich deaktivieren?"
+  },
+  "form": {
+    "titleCreate": "Neuer Benutzer",
+    "titleEdit": "Benutzer bearbeiten",
+    "nameLabel": "Vollständiger Name",
+    "emailLabel": "E-Mail",
+    "roleLabel": "Rolle",
+    "rolePlaceholder": "Rolle auswählen",
+    "departmentLabel": "Abteilung",
+    "temporaryPasswordLabel": "Temporäres Passwort",
+    "showPassword": "Passwort anzeigen",
+    "hidePassword": "Passwort verbergen",
+    "generatePasswordTitle": "Zufälliges starkes Passwort erzeugen",
+    "copyPasswordTitle": "In die Zwischenablage kopieren",
+    "copyPasswordAria": "Passwort in die Zwischenablage kopieren",
+    "strengthLabel": "Stärke: {{strength}}",
+    "createNotice": "Nach der Erstellung meldet sich der Benutzer mit dem temporären Passwort an und muss es bei der ersten Anmeldung ändern.",
+    "errors": {
+      "nameRequired": "Der vollständige Name ist erforderlich.",
+      "emailRequired": "Die E-Mail ist erforderlich.",
+      "roleRequired": "Eine Rolle muss ausgewählt werden.",
+      "passwordPolicy": "Das Passwort muss alle Richtlinienregeln erfüllen."
+    },
+    "toast": {
+      "passwordCopied": "Passwort in die Zwischenablage kopiert.",
+      "passwordCopyFailed": "Kopieren in die Zwischenablage fehlgeschlagen. Wählen und kopieren Sie das Passwort manuell."
+    }
+  },
+  "resetPasswordModal": {
+    "title": "Passwort zurücksetzen",
+    "description": "Legen Sie ein neues temporäres Passwort für {{name}} ({{email}}) fest.",
+    "newPasswordLabel": "Neues Passwort",
+    "submit": "Passwort zurücksetzen",
+    "errors": {
+      "passwordPolicy": "Das Passwort muss alle Richtlinienregeln erfüllen."
+    }
+  },
+  "passwordStrength": {
+    "veryWeak": "Sehr schwach",
+    "weak": "Schwach",
+    "medium": "Mittel",
+    "good": "Gut",
+    "strong": "Stark"
+  },
+  "passwordRules": {
+    "length": "Mindestens {{count}} Zeichen",
+    "upper": "Mindestens ein Großbuchstabe",
+    "lower": "Mindestens ein Kleinbuchstabe",
+    "digit": "Mindestens eine Ziffer",
+    "special": "Mindestens ein Sonderzeichen"
+  },
+  "toast": {
+    "created": "Benutzer erstellt.",
+    "updated": "Benutzer aktualisiert.",
+    "deleted": "Benutzer gelöscht.",
+    "activated": "Benutzer aktiviert.",
+    "deactivated": "Benutzer deaktiviert.",
+    "passwordReset": "Passwort zurückgesetzt."
+  }
+}

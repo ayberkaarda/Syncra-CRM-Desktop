@@ -1,0 +1,15 @@
+{
+  "palette": {
+    "title": "Komut Paleti",
+    "inputPlaceholder": "Kayıt, kişi veya kullanıcı ara...",
+    "inputAriaLabel": "Kayıtlarda ara",
+    "resultsAria": "Arama sonuçları",
+    "prompt": "Aramak için en az 2 karakter yazın",
+    "loading": "Aranıyor…",
+    "empty": "Sonuç bulunamadı",
+    "error": "Arama sırasında bir hata oluştu",
+    "hintNavigate": "↑↓ gezin",
+    "hintSelect": "↵ seç",
+    "hintClose": "esc kapat"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "actions": {
+    "manage": "Ansichten",
+    "saveCurrent": "Aktuelle Filter speichern",
+    "share": "Teilen",
+    "unshare": "Freigabe aufheben"
+  },
+  "modal": {
+    "title": "Gespeicherte Ansichten — {{module}}"
+  },
+  "form": {
+    "nameLabel": "Name der Ansicht",
+    "namePlaceholder": "z. B. Meine offenen Verkaufschancen diesen Monat",
+    "sharedLabel": "Mit dem Team teilen",
+    "sharedHint": "Eine geteilte Ansicht kann von allen gesehen und angewendet werden; nur Sie können sie bearbeiten oder löschen."
+  },
+  "list": {
+    "empty": "Noch keine gespeicherten Ansichten.",
+    "sharedBadge": "Geteilt",
+    "ownedBy": "Geteilt von {{name}}"
+  },
+  "deleteConfirm": {
+    "title": "„{{name}}“ löschen?",
+    "confirm": "Löschen",
+    "cancel": "Abbrechen"
+  },
+  "aria": {
+    "apply": "Ansicht anwenden: {{name}}",
+    "share": "Teilen: {{name}}",
+    "unshare": "Freigabe aufheben: {{name}}",
+    "delete": "Ansicht löschen: {{name}}"
+  }
+}

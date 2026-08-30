@@ -1,0 +1,89 @@
+{
+  "activity": {
+    "type": {
+      "call": "Anruf",
+      "meeting": "Meeting",
+      "email": "E-Mail",
+      "note": "Notiz",
+      "unknown": "Sonstiges"
+    }
+  },
+  "deal": {
+    "status": {
+      "open": "Offen",
+      "won": "Gewonnen",
+      "lost": "Verloren"
+    }
+  },
+  "task": {
+    "priority": { "low": "Niedrig", "normal": "Normal", "high": "Hoch", "urgent": "Dringend" },
+    "status": { "pending": "Ausstehend", "in_progress": "In Bearbeitung", "completed": "Abgeschlossen", "cancelled": "Storniert" }
+  },
+  "ticket": {
+    "priority": {
+      "low": "Niedrig",
+      "normal": "Normal",
+      "high": "Hoch",
+      "urgent": "Dringend"
+    },
+    "status": {
+      "open": "Offen",
+      "pending": "Wartend",
+      "in_progress": "In Bearbeitung",
+      "resolved": "Gelöst",
+      "closed": "Geschlossen"
+    }
+  },
+  "quote": {
+    "status": {
+      "draft": "Entwurf",
+      "sent": "Gesendet",
+      "accepted": "Angenommen",
+      "rejected": "Abgelehnt",
+      "expired": "Abgelaufen"
+    }
+  },
+  "lead": {
+    "status": {
+      "new": "Neu",
+      "contacted": "Kontaktiert",
+      "qualified": "Qualifiziert",
+      "unqualified": "Nicht qualifiziert",
+      "converted": "Konvertiert"
+    },
+    "source": {
+      "website": "Website",
+      "referral": "Empfehlung",
+      "cold_call": "Kaltakquise",
+      "email_campaign": "E-Mail-Kampagne",
+      "social_media": "Soziale Medien",
+      "event": "Veranstaltung",
+      "other": "Sonstiges"
+    }
+  },
+  "role": {
+    "super_admin": "Super-Administrator",
+    "admin": "Administrator",
+    "sales_manager": "Vertriebsleiter",
+    "sales_rep": "Vertriebsmitarbeiter",
+    "support_agent": "Support-Mitarbeiter",
+    "viewer": "Betrachter"
+  },
+  "ticketCategory": {
+    "technical_support": "Technischer Support",
+    "billing": "Abrechnung",
+    "product_info": "Produktinformation",
+    "complaint": "Beschwerde",
+    "installation": "Installation",
+    "training_request": "Schulungsanfrage"
+  },
+  "pipelineStage": {
+    "yeni-firsat": "Neue Chance",
+    "iletisim-kuruldu": "Kontakt hergestellt",
+    "teklif-hazirlaniyor": "Angebot wird vorbereitet",
+    "teklif-gonderildi": "Angebot gesendet",
+    "muzakere": "Verhandlung",
+    "kazanildi": "Gewonnen",
+    "kaybedildi": "Verloren"
+  }
+}

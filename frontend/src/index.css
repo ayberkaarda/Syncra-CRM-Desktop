@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+/* Poppins self-host (kapalı devre sistemde Google Fonts CDN yerine — bkz. docs/DESIGN-SYSTEM.md §9) */
+@import '@fontsource/poppins/400.css';
+@import '@fontsource/poppins/500.css';
+@import '@fontsource/poppins/600.css';
+@import '@fontsource/poppins/700.css';
+
+@import './styles/tokens.css';
+
+body {
+  background-color: var(--color-surface-0);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

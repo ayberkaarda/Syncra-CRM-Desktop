@@ -1,0 +1,138 @@
+{
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "create": "Create",
+    "close": "Close",
+    "confirm": "Confirm",
+    "retry": "Retry",
+    "loadMore": "Load more",
+    "search": "Search",
+    "clear": "Clear",
+    "apply": "Apply",
+    "back": "Back",
+    "view": "View",
+    "download": "Download",
+    "upload": "Upload",
+    "export": "Export",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "states": {
+    "loading": "Loading…",
+    "noRecords": "No records found",
+    "empty": "Nothing to show",
+    "error": "An error occurred"
+  },
+  "pagination": {
+    "aria": "Pagination",
+    "summary": "{{from}} - {{to}} of {{total}} records",
+    "previous": "Previous page",
+    "next": "Next page"
+  },
+  "timeline": {
+    "justNow": "just now",
+    "loadError": "An error occurred while loading the timeline.",
+    "loadMoreError": "An error occurred while loading more records.",
+    "loadMore": "Load more",
+    "emptyTitle": "No interactions yet",
+    "emptyDescription": "There is nothing to show for this record yet."
+  },
+  "toast": {
+    "genericError": "Something went wrong. Please try again.",
+    "saveSuccess": "Changes saved.",
+    "saveError": "An error occurred while saving.",
+    "deleteSuccess": "Record deleted.",
+    "deleteError": "An error occurred while deleting."
+  },
+  "nav": {
+    "aria": "Main navigation",
+    "sections": {
+      "main": "MAIN",
+      "sales": "SALES",
+      "work": "WORK",
+      "analysis": "ANALYTICS",
+      "admin": "ADMINISTRATION"
+    },
+    "dashboard": "Dashboard",
+    "leads": "Leads",
+    "contacts": "Contacts",
+    "companies": "Companies",
+    "deals": "Deals",
+    "quotes": "Quotes",
+    "products": "Products",
+    "tasks": "Tasks",
+    "tickets": "Tickets",
+    "chat": "Chat",
+    "reports": "Reports",
+    "users": "Users",
+    "logs": "Logs",
+    "settings": "Settings"
+  },
+  "layout": {
+    "toggleSidebar": "Toggle sidebar",
+    "search": "Search",
+    "searchPlaceholder": "Search...",
+    "themeAria": "Theme: {{theme}}. Click to change.",
+    "theme": {
+      "light": "Light theme",
+      "dark": "Dark theme",
+      "system": "System theme"
+    },
+    "realtimeDisconnected": "Realtime connection lost",
+    "userMenu": "User menu",
+    "userFallback": "User",
+    "profile": "Profile",
+    "logout": "Sign out"
+  },
+  "language": {
+    "label": "Language",
+    "aria": "Interface language",
+    "names": {
+      "tr": "Türkçe",
+      "en": "English",
+      "de": "Deutsch",
+      "fr": "Français"
+    },
+    "saveFailed": "Could not save the language preference."
+  },
+  "currency": {
+    "label": "Currency",
+    "aria": "Display currency",
+    "names": {
+      "TRY": "Turkish Lira",
+      "USD": "US Dollar",
+      "EUR": "Euro",
+      "GBP": "British Pound"
+    },
+    "saveFailed": "Could not save the currency preference."
+  },
+  "pages": {
+    "notFound": {
+      "title": "Page not found",
+      "description": "The page you're looking for doesn't exist or may have moved."
+    },
+    "dashboard": {
+      "revenueTrend": {
+        "title": "Revenue Trend",
+        "subtitle": "Revenue from deals won in the selected range",
+        "day": "Day",
+        "week": "Week",
+        "month": "Month"
+      },
+      "salesFunnel": {
+        "title": "Sales Funnel",
+        "subtitle": "Open deal amount per stage"
+      },
+      "recentActivities": {
+        "title": "Recent Activities"
+      },
+      "taskSummary": {
+        "title": "Task Summary"
+      }
+    }
+  }
+}

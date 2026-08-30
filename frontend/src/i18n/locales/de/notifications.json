@@ -1,0 +1,34 @@
+{
+  "breadcrumb": { "home": "Startseite", "notifications": "Benachrichtigungen" },
+  "page": {
+    "title": "Benachrichtigungen",
+    "subtitle_one": "{{count}} Benachrichtigung",
+    "subtitle_other": "{{count}} Benachrichtigungen",
+    "markAllRead": "Alle als gelesen markieren",
+    "tabs": { "all": "Alle", "unread": "Ungelesen", "read": "Gelesen" },
+    "emptyTitle": "Keine Benachrichtigungen",
+    "emptyUnread": "Sie haben keine ungelesenen Benachrichtigungen.",
+    "emptyAll": "Sie haben noch keine Benachrichtigungen erhalten.",
+    "newBadge": "Neu",
+    "deleteAria": "Benachrichtigung löschen"
+  },
+  "bell": {
+    "ariaLabel": "Benachrichtigungen",
+    "ariaLabelUnread": "Benachrichtigungen ({{count}} ungelesen)",
+    "dialogAria": "Benachrichtigungen",
+    "title": "Benachrichtigungen",
+    "markAllRead": "Alle als gelesen markieren",
+    "viewAll": "Alle Benachrichtigungen anzeigen"
+  },
+  "list": {
+    "emptyTitle": "Keine Benachrichtigungen",
+    "emptyDescription": "Neue Ereignisse erscheinen hier."
+  },
+  "relativeTime": {
+    "justNow": "gerade eben"
+  },
+  "toast": {
+    "markAllReadSuccess": "Alle Benachrichtigungen als gelesen markiert.",
+    "deleteSuccess": "Benachrichtigung gelöscht."
+  }
+}

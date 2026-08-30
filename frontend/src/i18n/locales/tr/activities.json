@@ -1,0 +1,76 @@
+{
+  "breadcrumb": {
+    "home": "Anasayfa",
+    "activities": "Aktiviteler"
+  },
+  "list": {
+    "title": "Aktiviteler",
+    "subtitle_one": "{{count}} aktivite",
+    "subtitle_other": "{{count}} aktivite",
+    "createButton": "Aktivite Kaydet",
+    "error": "Aktiviteler yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "empty": {
+      "title": "Aktivite bulunamadı",
+      "description": "Arama veya filtre kriterlerinizle eşleşen aktivite yok."
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Konu ara...",
+    "searchAria": "Aktivite ara",
+    "typeAria": "Tür filtresi",
+    "userAria": "Kullanıcı filtresi",
+    "recordTypeAria": "İlgili kayıt türü filtresi",
+    "fromDateAria": "Başlangıç tarihi",
+    "toDateAria": "Bitiş tarihi",
+    "allTypes": "Tüm türler",
+    "allUsers": "Tüm kullanıcılar",
+    "allRecordTypes": "Tüm kayıt türleri"
+  },
+  "table": {
+    "type": "Tür",
+    "subject": "Konu",
+    "relatedRecord": "İlgili Kayıt",
+    "user": "Kullanıcı",
+    "occurredAt": "Gerçekleşme",
+    "duration": "Süre",
+    "outcome": "Sonuç",
+    "actions": "İşlemler",
+    "durationValue_one": "{{count}} dk",
+    "durationValue_other": "{{count}} dk",
+    "edit": "Düzenle",
+    "editForbidden": "Bu aktiviteyi yazan kişi değilsiniz, düzenleyemezsiniz.",
+    "delete": "Sil"
+  },
+  "form": {
+    "titleCreate": "Aktivite Kaydet",
+    "titleEdit": "Aktiviteyi Düzenle",
+    "cancel": "Vazgeç",
+    "submitCreate": "Oluştur",
+    "submitEdit": "Kaydet",
+    "fields": {
+      "type": "Tür",
+      "subject": "Konu",
+      "occurredAt": "Gerçekleşme Tarihi",
+      "durationMinutes": "Süre (dakika)",
+      "outcome": "Sonuç",
+      "body": "Açıklama"
+    },
+    "validation": {
+      "subjectRequired": "Konu zorunludur.",
+      "occurredAtRequired": "Gerçekleşme tarihi zorunludur.",
+      "occurredAtFuture": "Aktivite tarihi gelecekte olamaz.",
+      "durationRange": "Süre 0 ile 1440 dakika arasında olmalıdır."
+    }
+  },
+  "deleteModal": {
+    "title": "Aktiviteyi sil",
+    "description": "Bu işlem geri alınamaz. Aktivite kalıcı olarak silinecek.",
+    "confirm": "<strong>{{subject}}</strong> adlı aktiviteyi silmek istediğinize emin misiniz?"
+  },
+  "toast": {
+    "created": "Aktivite kaydedildi.",
+    "updated": "Aktivite güncellendi.",
+    "deleted": "Aktivite silindi."
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "breadcrumb": {
+    "products": "Products",
+    "priceLists": "Price Lists"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "unlimited": "Unlimited",
+  "defaultBadge": "Default",
+  "retry": "Retry",
+  "actions": {
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "list": {
+    "title": "Price Lists",
+    "subtitle_one": "{{count}} list",
+    "subtitle_other": "{{count}} lists",
+    "createButton": "New List",
+    "searchPlaceholder": "Search list name or code...",
+    "searchAria": "Search price lists",
+    "statusAria": "Status filter",
+    "defaultAria": "Default filter",
+    "allStatuses": "All statuses",
+    "allDefault": "All",
+    "onlyDefault": "Default only",
+    "notDefault": "Non-default only",
+    "loadError": "An error occurred while loading price lists.",
+    "emptyTitle": "No price list found",
+    "emptyDescription": "No price list matches your search or filter criteria.",
+    "columns": {
+      "list": "List",
+      "itemCount": "Product Count",
+      "validity": "Validity",
+      "default": "Default",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "manageAction": "Manage Prices",
+    "deleteDisabledAction": "Default list cannot be deleted"
+  },
+  "deleteModal": {
+    "title": "Delete price list",
+    "descriptionDefault": "The default price list cannot be deleted. First set another list as default or deactivate this list.",
+    "descriptionNormal": "This action cannot be undone. The price list and all product prices within it will be permanently deleted.",
+    "confirmText": "Are you sure you want to delete <bold>{{name}}</bold>?"
+  },
+  "form": {
+    "titleCreate": "New Price List",
+    "titleEdit": "Edit Price List",
+    "nameLabel": "List Name",
+    "codeLabel": "Code",
+    "codeHint": "Must be unique. Automatically normalized to UPPERCASE with underscores.",
+    "descriptionLabel": "Description",
+    "currencyLabel": "Currency",
+    "currency": {
+      "try": "TRY — Turkish Lira",
+      "usd": "USD — US Dollar",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — British Pound"
+    },
+    "validFromLabel": "Valid From",
+    "validUntilLabel": "Valid Until",
+    "defaultCheckbox": "Default list",
+    "defaultWarningWithCurrent": "The current default list (\"{{name}}\") will change — this list will be marked as default in its place.",
+    "defaultWarningNoCurrent": "This list will be marked as the default price list.",
+    "activeCheckbox": "Active",
+    "validation": {
+      "nameRequired": "List name is required.",
+      "codeRequired": "List code is required.",
+      "validUntilBeforeFrom": "End date cannot be before the start date."
+    }
+  },
+  "detail": {
+    "validityLabel": "Validity",
+    "loadError": "An error occurred while loading the price list.",
+    "addProductPriceLabel": "List Price",
+    "addOrUpdateAction": "Add / Update",
+    "addProductRequired": "Select a product.",
+    "addPriceInvalid": "Enter a valid, non-negative price.",
+    "addHint": "If a product already on the list is selected, its current price is updated with this value.",
+    "emptyTitle": "This list has no product prices yet",
+    "emptyDescription": "Catalog prices apply — you can define a custom price for this list by adding a product above.",
+    "columns": {
+      "product": "Product",
+      "catalogPrice": "Catalog Price",
+      "listPrice": "List Price",
+      "diff": "Difference",
+      "actions": "Actions"
+    },
+    "noDiff": "No difference",
+    "priceInputAria": "{{name}} list price",
+    "productFallback": "Product",
+    "editPrice": "Edit price",
+    "removeAction": "Remove",
+    "removeModal": {
+      "title": "Remove product from list",
+      "confirmText": "Are you sure you want to remove <bold>{{name}}</bold> from this price list?",
+      "warning": "After removal, the catalog price will apply to this product."
+    },
+    "readOnlyHint": "You don't have permission to edit prices, you can only view them."
+  },
+  "productCombobox": {
+    "label": "Product",
+    "placeholder": "Search product name or SKU...",
+    "clearAria": "Clear product selection",
+    "loading": "Loading…",
+    "empty": "No results found"
+  },
+  "toast": {
+    "created": "Price list created.",
+    "updated": "Price list updated.",
+    "deleted": "Price list deleted.",
+    "priceSaved": "Product price saved.",
+    "priceRemoved": "Product removed from price list. The catalog price will now apply to this product."
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "list": {
+    "breadcrumbHome": "Anasayfa",
+    "breadcrumbCurrent": "Ürünler",
+    "title": "Ürünler",
+    "subtitle_one": "{{count}} ürün",
+    "subtitle_other": "{{count}} ürün",
+    "priceListsLink": "Fiyat Listeleri",
+    "newProduct": "Yeni Ürün",
+    "searchPlaceholder": "Ürün adı veya SKU ara...",
+    "searchAria": "Ürün ara",
+    "categoryFilterAria": "Kategori filtresi",
+    "statusFilterAria": "Durum filtresi",
+    "tagFilterAria": "Etiket filtresi",
+    "allCategories": "Tüm kategoriler",
+    "allStatuses": "Tüm durumlar",
+    "allTags": "Tüm etiketler",
+    "minPricePlaceholder": "Min fiyat",
+    "minPriceAria": "Minimum fiyat",
+    "maxPricePlaceholder": "Maks fiyat",
+    "maxPriceAria": "Maksimum fiyat",
+    "inStockOnly": "Sadece stokta olanlar",
+    "loadError": "Ürünler yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "empty": {
+      "title": "Ürün bulunamadı",
+      "description": "Arama veya filtre kriterlerinizle eşleşen ürün yok."
+    },
+    "columns": {
+      "product": "Ürün",
+      "category": "Kategori",
+      "unitPrice": "Birim Fiyat",
+      "taxRate": "KDV %",
+      "unit": "Birim",
+      "stock": "Stok",
+      "status": "Durum",
+      "tags": "Etiketler",
+      "actions": "İşlemler"
+    },
+    "actions": {
+      "edit": "Düzenle",
+      "delete": "Sil"
+    },
+    "deleteModal": {
+      "title": "Ürünü sil",
+      "description": "Bu işlem geri alınamaz. Ürün kalıcı olarak silinecek.",
+      "cancel": "Vazgeç",
+      "confirm": "Sil",
+      "confirmText": "<bold>{{name}}</bold> adlı ürünü silmek istediğinize emin misiniz?"
+    }
+  },
+  "status": {
+    "active": "Aktif",
+    "inactive": "Pasif"
+  },
+  "form": {
+    "titleCreate": "Yeni Ürün",
+    "titleEdit": "Ürünü Düzenle",
+    "cancel": "Vazgeç",
+    "submitCreate": "Oluştur",
+    "submitEdit": "Kaydet",
+    "nameLabel": "Ürün Adı",
+    "skuLabel": "SKU",
+    "skuHint": "Boş bırakılabilir; girilirse benzersiz olmalıdır.",
+    "descriptionLabel": "Açıklama",
+    "categoryLabel": "Kategori",
+    "categoryPlaceholder": "Mevcut bir kategori seçin veya yeni yazın",
+    "categoryHint": "Listeden seçebilir veya serbestçe yeni bir kategori yazabilirsiniz.",
+    "unitPriceLabel": "Birim Fiyat",
+    "currencyLabel": "Para Birimi",
+    "currency": {
+      "try": "TRY — Türk Lirası",
+      "usd": "USD — Amerikan Doları",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — İngiliz Sterlini"
+    },
+    "taxRateLabel": "KDV %",
+    "unitLabel": "Birim",
+    "stockQuantityLabel": "Stok Miktarı",
+    "stockQuantityHint": "Boş bırakılırsa stok takibi yapılmadığı anlamına gelir.",
+    "activeLabel": "Aktif",
+    "validation": {
+      "nameRequired": "Ürün adı zorunludur.",
+      "unitPriceRequired": "Birim fiyat zorunludur.",
+      "unitPriceInvalid": "Birim fiyat geçerli, negatif olmayan bir sayı olmalıdır.",
+      "taxRateRange": "KDV oranı 0 ile 100 arasında olmalıdır.",
+      "stockQuantityInvalid": "Stok miktarı negatif olmayan bir tam sayı olmalıdır."
+    }
+  },
+  "customFields": {
+    "sectionTitle": "Özel Alanlar",
+    "selectPlaceholder": "Seçin…",
+    "noOptions": "Seçenek tanımlı değil."
+  },
+  "tagSelect": {
+    "label": "Etiketler",
+    "placeholder": "Etiket seç...",
+    "loading": "Yükleniyor…",
+    "empty": "Etiket bulunamadı",
+    "removeAria": "{{name}} etiketini kaldır"
+  },
+  "toast": {
+    "created": "Ürün oluşturuldu.",
+    "updated": "Ürün güncellendi.",
+    "deleted": "Ürün silindi."
+  }
+}

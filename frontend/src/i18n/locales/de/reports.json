@@ -1,0 +1,102 @@
+{
+  "breadcrumb": { "home": "Startseite", "reports": "Berichte" },
+  "page": {
+    "title": "Berichte",
+    "subtitle": "Verkaufsleistung, Benutzer- und Quellenverteilung einsehen"
+  },
+  "tabs": {
+    "salesPerformance": "Verkaufsleistung",
+    "userPerformance": "Benutzerleistung",
+    "sourceAnalysis": "Quellenanalyse",
+    "conversion": "Konversion"
+  },
+  "dateRange": {
+    "presets": {
+      "today": "Heute",
+      "last7": "Letzte 7 Tage",
+      "last30": "Letzte 30 Tage",
+      "last90": "Letzte 90 Tage"
+    },
+    "menuAria": "Zeitraum",
+    "fromLabel": "Beginn",
+    "toLabel": "Ende"
+  },
+  "export": {
+    "button": "Exportieren",
+    "menuAria": "Exportformat",
+    "csv": "CSV",
+    "excel": "Excel"
+  },
+  "groupBy": { "day": "Tag", "week": "Woche", "month": "Monat" },
+  "noRecords": "Kein Datensatz gefunden.",
+  "salesPerformance": {
+    "userFilterAria": "Benutzerfilter",
+    "allUsers": "Alle Benutzer",
+    "emptyTitle": "Keine Verkaufsdaten für diesen Zeitraum",
+    "emptyDescription": "Kein Datensatz entspricht den ausgewählten Filtern.",
+    "tooltipWonLost": "{{won}} gewonnen · {{lost}} verloren",
+    "columns": {
+      "period": "Zeitraum",
+      "revenue": "Umsatz",
+      "won": "Gewonnen",
+      "lost": "Verloren",
+      "deals": "Verkaufschancen gesamt"
+    },
+    "totalsRow": "Gesamt"
+  },
+  "userPerformance": {
+    "unknownUser": "Unbekannter Benutzer",
+    "emptyTitle": "Keine Benutzerleistungsdaten für diesen Zeitraum",
+    "emptyDescription": "Im gewählten Zeitraum wurde keine zugewiesene Verkaufschance gefunden.",
+    "tooltipWonConversion": "{{won}} gewonnen · {{rate}}% Konversion",
+    "columns": {
+      "user": "Benutzer",
+      "revenue": "Umsatz",
+      "won": "Gewonnen",
+      "lost": "Verloren",
+      "openDeals": "Offene Verkaufschancen",
+      "openDealsValue": "Wert offener Verkaufschancen",
+      "conversion": "Konversion",
+      "avgDeal": "Ø Verkaufschance",
+      "activities": "Aktivitäten"
+    }
+  },
+  "sourceAnalysis": {
+    "unknownSource": "Unbekannt",
+    "emptyTitle": "Keine Quellendaten für diesen Zeitraum",
+    "emptyDescription": "Im gewählten Zeitraum wurde kein Interessent mit markierter Quelle gefunden.",
+    "tooltipLeadsConversion": "{{leads}} Interessenten · {{rate}}% Konversion",
+    "columns": {
+      "source": "Quelle",
+      "leads": "Interessenten",
+      "converted": "Konvertiert",
+      "conversion": "Konversion",
+      "revenue": "Umsatz"
+    }
+  },
+  "conversion": {
+    "totalLeads": "Interessenten gesamt",
+    "converted": "Konvertiert",
+    "conversionRate": "Konversionsrate",
+    "avgConversionTime": "Ø Konversionsdauer",
+    "avgConversionTimeValue": "{{days}} Tage",
+    "emptyTitle": "Keine Konversionsdaten für diesen Zeitraum",
+    "emptyDescription": "Im gewählten Zeitraum wurde kein Interessent erstellt.",
+    "tooltipShare": "{{value}}% Anteil",
+    "columns": {
+      "status": "Status",
+      "count": "Anzahl Interessenten"
+    }
+  },
+  "rateInfo": {
+    "open": "Offene Verkaufschancen wurden mit dem Kurs vom {{date}} in {{currency}} umgerechnet.",
+    "closedFrozen": "Abgeschlossene Verkaufschancen sind zum Kurs des Abschlusstags eingefroren (ein stabiler Wert).",
+    "closedConverted": "Abgeschlossene Verkaufschancen sind zum Kurs des Abschlusstags eingefroren; zur Anzeige wurden sie mit dem Kurs vom {{date}} in {{currency}} umgerechnet (dieser Wert kann sich mit dem aktuellen Kurs ändern).",
+    "stale_one": "Der verwendete Kurs ist {{count}} Tag alt und möglicherweise nicht mehr aktuell.",
+    "stale_other": "Der verwendete Kurs ist {{count}} Tage alt und möglicherweise nicht mehr aktuell.",
+    "unconvertedOpen_one": "{{count}} Währung konnte mangels Kurs nicht umgerechnet werden; sie zählt als 0 in den Summen.",
+    "unconvertedOpen_other": "{{count}} Währungen konnten mangels Kurs nicht umgerechnet werden; sie zählen als 0 in den Summen.",
+    "unconvertedClosed_one": "{{count}} abgeschlossene Verkaufschance hat keinen eingefrorenen Betrag und ist nicht im Umsatz enthalten.",
+    "unconvertedClosed_other": "{{count}} abgeschlossene Verkaufschancen haben keinen eingefrorenen Betrag und sind nicht im Umsatz enthalten."
+  }
+}

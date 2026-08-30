@@ -1,0 +1,146 @@
+{
+  "breadcrumb": {
+    "home": "Accueil",
+    "logs": "Journaux"
+  },
+  "page": {
+    "title": "Journaux",
+    "subtitle_one": "{{count}} enregistrement",
+    "subtitle_other": "{{count}} enregistrements"
+  },
+  "tabs": {
+    "sessions": "Sessions",
+    "pageVisits": "Navigation",
+    "activities": "Actions",
+    "live": "Flux en direct"
+  },
+  "filterBar": {
+    "searchPlaceholder": "Rechercher...",
+    "searchAria": "Rechercher dans les journaux",
+    "userFilterAria": "Filtre utilisateur",
+    "allUsers": "Tous les utilisateurs",
+    "fromDateAria": "Date de début",
+    "toDateAria": "Date de fin",
+    "eventFilterAria": "Filtre de type d'événement",
+    "subjectTypeFilterAria": "Filtre de type d'entité",
+    "allEvents": "Tous les événements",
+    "allSubjectTypes": "Toutes les entités"
+  },
+  "sessions": {
+    "loadError": "Une erreur s'est produite lors du chargement des sessions.",
+    "emptyTitle": "Aucune session trouvée",
+    "emptyDescription": "Aucune session ne correspond à vos critères de recherche ou de filtre.",
+    "columns": {
+      "user": "Utilisateur",
+      "event": "Événement",
+      "ip": "IP",
+      "device": "Appareil / Navigateur / Plateforme",
+      "loginAt": "Connexion",
+      "logoutAt": "Déconnexion",
+      "duration": "Durée"
+    }
+  },
+  "pageVisits": {
+    "loadError": "Une erreur s'est produite lors du chargement des visites de page.",
+    "emptyTitle": "Aucune visite de page trouvée",
+    "emptyDescription": "Aucune visite de page ne correspond à vos critères de recherche ou de filtre.",
+    "columns": {
+      "user": "Utilisateur",
+      "page": "Page",
+      "path": "Chemin",
+      "enteredAt": "Entrée",
+      "duration": "Durée",
+      "ip": "IP"
+    }
+  },
+  "activities": {
+    "loadError": "Une erreur s'est produite lors du chargement des actions.",
+    "emptyTitle": "Aucune action trouvée",
+    "emptyDescription": "Aucune action ne correspond à vos critères de recherche ou de filtre.",
+    "columns": {
+      "user": "Utilisateur",
+      "event": "Événement",
+      "subject": "Entité",
+      "date": "Date",
+      "detail": "Détail"
+    },
+    "detailButton": "Détail"
+  },
+  "detailModal": {
+    "noDetailTitle": "Aucun détail de modification pour cet enregistrement.",
+    "responseTruncatedWarning": "Les données de modification de cet enregistrement ont peut-être été partiellement tronquées en raison de la limite de taille.",
+    "fieldTruncatedNote": "(tronqué à 1024 caractères)",
+    "columns": {
+      "field": "Champ",
+      "old": "Ancien",
+      "new": "Nouveau"
+    }
+  },
+  "liveStream": {
+    "recordCount_one": "{{count}} enregistrement (100 maximum conservés)",
+    "recordCount_other": "{{count}} enregistrements (100 maximum conservés)",
+    "connection": {
+      "connected": "Connecté",
+      "connecting": "Connexion en cours",
+      "disconnected": "Déconnecté"
+    },
+    "pause": "Mettre en pause",
+    "resume": "Reprendre",
+    "disconnectedBanner": "La connexion en temps réel est actuellement coupée — les nouveaux enregistrements continueront d'arriver une fois la connexion rétablie.",
+    "emptyTitle": "Aucun enregistrement en direct pour l'instant",
+    "emptyDescription": "Lorsqu'une nouvelle action se produit dans le système, elle apparaîtra ici instantanément."
+  },
+  "onlineUsers": {
+    "title": "Utilisateurs en ligne",
+    "count_one": "{{count}} personne",
+    "count_other": "{{count}} personnes",
+    "loadError": "La liste des utilisateurs en ligne ne peut pas être affichée pour le moment.",
+    "staleWarning": "La liste peut ne pas être à jour.",
+    "emptyTitle": "Aucun utilisateur en ligne",
+    "emptyDescription": "Personne d'autre n'est actuellement connecté."
+  },
+  "exportMenu": {
+    "button": "Exporter",
+    "menuAria": "Format d'export",
+    "csv": "CSV",
+    "excel": "Excel"
+  },
+  "duration": {
+    "hoursShort": "{{count}} h",
+    "minutesShort": "{{count}} min",
+    "secondsShort": "{{count}} s"
+  },
+  "enums": {
+    "sessionEvent": {
+      "login": "Connexion",
+      "logout": "Déconnexion",
+      "failed_login": "Échec de connexion",
+      "locked_out": "Compte verrouillé"
+    },
+    "activityEvent": {
+      "created": "Créé",
+      "updated": "Mis à jour",
+      "deleted": "Supprimé",
+      "restored": "Restauré"
+    },
+    "subjectType": {
+      "lead": "Prospect",
+      "contact": "Contact",
+      "company": "Entreprise",
+      "deal": "Opportunité",
+      "task": "Tâche",
+      "activity": "Activité",
+      "ticket": "Ticket",
+      "quote": "Devis",
+      "product": "Produit",
+      "user": "Utilisateur"
+    },
+    "context": {
+      "system": "Système",
+      "console": "Console",
+      "queue": "File d'attente",
+      "seed": "Amorçage",
+      "test": "Test"
+    }
+  }
+}

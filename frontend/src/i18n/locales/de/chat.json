@@ -1,0 +1,126 @@
+{
+  "time": {
+    "justNow": "gerade eben",
+    "today": "Heute",
+    "yesterday": "Gestern"
+  },
+  "conversationType": {
+    "dm": "Direkt",
+    "group": "Gruppe",
+    "record": "Datensatz"
+  },
+  "message": {
+    "deletedPreview": "Diese Nachricht wurde gelöscht",
+    "unknownUser": "Unbekannt",
+    "editAria": "Nachricht bearbeiten",
+    "deleteAria": "Nachricht löschen",
+    "sending": "Wird gesendet…",
+    "failed": "Senden fehlgeschlagen",
+    "editedLabel": "bearbeitet",
+    "tickSent": "Gesendet",
+    "tickDelivered": "Zugestellt",
+    "tickRead": "Gelesen"
+  },
+  "confirm": {
+    "deleteMessage": "Möchten Sie diese Nachricht wirklich löschen?",
+    "removeMember": "Möchten Sie dieses Mitglied wirklich aus der Gruppe entfernen?"
+  },
+  "composer": {
+    "placeholder": "Schreiben Sie eine Nachricht…",
+    "inputAria": "Nachricht schreiben",
+    "sendAria": "Senden",
+    "attachFileAria": "Datei anhängen",
+    "removeAttachmentAria": "Anhang entfernen",
+    "dropFile": "Datei hier ablegen",
+    "mentionSuggestionsAria": "Benutzervorschläge"
+  },
+  "typing": {
+    "single": "{{name}} schreibt…",
+    "double": "{{name1}} und {{name2}} schreiben…",
+    "multiple": "Mehrere Personen schreiben…"
+  },
+  "messageList": {
+    "emptyTitle": "Noch keine Nachrichten",
+    "emptyDescription": "Starten Sie das Gespräch mit der ersten Nachricht.",
+    "logAria": "Nachrichten",
+    "newMessage": "Neue Nachricht"
+  },
+  "search": {
+    "conversationAria": "In diesem Chat suchen",
+    "globalAria": "Nachrichten durchsuchen",
+    "conversationPlaceholder": "In diesem Chat suchen…",
+    "globalPlaceholder": "Alle Nachrichten durchsuchen…",
+    "inputAria": "Suchtext",
+    "minLength_one": "Geben Sie mindestens {{count}} Zeichen ein, um zu suchen.",
+    "minLength_other": "Geben Sie mindestens {{count}} Zeichen ein, um zu suchen.",
+    "noResultsTitle": "Kein Ergebnis",
+    "noResultsDescription": "Keine Nachricht entspricht Ihrer Suche."
+  },
+  "conversationList": {
+    "title": "Chats",
+    "newConversationAria": "Neuen Chat starten",
+    "searchPlaceholder": "Chats durchsuchen…",
+    "searchAria": "Chats durchsuchen",
+    "filterAria": "Filter nach Konversationstyp",
+    "filters": {
+      "all": "Alle",
+      "dm": "DM",
+      "group": "Gruppe",
+      "record": "Datensatz"
+    },
+    "emptyTitle": "Keine Konversation gefunden",
+    "emptySearchDescription": "Keine Konversation entspricht Ihren Suchkriterien.",
+    "emptyDescription": "Sie haben noch keine Konversationen.",
+    "noMessagesYet": "Noch keine Nachrichten",
+    "mutedAria": "Stummgeschaltet"
+  },
+  "header": {
+    "backAria": "Zurück zur Konversationsliste",
+    "membersCount_one": "{{count}} Mitglied",
+    "membersCount_other": "{{count}} Mitglieder",
+    "muteAria": "Stummschalten",
+    "unmuteAria": "Stummschaltung aufheben",
+    "optionsAria": "Konversationsoptionen",
+    "addMember": "Mitglied hinzufügen",
+    "renameGroup": "Gruppennamen ändern",
+    "leaveGroup": "Gruppe verlassen",
+    "leaveConfirmButton": "Verlassen",
+    "leaveConfirmDescription": "Möchten Sie diese Gruppe wirklich verlassen?",
+    "deleteGroup": "Gruppe löschen",
+    "deleteConfirmDescription": "Diese Gruppe wird endgültig gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "membersDialogAria": "Mitglieder",
+    "removeMemberAria": "{{name}} entfernen",
+    "noUsersToAdd": "Keine Benutzer zum Hinzufügen."
+  },
+  "common": {
+    "groupNameLabel": "Gruppenname",
+    "searchUsersPlaceholder": "Benutzer suchen…",
+    "searchUsersAria": "Benutzer suchen",
+    "startNewConversation": "Neuen Chat starten"
+  },
+  "newConversation": {
+    "title": "Neuer Chat",
+    "typeAria": "Chat-Typ",
+    "groupNamePlaceholder": "z. B. Vertriebsteam",
+    "noUsersFound": "Keine Benutzer gefunden."
+  },
+  "page": {
+    "emptyTitle": "Wählen Sie eine Konversation oder starten Sie einen neuen Chat"
+  },
+  "recordPanel": {
+    "title": "Chat",
+    "subtitle": "Interner Teamaustausch zu diesem Datensatz",
+    "emptyTitle": "Zu diesem Datensatz wurde noch nicht gesprochen.",
+    "emptyDescription": "Schreiben Sie die erste Nachricht."
+  },
+  "toast": {
+    "created": "Chat erstellt.",
+    "memberAdded": "Mitglied hinzugefügt.",
+    "memberRemoved": "Mitglied entfernt.",
+    "left": "Sie haben den Chat verlassen.",
+    "renamed": "Chat-Name aktualisiert.",
+    "deleted": "Chat gelöscht.",
+    "muted": "Benachrichtigungen stummgeschaltet.",
+    "unmuted": "Benachrichtigungen aktiviert."
+  }
+}

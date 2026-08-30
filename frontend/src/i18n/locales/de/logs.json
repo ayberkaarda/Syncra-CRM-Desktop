@@ -1,0 +1,146 @@
+{
+  "breadcrumb": {
+    "home": "Startseite",
+    "logs": "Protokolle"
+  },
+  "page": {
+    "title": "Protokolle",
+    "subtitle_one": "{{count}} Eintrag",
+    "subtitle_other": "{{count}} Einträge"
+  },
+  "tabs": {
+    "sessions": "Sitzungen",
+    "pageVisits": "Seitenaufrufe",
+    "activities": "Aktionen",
+    "live": "Live-Feed"
+  },
+  "filterBar": {
+    "searchPlaceholder": "Suchen...",
+    "searchAria": "Protokolle durchsuchen",
+    "userFilterAria": "Benutzerfilter",
+    "allUsers": "Alle Benutzer",
+    "fromDateAria": "Startdatum",
+    "toDateAria": "Enddatum",
+    "eventFilterAria": "Ereignistypfilter",
+    "subjectTypeFilterAria": "Entitätstypfilter",
+    "allEvents": "Alle Ereignisse",
+    "allSubjectTypes": "Alle Entitäten"
+  },
+  "sessions": {
+    "loadError": "Beim Laden der Sitzungsdatensätze ist ein Fehler aufgetreten.",
+    "emptyTitle": "Keine Sitzungsdatensätze gefunden",
+    "emptyDescription": "Kein Sitzungsdatensatz entspricht Ihren Such- oder Filterkriterien.",
+    "columns": {
+      "user": "Benutzer",
+      "event": "Ereignis",
+      "ip": "IP",
+      "device": "Gerät / Browser / Plattform",
+      "loginAt": "Anmeldung",
+      "logoutAt": "Abmeldung",
+      "duration": "Dauer"
+    }
+  },
+  "pageVisits": {
+    "loadError": "Beim Laden der Seitenaufrufe ist ein Fehler aufgetreten.",
+    "emptyTitle": "Keine Seitenaufrufe gefunden",
+    "emptyDescription": "Kein Seitenaufruf entspricht Ihren Such- oder Filterkriterien.",
+    "columns": {
+      "user": "Benutzer",
+      "page": "Seite",
+      "path": "Pfad",
+      "enteredAt": "Aufgerufen",
+      "duration": "Dauer",
+      "ip": "IP"
+    }
+  },
+  "activities": {
+    "loadError": "Beim Laden der Aktionsdatensätze ist ein Fehler aufgetreten.",
+    "emptyTitle": "Keine Aktionsdatensätze gefunden",
+    "emptyDescription": "Kein Aktionsdatensatz entspricht Ihren Such- oder Filterkriterien.",
+    "columns": {
+      "user": "Benutzer",
+      "event": "Ereignis",
+      "subject": "Entität",
+      "date": "Datum",
+      "detail": "Detail"
+    },
+    "detailButton": "Detail"
+  },
+  "detailModal": {
+    "noDetailTitle": "Für diesen Datensatz liegen keine Änderungsdetails vor.",
+    "responseTruncatedWarning": "Die Änderungsdaten dieses Datensatzes wurden aufgrund der Größenbeschränkung möglicherweise teilweise gekürzt.",
+    "fieldTruncatedNote": "(bei 1024 Zeichen gekürzt)",
+    "columns": {
+      "field": "Feld",
+      "old": "Alt",
+      "new": "Neu"
+    }
+  },
+  "liveStream": {
+    "recordCount_one": "{{count}} Eintrag (max. 100 werden behalten)",
+    "recordCount_other": "{{count}} Einträge (max. 100 werden behalten)",
+    "connection": {
+      "connected": "Verbunden",
+      "connecting": "Verbindung wird hergestellt",
+      "disconnected": "Keine Verbindung"
+    },
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "disconnectedBanner": "Die Echtzeitverbindung ist derzeit unterbrochen — neue Einträge werden nach der Wiederverbindung weiter angezeigt.",
+    "emptyTitle": "Noch keine Live-Einträge",
+    "emptyDescription": "Sobald eine neue Aktion im System stattfindet, erscheint sie hier sofort."
+  },
+  "onlineUsers": {
+    "title": "Online-Benutzer",
+    "count_one": "{{count}} Person",
+    "count_other": "{{count}} Personen",
+    "loadError": "Die Liste der Online-Benutzer kann derzeit nicht angezeigt werden.",
+    "staleWarning": "Die Liste ist möglicherweise nicht aktuell.",
+    "emptyTitle": "Keine Benutzer online",
+    "emptyDescription": "Derzeit ist niemand sonst verbunden."
+  },
+  "exportMenu": {
+    "button": "Exportieren",
+    "menuAria": "Exportformat",
+    "csv": "CSV",
+    "excel": "Excel"
+  },
+  "duration": {
+    "hoursShort": "{{count}} Std.",
+    "minutesShort": "{{count}} Min.",
+    "secondsShort": "{{count}} Sek."
+  },
+  "enums": {
+    "sessionEvent": {
+      "login": "Anmeldung",
+      "logout": "Abmeldung",
+      "failed_login": "Fehlgeschlagene Anmeldung",
+      "locked_out": "Konto gesperrt"
+    },
+    "activityEvent": {
+      "created": "Erstellt",
+      "updated": "Aktualisiert",
+      "deleted": "Gelöscht",
+      "restored": "Wiederhergestellt"
+    },
+    "subjectType": {
+      "lead": "Interessent",
+      "contact": "Kontakt",
+      "company": "Unternehmen",
+      "deal": "Verkaufschance",
+      "task": "Aufgabe",
+      "activity": "Aktivität",
+      "ticket": "Ticket",
+      "quote": "Angebot",
+      "product": "Produkt",
+      "user": "Benutzer"
+    },
+    "context": {
+      "system": "System",
+      "console": "Konsole",
+      "queue": "Warteschlange",
+      "seed": "Seeding",
+      "test": "Test"
+    }
+  }
+}

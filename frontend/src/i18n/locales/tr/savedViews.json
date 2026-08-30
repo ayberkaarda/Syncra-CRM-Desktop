@@ -1,0 +1,33 @@
+{
+  "actions": {
+    "manage": "Görünümler",
+    "saveCurrent": "Geçerli filtreleri kaydet",
+    "share": "Paylaş",
+    "unshare": "Paylaşımı kaldır"
+  },
+  "modal": {
+    "title": "Kayıtlı Görünümler — {{module}}"
+  },
+  "form": {
+    "nameLabel": "Görünüm adı",
+    "namePlaceholder": "ör. Bu ayki açık fırsatlarım",
+    "sharedLabel": "Ekiple paylaş",
+    "sharedHint": "Paylaşılan bir görünümü herkes görebilir ve uygulayabilir; yalnızca siz düzenleyip silebilirsiniz."
+  },
+  "list": {
+    "empty": "Henüz kayıtlı görünüm yok.",
+    "sharedBadge": "Paylaşılan",
+    "ownedBy": "{{name}} tarafından paylaşıldı"
+  },
+  "deleteConfirm": {
+    "title": "\"{{name}}\" silinsin mi?",
+    "confirm": "Sil",
+    "cancel": "Vazgeç"
+  },
+  "aria": {
+    "apply": "Görünümü uygula: {{name}}",
+    "share": "Paylaş: {{name}}",
+    "unshare": "Paylaşımı kaldır: {{name}}",
+    "delete": "Görünümü sil: {{name}}"
+  }
+}

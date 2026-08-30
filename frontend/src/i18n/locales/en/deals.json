@@ -1,0 +1,264 @@
+{
+  "board": {
+    "title": "Deals",
+    "openTotalLabel": "Total open value:",
+    "viewSwitcher": {
+      "aria": "View",
+      "board": "Board",
+      "list": "List"
+    },
+    "refresh": "Refresh",
+    "newDeal": "Deal",
+    "offlineWarning": "No live connection — moves made by others aren't visible right now. The board will refresh automatically once the connection returns.",
+    "readOnlyHint": "You don't have permission to move cards; the board is shown read-only.",
+    "loadError": {
+      "title": "Couldn't load the board",
+      "description": "Something went wrong while fetching the deal board.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "No deals to show",
+      "description": "No deal matches the selected filters.",
+      "create": "Create deal"
+    },
+    "column": {
+      "aria_one": "{{stage}} stage, {{count}} card",
+      "aria_other": "{{stage}} stage, {{count}} cards",
+      "empty": "No cards in this stage",
+      "moreHidden_one": "{{count}} more card — narrow it down with filters",
+      "moreHidden_other": "{{count}} more cards — narrow it down with filters",
+      "addDeal": "Deal"
+    },
+    "card": {
+      "lockedTooltip": "You're not the owner of this card, so you can't move it.",
+      "unassigned": "Unassigned",
+      "movedBy": "{{name}} moved this card",
+      "overdueSrOnly": "(overdue)",
+      "draggableRole": "Draggable deal card",
+      "ariaLabel": "{{title}}, {{amount}}"
+    },
+    "announcements": {
+      "pickedUp": "{{title}} card picked up. Use the arrow keys to move it.",
+      "overStage": "{{title}} card is over the {{stage}} stage.",
+      "overNone": "{{title}} card is outside of a droppable area.",
+      "droppedOnStage": "{{title}} card was dropped on the {{stage}} stage.",
+      "droppedBack": "{{title}} card was returned to its previous position.",
+      "cancelled": "Moving the {{title}} card was cancelled.",
+      "defaultCardName": "Card",
+      "keyboardInstructions": "To move a deal card with the keyboard, press space or enter to pick it up. Use the arrow keys to move the card between and within stages. Press space or enter again to drop it, or escape to cancel."
+    },
+    "filters": {
+      "searchLabel": "Search",
+      "searchPlaceholder": "Deal title or description",
+      "ownerLabel": "Owner",
+      "allOwners": "All owners",
+      "companyLabel": "Company",
+      "allCompanies": "All companies",
+      "closeFrom": "Close date (from)",
+      "closeTo": "Close date (to)",
+      "clear": "Clear"
+    },
+    "toast": {
+      "conflict": "Someone else moved this card in the meantime; it has been updated with the current server state.",
+      "networkError": "Connection error: the card couldn't be moved and was returned to its previous position."
+    }
+  },
+  "stageReason": {
+    "lostRequired": "A lost reason is required.",
+    "titleLost": "Lost reason",
+    "titleWon": "Won reason",
+    "description": "\"{{dealTitle}}\" card is being moved to the \"{{stageName}}\" stage.",
+    "cancel": "Cancel",
+    "submitLost": "Move as lost",
+    "submitWon": "Move as won",
+    "fieldLabelLost": "Lost reason",
+    "fieldLabelWon": "Won reason (optional)",
+    "placeholderLost": "E.g. Price was higher than a competing offer",
+    "placeholderWon": "E.g. Reference customer influence",
+    "hintLost": "The lost reason is the most valuable data point for sales analytics, so it's required.",
+    "hintWon": "You can leave this blank."
+  },
+  "form": {
+    "titleCreate": "New Deal",
+    "titleEdit": "Edit Deal",
+    "cancel": "Cancel",
+    "submitCreate": "Create",
+    "submitEdit": "Save",
+    "titleLabel": "Title",
+    "descriptionLabel": "Description",
+    "amountLabel": "Amount",
+    "currencyLabel": "Currency",
+    "currency": {
+      "try": "TRY — Turkish Lira",
+      "usd": "USD — US Dollar",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — British Pound"
+    },
+    "probabilityLabel": "Probability (%)",
+    "probabilityHint": "This stage's default is {{value}}%. If left blank, that value is used.",
+    "expectedCloseDateLabel": "Expected Close Date",
+    "stageLabel": "Stage",
+    "stageReadonlyHint": "Stage changes are made by dragging the card on the board.",
+    "stageHint": "If not specified, the server places it in the first active stage.",
+    "statusLabel": "Status",
+    "companyLabel": "Company",
+    "contactLabel": "Contact",
+    "contactHint": "If a company is selected, the contact list is filtered to that company.",
+    "contactLoading": "Loading…",
+    "contactNone": "No contacts",
+    "ownerLabel": "Owner",
+    "ownerPlaceholder": "Select an owner",
+    "validation": {
+      "titleRequired": "Title is required.",
+      "amountRequired": "Amount is required.",
+      "amountInvalid": "Amount must be a valid number.",
+      "probabilityRange": "Probability must be between 0 and 100."
+    }
+  },
+  "customFields": {
+    "sectionTitle": "Custom Fields",
+    "selectPlaceholder": "Select…",
+    "noOptions": "No options defined."
+  },
+  "tagSelect": {
+    "label": "Tags",
+    "placeholder": "Select tags...",
+    "loading": "Loading…",
+    "empty": "No tags found",
+    "removeAria": "Remove {{name}} tag"
+  },
+  "companyCombobox": {
+    "label": "Company",
+    "placeholder": "Search for a company...",
+    "clearAria": "Clear company selection",
+    "clearOption": "No company / clear",
+    "loading": "Loading…",
+    "empty": "No results found"
+  },
+  "assignOwner": {
+    "title": "Assign Owner",
+    "description": "Choose an owner for {{title}}.",
+    "cancel": "Cancel",
+    "submit": "Assign",
+    "ownerLabel": "Owner",
+    "ownerPlaceholder": "Select an owner",
+    "forbidden": "You don't have permission to access the user list."
+  },
+  "list": {
+    "breadcrumbHome": "Home",
+    "breadcrumbCurrent": "Deals",
+    "title": "Deals",
+    "subtitle_one": "{{count}} deal",
+    "subtitle_other": "{{count}} deals",
+    "viewSwitcher": {
+      "aria": "View",
+      "board": "Board",
+      "list": "List"
+    },
+    "newDeal": "New Deal",
+    "searchPlaceholder": "Search deal title...",
+    "searchAria": "Search deals",
+    "stageFilterAria": "Stage filter",
+    "statusFilterAria": "Status filter",
+    "ownerFilterAria": "Owner filter",
+    "companyFilterAria": "Company filter",
+    "tagFilterAria": "Tag filter",
+    "allStages": "All stages",
+    "allStatuses": "All statuses",
+    "allOwners": "All owners",
+    "allCompanies": "All companies",
+    "allTags": "All tags",
+    "minAmountPlaceholder": "Min amount",
+    "minAmountAria": "Minimum amount",
+    "maxAmountPlaceholder": "Max amount",
+    "maxAmountAria": "Maximum amount",
+    "fromDateAria": "Start date (expected close)",
+    "toDateAria": "End date (expected close)",
+    "totals": {
+      "count_one": "{{count}} record (filtered total)",
+      "count_other": "{{count}} records (filtered total)",
+      "tooltip": "Total: {{total}} · Won: {{won}} · Lost: {{lost}}",
+      "open": "Open value: {{amount}}",
+      "wonLost": "Won {{won}} · Lost {{lost}}"
+    },
+    "loadError": "Something went wrong while loading deals.",
+    "retry": "Try again",
+    "empty": {
+      "title": "No deals found",
+      "description": "No deal matches your search or filter criteria."
+    },
+    "columns": {
+      "title": "Title",
+      "company": "Company",
+      "contact": "Contact",
+      "stage": "Stage",
+      "status": "Status",
+      "amount": "Amount",
+      "probability": "Probability",
+      "expectedClose": "Expected Close",
+      "owner": "Owner",
+      "tags": "Tags",
+      "actions": "Actions"
+    },
+    "actions": {
+      "detail": "Details",
+      "edit": "Edit",
+      "editLockedTooltip": "You're not the owner of this record, so you can't edit it.",
+      "assign": "Assign owner",
+      "delete": "Delete"
+    },
+    "deleteModal": {
+      "title": "Delete deal",
+      "description": "This action cannot be undone. The deal will be permanently deleted.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "confirmText": "Are you sure you want to delete the deal \"{{title}}\"?"
+    }
+  },
+  "detail": {
+    "backToList": "Deals",
+    "loadError": "Something went wrong while loading the deal.",
+    "retry": "Try again",
+    "wonBanner": "This deal was won on {{date}}.",
+    "lostBanner": "This deal was lost on {{date}}.",
+    "noReason": "No reason given.",
+    "showOnBoard": "Show on Board",
+    "assignOwner": "Assign Owner",
+    "edit": "Edit",
+    "editLockedTooltip": "You're not the owner of this record, so you can't edit it.",
+    "delete": "Delete",
+    "probabilityBadge": "Probability: {{value}}%",
+    "fields": {
+      "company": "Company",
+      "contact": "Contact",
+      "owner": "Owner",
+      "expectedClose": "Expected Close"
+    },
+    "unassignedOwner": "Unassigned",
+    "overdueSuffix": " (overdue)",
+    "descriptionLabel": "Description",
+    "tagsLabel": "Tags",
+    "noTags": "No tags.",
+    "customFieldsTitle": "Custom Fields",
+    "timeline": {
+      "title": "Communication History",
+      "notice": "There isn't a dedicated timeline endpoint for deals yet. Instead, you can view the timeline of this deal's linked contact or company.",
+      "viewContact": "View this deal's contact's communication history",
+      "viewCompany": "View this deal's company's communication history",
+      "none": "This deal has no linked contact or company."
+    },
+    "deleteModal": {
+      "title": "Delete deal",
+      "description": "This action cannot be undone. The deal will be permanently deleted.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "confirmText": "Are you sure you want to delete the deal \"{{title}}\"?"
+    }
+  },
+  "toast": {
+    "created": "Deal created.",
+    "updated": "Deal updated.",
+    "deleted": "Deal deleted.",
+    "ownerAssigned": "Owner assignment updated."
+  }
+}

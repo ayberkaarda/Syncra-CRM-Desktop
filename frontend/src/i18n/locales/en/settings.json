@@ -1,0 +1,315 @@
+{
+  "page": {
+    "title": "Settings",
+    "subtitle": "Manage system-wide configuration."
+  },
+  "tabs": {
+    "company": "Company Profile",
+    "pipeline": "Pipeline Stages",
+    "customFields": "Custom Fields",
+    "emailTemplates": "Email Templates",
+    "permissions": "Role / Permission Matrix",
+    "exchangeRates": "Exchange Rate",
+    "automationRules": "Automation Rules"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "company": {
+    "fields": {
+      "name": "Company Name",
+      "email": "Email",
+      "phone": "Phone",
+      "address": "Address",
+      "website": "Website",
+      "taxNumber": "Tax Number",
+      "taxOffice": "Tax Office",
+      "logoUrl": "Logo URL",
+      "currency": "Currency"
+    },
+    "jsonHint": "A value in JSON format.",
+    "loadError": "An error occurred while loading the settings.",
+    "empty": "No company settings found.",
+    "resetChanges": "Discard Changes",
+    "errors": {
+      "invalidNumber": "Enter a valid number.",
+      "invalidJson": "Enter a valid JSON value.",
+      "fixBeforeSave": "Some fields are invalid — fix them before saving."
+    }
+  },
+  "keys": {
+    "company": {
+      "name": { "description": "Company's legal name" },
+      "email": { "description": "Company contact email" },
+      "phone": { "description": "Company phone number" },
+      "address": { "description": "Company address" },
+      "tax_number": { "description": "Tax identification number" }
+    }
+  },
+  "customFields": {
+    "entityTypes": {
+      "leads": "Leads",
+      "contacts": "Contacts",
+      "companies": "Companies",
+      "deals": "Deals",
+      "tickets": "Tickets",
+      "products": "Products"
+    },
+    "fieldTypes": {
+      "text": "Text",
+      "textarea": "Long Text",
+      "number": "Number",
+      "date": "Date",
+      "select": "Select (Single)",
+      "multiselect": "Select (Multiple)",
+      "boolean": "Yes/No"
+    },
+    "addField": "Add Field",
+    "required": "Required",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "loadError": "An error occurred while loading custom fields.",
+    "empty": {
+      "title": "No custom fields",
+      "description": "There are no custom fields defined for this record type yet."
+    }
+  },
+  "customFieldForm": {
+    "titleCreate": "New Custom Field",
+    "titleEdit": "Edit Custom Field",
+    "entityTypeLabel": "Record Type",
+    "entityTypeHintLocked": "Cannot be changed after creation.",
+    "fieldTypeLabel": "Field Type",
+    "nameLabel": "Field Name",
+    "keyLabel": "Key",
+    "keyHintLocked": "Cannot be changed after creation.",
+    "keyHintPattern": "Lowercase letters, numbers and underscores only.",
+    "optionsLabel": "Options",
+    "optionPlaceholder": "Option {{index}}",
+    "removeOption": "Remove option",
+    "addOption": "Add Option",
+    "requiredLabel": "Required field",
+    "errors": {
+      "nameRequired": "Field name is required.",
+      "keyRequired": "Field key is required.",
+      "optionsRequired": "You must add at least one option."
+    }
+  },
+  "emailTemplates": {
+    "newTemplate": "New Template",
+    "loadError": "An error occurred while loading email templates.",
+    "empty": {
+      "title": "No email templates",
+      "description": "There are no email templates defined yet."
+    },
+    "variablesCount_one": "{{count}} variable",
+    "variablesCount_other": "{{count}} variables",
+    "delete": {
+      "title": "Delete Email Template",
+      "description": "This action CANNOT BE UNDONE. The template will be permanently deleted.",
+      "confirmSuffix": "Are you sure you want to delete this template?"
+    }
+  },
+  "emailTemplateForm": {
+    "titleCreate": "New Email Template",
+    "titleEdit": "Edit Email Template",
+    "keyLabel": "Key",
+    "nameLabel": "Template Name",
+    "subjectLabel": "Subject",
+    "bodyLabel": "Content (HTML)",
+    "variablesLabel": "Variables",
+    "variablesHint": "You may leave this empty — the server automatically derives it from {{placeholder}} placeholders in the content.",
+    "variablePlaceholderExample": "e.g. customer_name",
+    "removeVariable": "Remove variable",
+    "addVariable": "Add Variable",
+    "previewLabel": "Preview",
+    "previewSubjectLabel": "Subject",
+    "previewEmptySubject": "—",
+    "previewPlaceholder": "The preview will appear here as you type.",
+    "previewNote": "The preview shows the raw HTML you typed. On save, the server strips unsafe tags/attributes (script, style, event handlers); the saved content may be simpler than the preview.",
+    "previewIframeTitle": "Email template preview",
+    "errors": {
+      "keyRequired": "Key is required.",
+      "nameRequired": "Template name is required.",
+      "subjectRequired": "Subject is required.",
+      "bodyRequired": "Content is required."
+    }
+  },
+  "pipeline": {
+    "dragHint": "Drag stages to reorder them. Stages cannot be deleted, only deactivated and reactivated.",
+    "newStage": "New Stage",
+    "loadError": "An error occurred while loading pipeline stages.",
+    "empty": {
+      "title": "No stages found",
+      "description": "There are no pipeline stages defined yet."
+    },
+    "dealsCount_one": "{{count}} deal",
+    "dealsCount_other": "{{count}} deals",
+    "systemWon": "System — Won",
+    "systemLost": "System — Lost",
+    "reorderAria": "Reorder stage {{name}}",
+    "deactivateDisabledTitle": "A system stage cannot be deactivated",
+    "toast": {
+      "activated": "\"{{name}}\" stage was activated.",
+      "deactivated": "\"{{name}}\" stage was deactivated.",
+      "movedAndDeactivated": "Stage deactivated, {{count}} deals moved to {{target}}."
+    },
+    "movedTargetFallback": "the selected stage"
+  },
+  "pipelineStageForm": {
+    "titleCreate": "New Stage",
+    "titleEdit": "Edit Stage",
+    "systemBadgeWon": "Won (system)",
+    "systemBadgeLost": "Lost (system)",
+    "systemNote": "This is a system stage and cannot be deactivated.",
+    "nameLabel": "Stage Name",
+    "probabilityLabel": "Win Probability (%)",
+    "colorLabel": "Color",
+    "previewLabel": "Preview:",
+    "previewDefaultName": "Stage Name",
+    "colors": {
+      "primary": "Primary",
+      "success": "Green (Success)",
+      "danger": "Red (Danger)",
+      "warning": "Orange (Warning)",
+      "neutral": "Gray (Neutral)",
+      "info": "Blue (Info)"
+    },
+    "errors": {
+      "nameRequired": "Stage name is required.",
+      "probabilityInvalid": "Probability must be a number between 0 and 100."
+    }
+  },
+  "deactivateStageModal": {
+    "title": "Deactivate Stage",
+    "warning_one": "has {{count}} open deal. Which stage should it be moved to before deactivating?",
+    "warning_other": "has {{count}} open deals. Which stage should they be moved to before deactivating?",
+    "targetLabel": "Target Stage",
+    "targetPlaceholder": "Select a stage…",
+    "confirm": "Move and Deactivate"
+  },
+  "permissions": {
+    "description": "Check or uncheck a box to change that role's permission. Changes save instantly.",
+    "columns": { "permission": "Permission" },
+    "readOnlyBadge": "Locked",
+    "readOnlyNote": "Roles with this badge have every permission and cannot be edited.",
+    "loadError": "An error occurred while loading the permission matrix.",
+    "ariaAlwaysGranted": "{{role}} — {{permission}} (always granted)",
+    "ariaToggle": "{{role}} — {{permission}}"
+  },
+  "exchangeRates": {
+    "loadError": "An error occurred while loading exchange rates.",
+    "noRate": "No rate entered",
+    "rateAsOf": "Rate as of {{date}}",
+    "stale_one": "Rate is {{count}} day out of date",
+    "stale_other": "Rate is {{count}} days out of date",
+    "source": {
+      "tcmb": "TCMB",
+      "manual": "Manual"
+    },
+    "form": {
+      "title": "Manual Rate Entry",
+      "hint": "Enter today's rate manually if TCMB cannot be reached.",
+      "currencyLabel": "Currency",
+      "currencyPlaceholder": "Select",
+      "rateLabel": "Rate (1 unit = ? TRY)",
+      "dateLabel": "Date",
+      "submit": "Save",
+      "errors": {
+        "currencyRequired": "Select a currency.",
+        "rateRequired": "Enter a rate."
+      }
+    }
+  },
+  "automationRules": {
+    "description": "Set up small automation rules by picking a trigger and an action from a fixed catalog (e.g. \"create a task when a deal reaches a stage\"). No custom code or AI.",
+    "newRule": "New Rule",
+    "ruleSummary": "{{trigger}} → {{action}}",
+    "loadError": "An error occurred while loading automation rules.",
+    "empty": {
+      "title": "No automation rules",
+      "description": "No automation rule has been defined yet."
+    },
+    "delete": {
+      "title": "Delete Automation Rule",
+      "description": "This action CANNOT BE UNDONE. The rule will be permanently deleted.",
+      "confirmSuffix": "rule?"
+    },
+    "triggers": {
+      "deal_stage_changed": "When a deal reaches a specific stage",
+      "deal_status_changed": "When a deal is won/lost",
+      "ticket_created": "When a new support ticket is opened"
+    },
+    "actions": {
+      "task_create": "Create a task",
+      "notification_send": "Send a notification",
+      "deal_assign_owner": "Change the deal owner"
+    },
+    "form": {
+      "titleCreate": "New Automation Rule",
+      "titleEdit": "Edit Automation Rule",
+      "nameLabel": "Rule Name",
+      "triggerSection": "Trigger",
+      "actionSection": "Action",
+      "triggerTypeLabel": "Trigger",
+      "actionTypeLabel": "Action",
+      "pipelineStageLabel": "Target Stage",
+      "pipelineStagePlaceholder": "Select a stage…",
+      "dealStatusLabel": "Target Status",
+      "dealStatusWon": "Won",
+      "dealStatusLost": "Lost",
+      "ticketPriorityFilterLabel": "Priority Filter (optional)",
+      "ticketPriorityAny": "Any priority",
+      "ticketPriorityHint": "If left empty, a new ticket of any priority triggers this rule.",
+      "priorities": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "urgent": "Urgent"
+      },
+      "titleTemplateLabel": "Task Title Template",
+      "messageTemplateLabel": "Notification Message Template",
+      "placeholderHint": "Available placeholders: {{list}}",
+      "assigneeTypeLabel": "Assignee",
+      "assigneeRecordOwner": "The record's owner",
+      "assigneeFixedUser": "Fixed user",
+      "assigneeUserLabel": "User",
+      "recipientTypeLabel": "Recipient",
+      "recipientRecordOwner": "The record's owner",
+      "recipientFixedUser": "Fixed user",
+      "recipientUserLabel": "User",
+      "dueInDaysLabel": "Due In (days)",
+      "newOwnerLabel": "New Owner",
+      "userPlaceholder": "Select a user…",
+      "usersForbidden": "You do not have permission to view the user list.",
+      "errors": {
+        "nameRequired": "Rule name is required.",
+        "stageRequired": "A target stage must be selected.",
+        "titleTemplateRequired": "Task title template is required.",
+        "assigneeRequired": "An assignee must be selected.",
+        "dueInDaysRequired": "Due in (days) is required.",
+        "messageTemplateRequired": "Notification message template is required.",
+        "recipientRequired": "A recipient user must be selected.",
+        "newOwnerRequired": "A new owner must be selected."
+      }
+    }
+  },
+  "toast": {
+    "customFieldCreated": "Custom field created.",
+    "customFieldUpdated": "Custom field updated.",
+    "customFieldDeactivated": "Custom field deactivated.",
+    "templateCreated": "Email template created.",
+    "templateUpdated": "Email template updated.",
+    "templateDeleted": "Email template deleted.",
+    "stageCreated": "Stage created.",
+    "settingsSaved": "Settings saved.",
+    "roleNotEditable": "This role cannot be edited.",
+    "cannotRevokeOwnAccess": "This change would revoke your own settings access.",
+    "unknownPermissions": "Unknown permission(s): {{list}}",
+    "exchangeRateSaved": "Rate saved.",
+    "automationRuleCreated": "Automation rule created.",
+    "automationRuleUpdated": "Automation rule updated.",
+    "automationRuleDeleted": "Automation rule deleted."
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "users": "Users"
+  },
+  "list": {
+    "title": "Users",
+    "subtitle_one": "{{count}} user",
+    "subtitle_other": "{{count}} users",
+    "createButton": "New User",
+    "searchPlaceholder": "Search by name or email...",
+    "searchAria": "Search users",
+    "roleFilterAria": "Role filter",
+    "statusFilterAria": "Status filter",
+    "allRoles": "All roles",
+    "allStatuses": "All",
+    "loadError": "An error occurred while loading the users.",
+    "emptyTitle": "No users found",
+    "emptyDescription": "No user matches your search or filter criteria.",
+    "columns": {
+      "user": "User",
+      "role": "Role",
+      "department": "Department",
+      "status": "Status",
+      "lastLogin": "Last Login",
+      "actions": "Actions"
+    },
+    "neverLoggedIn": "Never logged in",
+    "actions": {
+      "edit": "Edit",
+      "resetPassword": "Reset password",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "delete": "Delete"
+    }
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "deleteModal": {
+    "title": "Delete user",
+    "description": "This action cannot be undone. The user will be permanently deleted.",
+    "confirmText": "Are you sure you want to delete <bold>{{name}}</bold> ({{email}})?"
+  },
+  "deactivateModal": {
+    "title": "Deactivate user",
+    "description": "This action cannot be undone — the user's session ends immediately and they cannot sign in again until reactivated.",
+    "confirmText": "Are you sure you want to deactivate <bold>{{name}}</bold>?"
+  },
+  "form": {
+    "titleCreate": "New User",
+    "titleEdit": "Edit User",
+    "nameLabel": "Full Name",
+    "emailLabel": "Email",
+    "roleLabel": "Role",
+    "rolePlaceholder": "Select a role",
+    "departmentLabel": "Department",
+    "temporaryPasswordLabel": "Temporary Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "generatePasswordTitle": "Generate a strong random password",
+    "copyPasswordTitle": "Copy to clipboard",
+    "copyPasswordAria": "Copy password to clipboard",
+    "strengthLabel": "Strength: {{strength}}",
+    "createNotice": "Once created, the user signs in with the temporary password and must change it on first login.",
+    "errors": {
+      "nameRequired": "Full name is required.",
+      "emailRequired": "Email is required.",
+      "roleRequired": "A role must be selected.",
+      "passwordPolicy": "The password must satisfy all policy rules."
+    },
+    "toast": {
+      "passwordCopied": "Password copied to clipboard.",
+      "passwordCopyFailed": "Could not copy to clipboard. Select and copy the password manually."
+    }
+  },
+  "resetPasswordModal": {
+    "title": "Reset Password",
+    "description": "Set a new temporary password for {{name}} ({{email}}).",
+    "newPasswordLabel": "New Password",
+    "submit": "Reset Password",
+    "errors": {
+      "passwordPolicy": "The password must satisfy all policy rules."
+    }
+  },
+  "passwordStrength": {
+    "veryWeak": "Very weak",
+    "weak": "Weak",
+    "medium": "Medium",
+    "good": "Good",
+    "strong": "Strong"
+  },
+  "passwordRules": {
+    "length": "At least {{count}} characters",
+    "upper": "At least one uppercase letter",
+    "lower": "At least one lowercase letter",
+    "digit": "At least one digit",
+    "special": "At least one special character"
+  },
+  "toast": {
+    "created": "User created.",
+    "updated": "User updated.",
+    "deleted": "User deleted.",
+    "activated": "User activated.",
+    "deactivated": "User deactivated.",
+    "passwordReset": "Password reset."
+  }
+}

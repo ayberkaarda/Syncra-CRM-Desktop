@@ -1,0 +1,107 @@
+{
+  "list": {
+    "breadcrumbHome": "Accueil",
+    "breadcrumbCurrent": "Produits",
+    "title": "Produits",
+    "subtitle_one": "{{count}} produit",
+    "subtitle_other": "{{count}} produits",
+    "priceListsLink": "Listes de prix",
+    "newProduct": "Nouveau produit",
+    "searchPlaceholder": "Rechercher un nom de produit ou un SKU...",
+    "searchAria": "Rechercher des produits",
+    "categoryFilterAria": "Filtre de catégorie",
+    "statusFilterAria": "Filtre de statut",
+    "tagFilterAria": "Filtre d'étiquette",
+    "allCategories": "Toutes les catégories",
+    "allStatuses": "Tous les statuts",
+    "allTags": "Toutes les étiquettes",
+    "minPricePlaceholder": "Prix min",
+    "minPriceAria": "Prix minimum",
+    "maxPricePlaceholder": "Prix max",
+    "maxPriceAria": "Prix maximum",
+    "inStockOnly": "En stock uniquement",
+    "loadError": "Une erreur est survenue lors du chargement des produits.",
+    "retry": "Réessayer",
+    "empty": {
+      "title": "Aucun produit trouvé",
+      "description": "Aucun produit ne correspond à vos critères de recherche ou de filtrage."
+    },
+    "columns": {
+      "product": "Produit",
+      "category": "Catégorie",
+      "unitPrice": "Prix unitaire",
+      "taxRate": "TVA %",
+      "unit": "Unité",
+      "stock": "Stock",
+      "status": "Statut",
+      "tags": "Étiquettes",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Modifier",
+      "delete": "Supprimer"
+    },
+    "deleteModal": {
+      "title": "Supprimer le produit",
+      "description": "Cette action est irréversible. Le produit sera définitivement supprimé.",
+      "cancel": "Annuler",
+      "confirm": "Supprimer",
+      "confirmText": "Êtes-vous sûr de vouloir supprimer <bold>{{name}}</bold> ?"
+    }
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "form": {
+    "titleCreate": "Nouveau produit",
+    "titleEdit": "Modifier le produit",
+    "cancel": "Annuler",
+    "submitCreate": "Créer",
+    "submitEdit": "Enregistrer",
+    "nameLabel": "Nom du produit",
+    "skuLabel": "SKU",
+    "skuHint": "Peut être laissé vide ; s'il est renseigné, il doit être unique.",
+    "descriptionLabel": "Description",
+    "categoryLabel": "Catégorie",
+    "categoryPlaceholder": "Choisir une catégorie existante ou en saisir une nouvelle",
+    "categoryHint": "Vous pouvez choisir dans la liste ou saisir librement une nouvelle catégorie.",
+    "unitPriceLabel": "Prix unitaire",
+    "currencyLabel": "Devise",
+    "currency": {
+      "try": "TRY — Livre turque",
+      "usd": "USD — Dollar américain",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — Livre sterling"
+    },
+    "taxRateLabel": "TVA %",
+    "unitLabel": "Unité",
+    "stockQuantityLabel": "Quantité en stock",
+    "stockQuantityHint": "Laisser vide si le stock n'est pas suivi pour ce produit.",
+    "activeLabel": "Actif",
+    "validation": {
+      "nameRequired": "Le nom du produit est obligatoire.",
+      "unitPriceRequired": "Le prix unitaire est obligatoire.",
+      "unitPriceInvalid": "Le prix unitaire doit être un nombre valide et non négatif.",
+      "taxRateRange": "Le taux de TVA doit être compris entre 0 et 100.",
+      "stockQuantityInvalid": "La quantité en stock doit être un nombre entier non négatif."
+    }
+  },
+  "customFields": {
+    "sectionTitle": "Champs personnalisés",
+    "selectPlaceholder": "Sélectionner…",
+    "noOptions": "Aucune option définie."
+  },
+  "tagSelect": {
+    "label": "Étiquettes",
+    "placeholder": "Sélectionner des étiquettes...",
+    "loading": "Chargement…",
+    "empty": "Aucune étiquette trouvée",
+    "removeAria": "Retirer l'étiquette {{name}}"
+  },
+  "toast": {
+    "created": "Produit créé.",
+    "updated": "Produit mis à jour.",
+    "deleted": "Produit supprimé."
+  }
+}

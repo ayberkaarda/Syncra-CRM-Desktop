@@ -1,0 +1,34 @@
+{
+  "breadcrumb": { "home": "Accueil", "notifications": "Notifications" },
+  "page": {
+    "title": "Notifications",
+    "subtitle_one": "{{count}} notification",
+    "subtitle_other": "{{count}} notifications",
+    "markAllRead": "Tout marquer comme lu",
+    "tabs": { "all": "Toutes", "unread": "Non lues", "read": "Lues" },
+    "emptyTitle": "Aucune notification",
+    "emptyUnread": "Vous n'avez aucune notification non lue.",
+    "emptyAll": "Vous n'avez encore reçu aucune notification.",
+    "newBadge": "Nouveau",
+    "deleteAria": "Supprimer la notification"
+  },
+  "bell": {
+    "ariaLabel": "Notifications",
+    "ariaLabelUnread": "Notifications ({{count}} non lues)",
+    "dialogAria": "Notifications",
+    "title": "Notifications",
+    "markAllRead": "Tout marquer comme lu",
+    "viewAll": "Voir toutes les notifications"
+  },
+  "list": {
+    "emptyTitle": "Aucune notification",
+    "emptyDescription": "Les nouvelles mises à jour apparaîtront ici."
+  },
+  "relativeTime": {
+    "justNow": "à l'instant"
+  },
+  "toast": {
+    "markAllReadSuccess": "Toutes les notifications ont été marquées comme lues.",
+    "deleteSuccess": "Notification supprimée."
+  }
+}

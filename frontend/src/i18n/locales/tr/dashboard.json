@@ -1,0 +1,46 @@
+{
+  "kpi": {
+    "revenue": "Gelir",
+    "openDealsCount": "Açık Fırsat Sayısı",
+    "openDealsValue": "Açık Fırsat Tutarı",
+    "conversionRate": "Dönüşüm Oranı",
+    "activitiesCount": "Aktivite Sayısı",
+    "wonCount": "Kazanılan",
+    "lostCount": "Kaybedilen",
+    "avgDealSize": "Ortalama Fırsat Büyüklüğü"
+  },
+  "recentActivities": {
+    "emptyTitle": "Henüz aktivite yok",
+    "emptyDescription": "Kaydedilmiş bir aktivite bulunamadı.",
+    "systemActor": "Sistem",
+    "related": {
+      "deal": "Fırsat",
+      "lead": "Aday",
+      "contact": "Kişi",
+      "company": "Firma",
+      "ticket": "Talep",
+      "task": "Görev",
+      "quote": "Teklif"
+    }
+  },
+  "revenueTrend": {
+    "group": { "day": "Gün", "week": "Hafta", "month": "Ay" },
+    "emptyTitle": "Bu aralıkta gelir verisi yok",
+    "emptyDescription": "Seçili tarih aralığında kazanılan bir anlaşma bulunamadı.",
+    "tooltipWonDeals": "{{value}} kazanılan anlaşma"
+  },
+  "salesFunnel": {
+    "emptyTitle": "Bu aralıkta huni verisi yok",
+    "emptyDescription": "Seçili tarih aralığında pipeline'a giren fırsat bulunamadı.",
+    "tooltipDealsCount": "{{value}} fırsat"
+  },
+  "taskSummary": {
+    "overdue": "Gecikmiş",
+    "dueToday": "Bugün Bitiyor",
+    "open": "Açık Görevler",
+    "completedToday": "Bugün Tamamlanan"
+  },
+  "relativeTime": {
+    "justNow": "az önce"
+  }
+}

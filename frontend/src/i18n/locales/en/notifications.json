@@ -1,0 +1,34 @@
+{
+  "breadcrumb": { "home": "Home", "notifications": "Notifications" },
+  "page": {
+    "title": "Notifications",
+    "subtitle_one": "{{count}} notification",
+    "subtitle_other": "{{count}} notifications",
+    "markAllRead": "Mark all as read",
+    "tabs": { "all": "All", "unread": "Unread", "read": "Read" },
+    "emptyTitle": "No notifications",
+    "emptyUnread": "You have no unread notifications.",
+    "emptyAll": "You haven't received any notifications yet.",
+    "newBadge": "New",
+    "deleteAria": "Delete notification"
+  },
+  "bell": {
+    "ariaLabel": "Notifications",
+    "ariaLabelUnread": "Notifications ({{count}} unread)",
+    "dialogAria": "Notifications",
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "viewAll": "View all notifications"
+  },
+  "list": {
+    "emptyTitle": "No notifications",
+    "emptyDescription": "New updates will appear here."
+  },
+  "relativeTime": {
+    "justNow": "just now"
+  },
+  "toast": {
+    "markAllReadSuccess": "All notifications marked as read.",
+    "deleteSuccess": "Notification deleted."
+  }
+}

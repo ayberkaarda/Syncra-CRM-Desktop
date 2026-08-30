@@ -1,0 +1,126 @@
+{
+  "time": {
+    "justNow": "az önce",
+    "today": "Bugün",
+    "yesterday": "Dün"
+  },
+  "conversationType": {
+    "dm": "Birebir",
+    "group": "Grup",
+    "record": "Kayıt"
+  },
+  "message": {
+    "deletedPreview": "Bu mesaj silindi",
+    "unknownUser": "Bilinmeyen",
+    "editAria": "Mesajı düzenle",
+    "deleteAria": "Mesajı sil",
+    "sending": "Gönderiliyor…",
+    "failed": "Gönderilemedi",
+    "editedLabel": "düzenlendi",
+    "tickSent": "Gönderildi",
+    "tickDelivered": "İletildi",
+    "tickRead": "Görüldü"
+  },
+  "confirm": {
+    "deleteMessage": "Bu mesajı silmek istediğinize emin misiniz?",
+    "removeMember": "Bu üyeyi gruptan çıkarmak istediğinize emin misiniz?"
+  },
+  "composer": {
+    "placeholder": "Bir mesaj yazın…",
+    "inputAria": "Mesaj yazın",
+    "sendAria": "Gönder",
+    "attachFileAria": "Dosya ekle",
+    "removeAttachmentAria": "Eki kaldır",
+    "dropFile": "Dosyayı bırakın",
+    "mentionSuggestionsAria": "Kullanıcı önerileri"
+  },
+  "typing": {
+    "single": "{{name}} yazıyor…",
+    "double": "{{name1}} ve {{name2}} yazıyor…",
+    "multiple": "Birkaç kişi yazıyor…"
+  },
+  "messageList": {
+    "emptyTitle": "Henüz mesaj yok",
+    "emptyDescription": "İlk mesajı göndererek sohbeti başlatın.",
+    "logAria": "Mesajlar",
+    "newMessage": "Yeni mesaj"
+  },
+  "search": {
+    "conversationAria": "Bu sohbette ara",
+    "globalAria": "Mesajlarda ara",
+    "conversationPlaceholder": "Bu sohbette ara…",
+    "globalPlaceholder": "Tüm mesajlarda ara…",
+    "inputAria": "Arama metni",
+    "minLength_one": "Aramak için en az {{count}} karakter yazın.",
+    "minLength_other": "Aramak için en az {{count}} karakter yazın.",
+    "noResultsTitle": "Sonuç yok",
+    "noResultsDescription": "Aramanızla eşleşen bir mesaj bulunamadı."
+  },
+  "conversationList": {
+    "title": "Sohbetler",
+    "newConversationAria": "Yeni sohbet başlat",
+    "searchPlaceholder": "Sohbetlerde ara…",
+    "searchAria": "Sohbetlerde ara",
+    "filterAria": "Konuşma tipi filtresi",
+    "filters": {
+      "all": "Tümü",
+      "dm": "DM",
+      "group": "Grup",
+      "record": "Kayıt"
+    },
+    "emptyTitle": "Konuşma bulunamadı",
+    "emptySearchDescription": "Arama kriterlerinize uyan bir konuşma yok.",
+    "emptyDescription": "Henüz bir konuşmanız yok.",
+    "noMessagesYet": "Henüz mesaj yok",
+    "mutedAria": "Sessize alındı"
+  },
+  "header": {
+    "backAria": "Konuşma listesine dön",
+    "membersCount_one": "{{count}} üye",
+    "membersCount_other": "{{count}} üye",
+    "muteAria": "Sessize al",
+    "unmuteAria": "Sesi aç",
+    "optionsAria": "Konuşma seçenekleri",
+    "addMember": "Üye ekle",
+    "renameGroup": "Grup adını değiştir",
+    "leaveGroup": "Gruptan ayrıl",
+    "leaveConfirmButton": "Ayrıl",
+    "leaveConfirmDescription": "Bu gruptan ayrılmak istediğinize emin misiniz?",
+    "deleteGroup": "Grubu sil",
+    "deleteConfirmDescription": "Bu grup kalıcı olarak silinecek. Bu işlem geri alınamaz.",
+    "membersDialogAria": "Üyeler",
+    "removeMemberAria": "{{name}} üyesini çıkar",
+    "noUsersToAdd": "Eklenecek kullanıcı yok."
+  },
+  "common": {
+    "groupNameLabel": "Grup adı",
+    "searchUsersPlaceholder": "Kullanıcı ara…",
+    "searchUsersAria": "Kullanıcı ara",
+    "startNewConversation": "Yeni sohbet başlat"
+  },
+  "newConversation": {
+    "title": "Yeni sohbet",
+    "typeAria": "Sohbet tipi",
+    "groupNamePlaceholder": "Örn. Satış Ekibi",
+    "noUsersFound": "Kullanıcı bulunamadı."
+  },
+  "page": {
+    "emptyTitle": "Bir konuşma seçin veya yeni sohbet başlatın"
+  },
+  "recordPanel": {
+    "title": "Sohbet",
+    "subtitle": "Bu kayıtla ilgili ekip içi yazışma",
+    "emptyTitle": "Bu kayıt hakkında henüz konuşulmamış.",
+    "emptyDescription": "İlk mesajı siz yazın."
+  },
+  "toast": {
+    "created": "Sohbet oluşturuldu.",
+    "memberAdded": "Üye eklendi.",
+    "memberRemoved": "Üye çıkarıldı.",
+    "left": "Sohbetten ayrıldınız.",
+    "renamed": "Sohbet adı güncellendi.",
+    "deleted": "Sohbet silindi.",
+    "muted": "Bildirimler sessize alındı.",
+    "unmuted": "Bildirimler açıldı."
+  }
+}

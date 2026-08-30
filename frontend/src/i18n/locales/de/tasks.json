@@ -1,0 +1,115 @@
+{
+  "breadcrumb": { "home": "Startseite", "current": "Aufgaben" },
+  "page": {
+    "title": "Aufgaben",
+    "countLabel_one": "{{count}} Aufgabe",
+    "countLabel_other": "{{count}} Aufgaben",
+    "newTask": "Neue Aufgabe",
+    "viewGroupAria": "Ansicht",
+    "viewList": "Liste",
+    "viewCalendar": "Kalender"
+  },
+  "filters": {
+    "searchPlaceholder": "Aufgabentitel suchen...",
+    "searchAria": "Aufgabe suchen",
+    "statusAria": "Statusfilter",
+    "priorityAria": "Prioritätsfilter",
+    "assignedAria": "Filter nach Zuständigkeit",
+    "taskableAria": "Filter nach Datensatztyp",
+    "fromAria": "Startdatum (Fälligkeit)",
+    "toAria": "Enddatum (Fälligkeit)",
+    "overdueOnly": "Nur überfällige",
+    "allStatuses": "Alle Status",
+    "allPriorities": "Alle Prioritäten",
+    "allAssignees": "Alle Zuständigen",
+    "allTaskableTypes": "Alle Datensatztypen"
+  },
+  "list": {
+    "loadError": "Beim Laden der Aufgaben ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen",
+    "emptyTitle": "Keine Aufgabe gefunden",
+    "emptyDescription": "Keine Aufgabe entspricht Ihren Such- oder Filterkriterien."
+  },
+  "table": {
+    "completedAria": "Erledigt",
+    "task": "Aufgabe",
+    "priority": "Priorität",
+    "status": "Status",
+    "dueDate": "Fälligkeit",
+    "assignee": "Zuständig",
+    "relatedRecord": "Verknüpfter Datensatz",
+    "actions": "Aktionen"
+  },
+  "row": {
+    "completeAria": "{{title}} erledigt",
+    "completeDisabledTitle": "Sie sind nicht Besitzer dieser Aufgabe und können sie nicht abschließen.",
+    "edit": "Bearbeiten",
+    "editDisabledTitle": "Sie sind nicht Besitzer dieser Aufgabe und können sie nicht bearbeiten.",
+    "assign": "Zuweisen",
+    "delete": "Löschen"
+  },
+  "calendar": {
+    "prevMonth": "Vorheriger Monat",
+    "nextMonth": "Nächster Monat",
+    "today": "Heute",
+    "noDueDateNote": "Aufgaben ohne Fälligkeitsdatum werden im Kalender nicht angezeigt.",
+    "overflowMore": "+{{count}} weitere",
+    "weekday": { "mon": "Mo", "tue": "Di", "wed": "Mi", "thu": "Do", "fri": "Fr", "sat": "Sa", "sun": "So" }
+  },
+  "dayModal": {
+    "taskCount_one": "{{count}} Aufgabe",
+    "taskCount_other": "{{count}} Aufgaben",
+    "empty": "Keine Aufgaben für diesen Tag.",
+    "addTask": "Aufgabe hinzufügen"
+  },
+  "deleteModal": {
+    "title": "Aufgabe löschen",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Die Aufgabe wird endgültig gelöscht.",
+    "confirmBody": "Möchten Sie die Aufgabe <bold>{{title}}</bold> wirklich löschen?",
+    "confirm": "Löschen"
+  },
+  "form": {
+    "createTitle": "Neue Aufgabe",
+    "editTitle": "Aufgabe bearbeiten",
+    "titleLabel": "Titel",
+    "descriptionLabel": "Beschreibung",
+    "dueDateLabel": "Fälligkeit",
+    "reminderLabel": "Erinnerung",
+    "reminderHintNoDueDate": "Wählen Sie zuerst ein Fälligkeitsdatum.",
+    "priorityLabel": "Priorität",
+    "statusLabel": "Status",
+    "statusHint": "Der Abschluss erfolgt über die Schnellmarkierung in der Liste.",
+    "assigneeLabel": "Zuständig",
+    "create": "Erstellen",
+    "titleRequired": "Titel ist erforderlich.",
+    "reminderAfterDue": "Die Erinnerung darf nicht nach dem Fälligkeitsdatum liegen."
+  },
+  "common": { "unassigned": "Nicht zugewiesen" },
+  "assignModal": { "title": "Aufgabe zuweisen", "submit": "Zuweisen" },
+  "relatedPicker": {
+    "typeLabel": "Typ des verknüpften Datensatzes",
+    "noneOption": "Kein verknüpfter Datensatz",
+    "searchLabel": "Datensatz suchen",
+    "searchPlaceholder": "Datensatz suchen...",
+    "selectTypeFirst": "Wählen Sie zuerst einen Typ",
+    "clearSelection": "Auswahl löschen",
+    "loading": "Wird geladen…",
+    "noResults": "Keine Ergebnisse gefunden"
+  },
+  "relatedType": {
+    "deal": "Verkaufschance",
+    "lead": "Interessent",
+    "contact": "Kontakt",
+    "company": "Unternehmen",
+    "ticket": "Ticket"
+  },
+  "toast": {
+    "created": "Aufgabe erstellt.",
+    "updated": "Aufgabe aktualisiert.",
+    "deleted": "Aufgabe gelöscht.",
+    "completed": "Aufgabe abgeschlossen.",
+    "uncompleted": "Aufgabe als nicht abgeschlossen markiert.",
+    "assigned": "Aufgabenzuweisung aktualisiert."
+  },
+  "reminders": { "dueLabel": "Fällig: {{date}}", "goToTask": "Zur Aufgabe" }
+}

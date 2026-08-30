@@ -1,0 +1,26 @@
+{
+  "panel": {
+    "title": "Enregistrements liés",
+    "moreNotShown_one": "+{{count}} enregistrement de plus",
+    "moreNotShown_other": "+{{count}} enregistrements de plus"
+  },
+  "groups": {
+    "company": "Entreprise",
+    "contact": "Contact",
+    "deal": "Opportunité",
+    "convertedContact": "Contact converti",
+    "convertedCompany": "Entreprise convertie",
+    "convertedDeal": "Opportunité convertie"
+  },
+  "empty": {
+    "deals": "Aucune opportunité liée.",
+    "quotes": "Aucun devis lié.",
+    "tickets": "Aucun ticket lié.",
+    "company": "Aucune entreprise liée.",
+    "contact": "Aucun contact lié.",
+    "deal": "Aucune opportunité liée.",
+    "convertedContact": "Ce prospect n'a pas encore été converti en contact.",
+    "convertedCompany": "Ce prospect n'a pas encore été converti en entreprise.",
+    "convertedDeal": "Aucune opportunité n'a été créée lors de cette conversion."
+  }
+}

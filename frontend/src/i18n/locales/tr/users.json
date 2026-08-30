@@ -1,0 +1,109 @@
+{
+  "breadcrumb": {
+    "home": "Anasayfa",
+    "users": "Kullanıcılar"
+  },
+  "list": {
+    "title": "Kullanıcılar",
+    "subtitle_one": "{{count}} kullanıcı",
+    "subtitle_other": "{{count}} kullanıcı",
+    "createButton": "Yeni Kullanıcı",
+    "searchPlaceholder": "İsim veya e-posta ara...",
+    "searchAria": "Kullanıcı ara",
+    "roleFilterAria": "Rol filtresi",
+    "statusFilterAria": "Durum filtresi",
+    "allRoles": "Tüm roller",
+    "allStatuses": "Tümü",
+    "loadError": "Kullanıcılar yüklenirken bir hata oluştu.",
+    "emptyTitle": "Kullanıcı bulunamadı",
+    "emptyDescription": "Arama veya filtre kriterlerinizle eşleşen kullanıcı yok.",
+    "columns": {
+      "user": "Kullanıcı",
+      "role": "Rol",
+      "department": "Departman",
+      "status": "Durum",
+      "lastLogin": "Son Giriş",
+      "actions": "İşlemler"
+    },
+    "neverLoggedIn": "Hiç giriş yapmadı",
+    "actions": {
+      "edit": "Düzenle",
+      "resetPassword": "Şifre sıfırla",
+      "activate": "Aktifleştir",
+      "deactivate": "Pasifleştir",
+      "delete": "Sil"
+    }
+  },
+  "status": {
+    "active": "Aktif",
+    "inactive": "Pasif"
+  },
+  "deleteModal": {
+    "title": "Kullanıcıyı sil",
+    "description": "Bu işlem geri alınamaz. Kullanıcı kalıcı olarak silinecek.",
+    "confirmText": "<bold>{{name}}</bold> ({{email}}) kullanıcısını silmek istediğinize emin misiniz?"
+  },
+  "deactivateModal": {
+    "title": "Kullanıcıyı pasifleştir",
+    "description": "Bu işlem geri alınamaz — kullanıcının oturumu anında sonlandırılır ve tekrar aktifleştirilene kadar sisteme giriş yapamaz.",
+    "confirmText": "<bold>{{name}}</bold> kullanıcısını pasifleştirmek istediğinize emin misiniz?"
+  },
+  "form": {
+    "titleCreate": "Yeni Kullanıcı",
+    "titleEdit": "Kullanıcıyı Düzenle",
+    "nameLabel": "Ad Soyad",
+    "emailLabel": "E-posta",
+    "roleLabel": "Rol",
+    "rolePlaceholder": "Rol seçin",
+    "departmentLabel": "Departman",
+    "temporaryPasswordLabel": "Geçici Şifre",
+    "showPassword": "Şifreyi göster",
+    "hidePassword": "Şifreyi gizle",
+    "generatePasswordTitle": "Rastgele güçlü şifre üret",
+    "copyPasswordTitle": "Panoya kopyala",
+    "copyPasswordAria": "Şifreyi panoya kopyala",
+    "strengthLabel": "Güç: {{strength}}",
+    "createNotice": "Kullanıcı oluşturulduğunda geçici şifre ile giriş yapar ve ilk girişte şifresini değiştirmek zorundadır.",
+    "errors": {
+      "nameRequired": "Ad soyad zorunludur.",
+      "emailRequired": "E-posta zorunludur.",
+      "roleRequired": "Rol seçimi zorunludur.",
+      "passwordPolicy": "Şifre, politika kurallarının tamamını karşılamalıdır."
+    },
+    "toast": {
+      "passwordCopied": "Şifre panoya kopyalandı.",
+      "passwordCopyFailed": "Panoya kopyalanamadı. Şifreyi elle seçip kopyalayın."
+    }
+  },
+  "resetPasswordModal": {
+    "title": "Şifreyi Sıfırla",
+    "description": "{{name}} ({{email}}) için yeni geçici şifre belirleyin.",
+    "newPasswordLabel": "Yeni Şifre",
+    "submit": "Şifreyi Sıfırla",
+    "errors": {
+      "passwordPolicy": "Şifre, politika kurallarının tamamını karşılamalıdır."
+    }
+  },
+  "passwordStrength": {
+    "veryWeak": "Çok zayıf",
+    "weak": "Zayıf",
+    "medium": "Orta",
+    "good": "İyi",
+    "strong": "Güçlü"
+  },
+  "passwordRules": {
+    "length": "En az {{count}} karakter",
+    "upper": "En az bir büyük harf",
+    "lower": "En az bir küçük harf",
+    "digit": "En az bir rakam",
+    "special": "En az bir özel karakter"
+  },
+  "toast": {
+    "created": "Kullanıcı oluşturuldu.",
+    "updated": "Kullanıcı güncellendi.",
+    "deleted": "Kullanıcı silindi.",
+    "activated": "Kullanıcı aktifleştirildi.",
+    "deactivated": "Kullanıcı pasifleştirildi.",
+    "passwordReset": "Şifre sıfırlandı."
+  }
+}

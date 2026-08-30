@@ -1,0 +1,89 @@
+{
+  "activity": {
+    "type": {
+      "call": "Appel",
+      "meeting": "Réunion",
+      "email": "E-mail",
+      "note": "Note",
+      "unknown": "Autre"
+    }
+  },
+  "deal": {
+    "status": {
+      "open": "Ouverte",
+      "won": "Gagnée",
+      "lost": "Perdue"
+    }
+  },
+  "task": {
+    "priority": { "low": "Faible", "normal": "Normale", "high": "Élevée", "urgent": "Urgente" },
+    "status": { "pending": "En attente", "in_progress": "En cours", "completed": "Terminée", "cancelled": "Annulée" }
+  },
+  "ticket": {
+    "priority": {
+      "low": "Faible",
+      "normal": "Normale",
+      "high": "Élevée",
+      "urgent": "Urgente"
+    },
+    "status": {
+      "open": "Ouvert",
+      "pending": "En attente",
+      "in_progress": "En cours",
+      "resolved": "Résolu",
+      "closed": "Fermé"
+    }
+  },
+  "quote": {
+    "status": {
+      "draft": "Brouillon",
+      "sent": "Envoyé",
+      "accepted": "Accepté",
+      "rejected": "Refusé",
+      "expired": "Expiré"
+    }
+  },
+  "lead": {
+    "status": {
+      "new": "Nouveau",
+      "contacted": "Contacté",
+      "qualified": "Qualifié",
+      "unqualified": "Non qualifié",
+      "converted": "Converti"
+    },
+    "source": {
+      "website": "Site web",
+      "referral": "Recommandation",
+      "cold_call": "Appel à froid",
+      "email_campaign": "Campagne e-mail",
+      "social_media": "Réseaux sociaux",
+      "event": "Événement",
+      "other": "Autre"
+    }
+  },
+  "role": {
+    "super_admin": "Super administrateur",
+    "admin": "Administrateur",
+    "sales_manager": "Directeur commercial",
+    "sales_rep": "Représentant commercial",
+    "support_agent": "Agent support",
+    "viewer": "Observateur"
+  },
+  "ticketCategory": {
+    "technical_support": "Support technique",
+    "billing": "Facturation",
+    "product_info": "Information produit",
+    "complaint": "Réclamation",
+    "installation": "Installation",
+    "training_request": "Demande de formation"
+  },
+  "pipelineStage": {
+    "yeni-firsat": "Nouvelle opportunité",
+    "iletisim-kuruldu": "Contact établi",
+    "teklif-hazirlaniyor": "Préparation de l'offre",
+    "teklif-gonderildi": "Offre envoyée",
+    "muzakere": "Négociation",
+    "kazanildi": "Gagné",
+    "kaybedildi": "Perdu"
+  }
+}

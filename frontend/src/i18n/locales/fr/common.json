@@ -1,0 +1,138 @@
+{
+  "actions": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "add": "Ajouter",
+    "create": "Créer",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "retry": "Réessayer",
+    "loadMore": "Charger plus",
+    "search": "Rechercher",
+    "clear": "Effacer",
+    "apply": "Appliquer",
+    "back": "Retour",
+    "view": "Afficher",
+    "download": "Télécharger",
+    "upload": "Importer",
+    "export": "Exporter",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "states": {
+    "loading": "Chargement…",
+    "noRecords": "Aucun enregistrement trouvé",
+    "empty": "Rien à afficher",
+    "error": "Une erreur est survenue"
+  },
+  "pagination": {
+    "aria": "Pagination",
+    "summary": "{{from}} - {{to}} sur {{total}} enregistrements",
+    "previous": "Page précédente",
+    "next": "Page suivante"
+  },
+  "timeline": {
+    "justNow": "à l'instant",
+    "loadError": "Une erreur est survenue lors du chargement de la chronologie.",
+    "loadMoreError": "Une erreur est survenue lors du chargement d'autres enregistrements.",
+    "loadMore": "Charger plus",
+    "emptyTitle": "Aucune interaction pour le moment",
+    "emptyDescription": "Il n'y a encore rien à afficher pour cet enregistrement."
+  },
+  "toast": {
+    "genericError": "Une erreur est survenue. Veuillez réessayer.",
+    "saveSuccess": "Modifications enregistrées.",
+    "saveError": "Une erreur est survenue lors de l'enregistrement.",
+    "deleteSuccess": "Enregistrement supprimé.",
+    "deleteError": "Une erreur est survenue lors de la suppression."
+  },
+  "nav": {
+    "aria": "Navigation principale",
+    "sections": {
+      "main": "ACCUEIL",
+      "sales": "VENTES",
+      "work": "TRAVAIL",
+      "analysis": "ANALYSE",
+      "admin": "ADMINISTRATION"
+    },
+    "dashboard": "Tableau de bord",
+    "leads": "Prospects",
+    "contacts": "Contacts",
+    "companies": "Entreprises",
+    "deals": "Opportunités",
+    "quotes": "Devis",
+    "products": "Produits",
+    "tasks": "Tâches",
+    "tickets": "Tickets",
+    "chat": "Messagerie",
+    "reports": "Rapports",
+    "users": "Utilisateurs",
+    "logs": "Journaux",
+    "settings": "Paramètres"
+  },
+  "layout": {
+    "toggleSidebar": "Afficher/masquer la barre latérale",
+    "search": "Rechercher",
+    "searchPlaceholder": "Rechercher...",
+    "themeAria": "Thème : {{theme}}. Cliquez pour changer.",
+    "theme": {
+      "light": "Thème clair",
+      "dark": "Thème sombre",
+      "system": "Thème système"
+    },
+    "realtimeDisconnected": "Connexion temps réel perdue",
+    "userMenu": "Menu utilisateur",
+    "userFallback": "Utilisateur",
+    "profile": "Profil",
+    "logout": "Se déconnecter"
+  },
+  "language": {
+    "label": "Langue",
+    "aria": "Langue de l'interface",
+    "names": {
+      "tr": "Türkçe",
+      "en": "English",
+      "de": "Deutsch",
+      "fr": "Français"
+    },
+    "saveFailed": "Impossible d'enregistrer la préférence de langue."
+  },
+  "currency": {
+    "label": "Devise",
+    "aria": "Devise d'affichage",
+    "names": {
+      "TRY": "Livre turque",
+      "USD": "Dollar américain",
+      "EUR": "Euro",
+      "GBP": "Livre sterling"
+    },
+    "saveFailed": "Impossible d'enregistrer la préférence de devise."
+  },
+  "pages": {
+    "notFound": {
+      "title": "Page introuvable",
+      "description": "La page que vous recherchez n'existe pas ou a peut-être été déplacée."
+    },
+    "dashboard": {
+      "revenueTrend": {
+        "title": "Tendance des revenus",
+        "subtitle": "Revenus des opportunités gagnées sur la période sélectionnée",
+        "day": "Jour",
+        "week": "Semaine",
+        "month": "Mois"
+      },
+      "salesFunnel": {
+        "title": "Entonnoir de vente",
+        "subtitle": "Montant des opportunités ouvertes par étape"
+      },
+      "recentActivities": {
+        "title": "Activités récentes"
+      },
+      "taskSummary": {
+        "title": "Résumé des tâches"
+      }
+    }
+  }
+}

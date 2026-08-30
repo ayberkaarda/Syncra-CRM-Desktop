@@ -1,0 +1,116 @@
+{
+  "breadcrumb": {
+    "home": "Accueil",
+    "contacts": "Contacts"
+  },
+  "list": {
+    "title": "Contacts",
+    "subtitle_one": "{{count}} contact",
+    "subtitle_other": "{{count}} contacts",
+    "createButton": "Nouveau contact",
+    "error": "Une erreur s'est produite lors du chargement des contacts.",
+    "retry": "Réessayer",
+    "empty": {
+      "title": "Aucun contact trouvé",
+      "description": "Aucun contact ne correspond à vos critères de recherche ou de filtre."
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Rechercher un contact...",
+    "searchAria": "Rechercher un contact",
+    "companyAria": "Filtre entreprise",
+    "ownerAria": "Filtre propriétaire",
+    "cityPlaceholder": "Ville",
+    "cityAria": "Filtre ville",
+    "tagAria": "Filtre étiquette",
+    "primaryAria": "Filtre principal",
+    "fromDateAria": "Date de début",
+    "toDateAria": "Date de fin",
+    "allCompanies": "Toutes les entreprises",
+    "allOwners": "Tous les propriétaires",
+    "allTags": "Toutes les étiquettes",
+    "all": "Tous",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "table": {
+    "contact": "Contact",
+    "company": "Entreprise",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "city": "Ville",
+    "owner": "Propriétaire",
+    "tags": "Étiquettes",
+    "primary": "Principal",
+    "actions": "Actions",
+    "detail": "Détails",
+    "edit": "Modifier",
+    "delete": "Supprimer"
+  },
+  "deleteModal": {
+    "title": "Supprimer le contact",
+    "description": "Cette action est irréversible. Le contact sera définitivement supprimé.",
+    "confirm": "Voulez-vous vraiment supprimer <strong>{{name}}</strong> ?"
+  },
+  "company": {
+    "label": "Entreprise",
+    "placeholder": "Rechercher une entreprise...",
+    "clearAria": "Effacer la sélection d'entreprise",
+    "clearOption": "Aucune entreprise",
+    "loading": "Chargement…",
+    "noResults": "Aucun résultat trouvé"
+  },
+  "tags": {
+    "label": "Étiquettes",
+    "removeAria": "Retirer l'étiquette {{name}}",
+    "select": "Sélectionner des étiquettes",
+    "loading": "Chargement…",
+    "notFound": "Aucune étiquette trouvée."
+  },
+  "form": {
+    "validation": {
+      "firstNameRequired": "Le prénom est obligatoire.",
+      "lastNameRequired": "Le nom est obligatoire."
+    },
+    "selectOwner": "Aucun propriétaire sélectionné",
+    "titleEdit": "Modifier le contact",
+    "titleCreate": "Nouveau contact",
+    "cancel": "Annuler",
+    "submitEdit": "Enregistrer",
+    "submitCreate": "Créer",
+    "fields": {
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "mobile": "Mobile",
+      "position": "Poste",
+      "owner": "Propriétaire",
+      "isPrimary": "Contact principal",
+      "address": "Adresse",
+      "city": "Ville",
+      "country": "Pays",
+      "notes": "Notes"
+    },
+    "primaryWarning": "Ce contact sera marqué comme le contact principal de l'entreprise sélectionnée.",
+    "customFields": "Champs personnalisés"
+  },
+  "detail": {
+    "breadcrumbError": "Erreur",
+    "loadError": "Une erreur s'est produite lors du chargement du contact.",
+    "title": "Résumé du contact",
+    "primaryBadge": "Principal",
+    "dealsBadge_one": "{{count}} opportunité",
+    "dealsBadge_other": "{{count}} opportunités",
+    "ticketsBadge_one": "{{count}} demande",
+    "ticketsBadge_other": "{{count}} demandes",
+    "cityCountry": "Ville / Pays",
+    "timelineTitle": "Chronologie",
+    "timelineEmptyDescription": "Aucune interaction à afficher pour ce contact pour le moment."
+  },
+  "toast": {
+    "created": "Contact créé.",
+    "updated": "Contact mis à jour.",
+    "deleted": "Contact supprimé."
+  }
+}

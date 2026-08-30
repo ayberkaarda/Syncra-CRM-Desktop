@@ -1,0 +1,46 @@
+{
+  "kpi": {
+    "revenue": "Revenu",
+    "openDealsCount": "Nombre d'opportunités ouvertes",
+    "openDealsValue": "Valeur des opportunités ouvertes",
+    "conversionRate": "Taux de conversion",
+    "activitiesCount": "Nombre d'activités",
+    "wonCount": "Gagnées",
+    "lostCount": "Perdues",
+    "avgDealSize": "Taille moyenne des opportunités"
+  },
+  "recentActivities": {
+    "emptyTitle": "Aucune activité pour le moment",
+    "emptyDescription": "Aucune activité enregistrée n'a été trouvée.",
+    "systemActor": "Système",
+    "related": {
+      "deal": "Opportunité",
+      "lead": "Prospect",
+      "contact": "Contact",
+      "company": "Entreprise",
+      "ticket": "Ticket",
+      "task": "Tâche",
+      "quote": "Devis"
+    }
+  },
+  "revenueTrend": {
+    "group": { "day": "Jour", "week": "Semaine", "month": "Mois" },
+    "emptyTitle": "Aucune donnée de revenu pour cette période",
+    "emptyDescription": "Aucune opportunité gagnée n'a été trouvée sur la période sélectionnée.",
+    "tooltipWonDeals": "{{value}} opportunités gagnées"
+  },
+  "salesFunnel": {
+    "emptyTitle": "Aucune donnée d'entonnoir pour cette période",
+    "emptyDescription": "Aucune opportunité n'est entrée dans le pipeline sur la période sélectionnée.",
+    "tooltipDealsCount": "{{value}} opportunités"
+  },
+  "taskSummary": {
+    "overdue": "En retard",
+    "dueToday": "Échéance aujourd'hui",
+    "open": "Tâches ouvertes",
+    "completedToday": "Terminées aujourd'hui"
+  },
+  "relativeTime": {
+    "justNow": "à l'instant"
+  }
+}

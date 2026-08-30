@@ -1,0 +1,115 @@
+{
+  "breadcrumb": { "home": "Home", "current": "Tasks" },
+  "page": {
+    "title": "Tasks",
+    "countLabel_one": "{{count}} task",
+    "countLabel_other": "{{count}} tasks",
+    "newTask": "New Task",
+    "viewGroupAria": "View",
+    "viewList": "List",
+    "viewCalendar": "Calendar"
+  },
+  "filters": {
+    "searchPlaceholder": "Search task title...",
+    "searchAria": "Search tasks",
+    "statusAria": "Status filter",
+    "priorityAria": "Priority filter",
+    "assignedAria": "Assignee filter",
+    "taskableAria": "Related record type filter",
+    "fromAria": "Start date (due)",
+    "toAria": "End date (due)",
+    "overdueOnly": "Overdue only",
+    "allStatuses": "All statuses",
+    "allPriorities": "All priorities",
+    "allAssignees": "All assignees",
+    "allTaskableTypes": "All record types"
+  },
+  "list": {
+    "loadError": "An error occurred while loading tasks.",
+    "retry": "Retry",
+    "emptyTitle": "No tasks found",
+    "emptyDescription": "No tasks match your search or filter criteria."
+  },
+  "table": {
+    "completedAria": "Completed",
+    "task": "Task",
+    "priority": "Priority",
+    "status": "Status",
+    "dueDate": "Due date",
+    "assignee": "Assignee",
+    "relatedRecord": "Related record",
+    "actions": "Actions"
+  },
+  "row": {
+    "completeAria": "{{title}} completed",
+    "completeDisabledTitle": "You are not the owner of this task, you cannot complete it.",
+    "edit": "Edit",
+    "editDisabledTitle": "You are not the owner of this task, you cannot edit it.",
+    "assign": "Assign",
+    "delete": "Delete"
+  },
+  "calendar": {
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today",
+    "noDueDateNote": "Tasks without a due date are not shown on the calendar.",
+    "overflowMore": "+{{count}} more",
+    "weekday": { "mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu", "fri": "Fri", "sat": "Sat", "sun": "Sun" }
+  },
+  "dayModal": {
+    "taskCount_one": "{{count}} task",
+    "taskCount_other": "{{count}} tasks",
+    "empty": "No tasks for this day.",
+    "addTask": "Add Task"
+  },
+  "deleteModal": {
+    "title": "Delete task",
+    "description": "This action cannot be undone. The task will be permanently deleted.",
+    "confirmBody": "Are you sure you want to delete the task <bold>{{title}}</bold>?",
+    "confirm": "Delete"
+  },
+  "form": {
+    "createTitle": "New Task",
+    "editTitle": "Edit Task",
+    "titleLabel": "Title",
+    "descriptionLabel": "Description",
+    "dueDateLabel": "Due date",
+    "reminderLabel": "Reminder",
+    "reminderHintNoDueDate": "Select a due date first.",
+    "priorityLabel": "Priority",
+    "statusLabel": "Status",
+    "statusHint": "Completion is done via the quick-check in the list.",
+    "assigneeLabel": "Assignee",
+    "create": "Create",
+    "titleRequired": "Title is required.",
+    "reminderAfterDue": "The reminder cannot be after the due date."
+  },
+  "common": { "unassigned": "Unassigned" },
+  "assignModal": { "title": "Assign Task", "submit": "Assign" },
+  "relatedPicker": {
+    "typeLabel": "Related Record Type",
+    "noneOption": "No related record",
+    "searchLabel": "Search Record",
+    "searchPlaceholder": "Search record...",
+    "selectTypeFirst": "Select a type first",
+    "clearSelection": "Clear selection",
+    "loading": "Loading…",
+    "noResults": "No results found"
+  },
+  "relatedType": {
+    "deal": "Deal",
+    "lead": "Lead",
+    "contact": "Contact",
+    "company": "Company",
+    "ticket": "Ticket"
+  },
+  "toast": {
+    "created": "Task created.",
+    "updated": "Task updated.",
+    "deleted": "Task deleted.",
+    "completed": "Task completed.",
+    "uncompleted": "Task marked as not completed.",
+    "assigned": "Task assignment updated."
+  },
+  "reminders": { "dueLabel": "Due: {{date}}", "goToTask": "Go to task" }
+}

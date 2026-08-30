@@ -1,0 +1,26 @@
+{
+  "panel": {
+    "title": "İlişkili Kayıtlar",
+    "moreNotShown_one": "+{{count}} kayıt daha",
+    "moreNotShown_other": "+{{count}} kayıt daha"
+  },
+  "groups": {
+    "company": "Firma",
+    "contact": "Kişi",
+    "deal": "Fırsat",
+    "convertedContact": "Dönüştürülen Kişi",
+    "convertedCompany": "Dönüştürülen Firma",
+    "convertedDeal": "Dönüştürülen Fırsat"
+  },
+  "empty": {
+    "deals": "Bağlı fırsat yok.",
+    "quotes": "Bağlı teklif yok.",
+    "tickets": "Bağlı destek talebi yok.",
+    "company": "Bağlı firma yok.",
+    "contact": "Bağlı kişi yok.",
+    "deal": "Bağlı fırsat yok.",
+    "convertedContact": "Bu aday henüz bir kişiye dönüştürülmedi.",
+    "convertedCompany": "Bu aday henüz bir firmaya dönüştürülmedi.",
+    "convertedDeal": "Bu dönüşümde bir fırsat oluşturulmadı."
+  }
+}

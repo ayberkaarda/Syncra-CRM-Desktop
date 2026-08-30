@@ -1,0 +1,126 @@
+{
+  "time": {
+    "justNow": "just now",
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
+  "conversationType": {
+    "dm": "Direct",
+    "group": "Group",
+    "record": "Record"
+  },
+  "message": {
+    "deletedPreview": "This message was deleted",
+    "unknownUser": "Unknown",
+    "editAria": "Edit message",
+    "deleteAria": "Delete message",
+    "sending": "Sending…",
+    "failed": "Failed to send",
+    "editedLabel": "edited",
+    "tickSent": "Sent",
+    "tickDelivered": "Delivered",
+    "tickRead": "Read"
+  },
+  "confirm": {
+    "deleteMessage": "Are you sure you want to delete this message?",
+    "removeMember": "Are you sure you want to remove this member from the group?"
+  },
+  "composer": {
+    "placeholder": "Write a message…",
+    "inputAria": "Write a message",
+    "sendAria": "Send",
+    "attachFileAria": "Attach file",
+    "removeAttachmentAria": "Remove attachment",
+    "dropFile": "Drop the file",
+    "mentionSuggestionsAria": "User suggestions"
+  },
+  "typing": {
+    "single": "{{name}} is typing…",
+    "double": "{{name1}} and {{name2}} are typing…",
+    "multiple": "Several people are typing…"
+  },
+  "messageList": {
+    "emptyTitle": "No messages yet",
+    "emptyDescription": "Start the conversation by sending the first message.",
+    "logAria": "Messages",
+    "newMessage": "New message"
+  },
+  "search": {
+    "conversationAria": "Search this conversation",
+    "globalAria": "Search messages",
+    "conversationPlaceholder": "Search this conversation…",
+    "globalPlaceholder": "Search all messages…",
+    "inputAria": "Search text",
+    "minLength_one": "Type at least {{count}} character to search.",
+    "minLength_other": "Type at least {{count}} characters to search.",
+    "noResultsTitle": "No results",
+    "noResultsDescription": "No message matches your search."
+  },
+  "conversationList": {
+    "title": "Chats",
+    "newConversationAria": "Start new chat",
+    "searchPlaceholder": "Search chats…",
+    "searchAria": "Search chats",
+    "filterAria": "Conversation type filter",
+    "filters": {
+      "all": "All",
+      "dm": "DM",
+      "group": "Group",
+      "record": "Record"
+    },
+    "emptyTitle": "No conversation found",
+    "emptySearchDescription": "No conversation matches your search criteria.",
+    "emptyDescription": "You don't have any conversations yet.",
+    "noMessagesYet": "No messages yet",
+    "mutedAria": "Muted"
+  },
+  "header": {
+    "backAria": "Back to conversation list",
+    "membersCount_one": "{{count}} member",
+    "membersCount_other": "{{count}} members",
+    "muteAria": "Mute",
+    "unmuteAria": "Unmute",
+    "optionsAria": "Conversation options",
+    "addMember": "Add member",
+    "renameGroup": "Rename group",
+    "leaveGroup": "Leave group",
+    "leaveConfirmButton": "Leave",
+    "leaveConfirmDescription": "Are you sure you want to leave this group?",
+    "deleteGroup": "Delete group",
+    "deleteConfirmDescription": "This group will be permanently deleted. This action cannot be undone.",
+    "membersDialogAria": "Members",
+    "removeMemberAria": "Remove {{name}}",
+    "noUsersToAdd": "No users to add."
+  },
+  "common": {
+    "groupNameLabel": "Group name",
+    "searchUsersPlaceholder": "Search users…",
+    "searchUsersAria": "Search users",
+    "startNewConversation": "Start new chat"
+  },
+  "newConversation": {
+    "title": "New chat",
+    "typeAria": "Chat type",
+    "groupNamePlaceholder": "e.g. Sales Team",
+    "noUsersFound": "No users found."
+  },
+  "page": {
+    "emptyTitle": "Select a conversation or start a new chat"
+  },
+  "recordPanel": {
+    "title": "Chat",
+    "subtitle": "Internal team discussion about this record",
+    "emptyTitle": "No discussion about this record yet.",
+    "emptyDescription": "Write the first message."
+  },
+  "toast": {
+    "created": "Chat created.",
+    "memberAdded": "Member added.",
+    "memberRemoved": "Member removed.",
+    "left": "You left the chat.",
+    "renamed": "Chat name updated.",
+    "deleted": "Chat deleted.",
+    "muted": "Notifications muted.",
+    "unmuted": "Notifications unmuted."
+  }
+}

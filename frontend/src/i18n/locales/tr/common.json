@@ -1,0 +1,138 @@
+{
+  "actions": {
+    "save": "Kaydet",
+    "cancel": "Vazgeç",
+    "delete": "Sil",
+    "edit": "Düzenle",
+    "add": "Ekle",
+    "create": "Oluştur",
+    "close": "Kapat",
+    "confirm": "Onayla",
+    "retry": "Tekrar dene",
+    "loadMore": "Daha fazla yükle",
+    "search": "Ara",
+    "clear": "Temizle",
+    "apply": "Uygula",
+    "back": "Geri",
+    "view": "Görüntüle",
+    "download": "İndir",
+    "upload": "Yükle",
+    "export": "Dışa Aktar",
+    "yes": "Evet",
+    "no": "Hayır"
+  },
+  "states": {
+    "loading": "Yükleniyor…",
+    "noRecords": "Kayıt bulunamadı",
+    "empty": "Gösterilecek bir şey yok",
+    "error": "Bir hata oluştu"
+  },
+  "pagination": {
+    "aria": "Sayfalama",
+    "summary": "{{from}} - {{to}} arası, toplam {{total}} kayıt",
+    "previous": "Önceki sayfa",
+    "next": "Sonraki sayfa"
+  },
+  "timeline": {
+    "justNow": "az önce",
+    "loadError": "Zaman çizelgesi yüklenirken bir hata oluştu.",
+    "loadMoreError": "Daha fazla kayıt yüklenirken bir hata oluştu.",
+    "loadMore": "Daha fazla yükle",
+    "emptyTitle": "Henüz kayıtlı etkileşim yok",
+    "emptyDescription": "Bu kayıt için henüz görüntülenecek bir etkileşim yok."
+  },
+  "toast": {
+    "genericError": "Bir hata oluştu. Lütfen tekrar deneyin.",
+    "saveSuccess": "Değişiklikler kaydedildi.",
+    "saveError": "Kaydetme sırasında bir hata oluştu.",
+    "deleteSuccess": "Kayıt silindi.",
+    "deleteError": "Silme sırasında bir hata oluştu."
+  },
+  "nav": {
+    "aria": "Ana navigasyon",
+    "sections": {
+      "main": "ANA",
+      "sales": "SATIŞ",
+      "work": "ÇALIŞMA",
+      "analysis": "ANALİZ",
+      "admin": "YÖNETİM"
+    },
+    "dashboard": "Dashboard",
+    "leads": "Müşteri Adayları",
+    "contacts": "Kişiler",
+    "companies": "Firmalar",
+    "deals": "Fırsatlar",
+    "quotes": "Teklifler",
+    "products": "Ürünler",
+    "tasks": "Görevler",
+    "tickets": "Destek Talepleri",
+    "chat": "Sohbet",
+    "reports": "Raporlar",
+    "users": "Kullanıcılar",
+    "logs": "Loglar",
+    "settings": "Ayarlar"
+  },
+  "layout": {
+    "toggleSidebar": "Kenar çubuğunu aç/kapat",
+    "search": "Ara",
+    "searchPlaceholder": "Ara...",
+    "themeAria": "Tema: {{theme}}. Değiştirmek için tıklayın.",
+    "theme": {
+      "light": "Açık tema",
+      "dark": "Koyu tema",
+      "system": "Sistem teması"
+    },
+    "realtimeDisconnected": "Gerçek zamanlı bağlantı kesildi",
+    "userMenu": "Kullanıcı menüsü",
+    "userFallback": "Kullanıcı",
+    "profile": "Profil",
+    "logout": "Çıkış Yap"
+  },
+  "language": {
+    "label": "Dil",
+    "aria": "Arayüz dili",
+    "names": {
+      "tr": "Türkçe",
+      "en": "English",
+      "de": "Deutsch",
+      "fr": "Français"
+    },
+    "saveFailed": "Dil tercihi kaydedilemedi."
+  },
+  "currency": {
+    "label": "Para Birimi",
+    "aria": "Görüntüleme para birimi",
+    "names": {
+      "TRY": "Türk Lirası",
+      "USD": "ABD Doları",
+      "EUR": "Euro",
+      "GBP": "İngiliz Sterlini"
+    },
+    "saveFailed": "Para birimi tercihi kaydedilemedi."
+  },
+  "pages": {
+    "notFound": {
+      "title": "Sayfa bulunamadı",
+      "description": "Aradığınız sayfa mevcut değil veya taşınmış olabilir."
+    },
+    "dashboard": {
+      "revenueTrend": {
+        "title": "Gelir Trendi",
+        "subtitle": "Seçili aralıkta kazanılan anlaşmaların geliri",
+        "day": "Gün",
+        "week": "Hafta",
+        "month": "Ay"
+      },
+      "salesFunnel": {
+        "title": "Satış Hunisi",
+        "subtitle": "Aşama başına açık fırsat tutarı"
+      },
+      "recentActivities": {
+        "title": "Son Aktiviteler"
+      },
+      "taskSummary": {
+        "title": "Görev Özeti"
+      }
+    }
+  }
+}

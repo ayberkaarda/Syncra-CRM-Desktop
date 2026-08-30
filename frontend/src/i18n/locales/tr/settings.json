@@ -1,0 +1,315 @@
+{
+  "page": {
+    "title": "Ayarlar",
+    "subtitle": "Sistem genelindeki yapılandırmayı yönetin."
+  },
+  "tabs": {
+    "company": "Firma Profili",
+    "pipeline": "Pipeline Aşamaları",
+    "customFields": "Özel Alanlar",
+    "emailTemplates": "E-posta Şablonları",
+    "permissions": "Rol / İzin Matrisi",
+    "exchangeRates": "Kur",
+    "automationRules": "Otomasyon Kuralları"
+  },
+  "status": {
+    "active": "Aktif",
+    "inactive": "Pasif"
+  },
+  "company": {
+    "fields": {
+      "name": "Firma Adı",
+      "email": "E-posta",
+      "phone": "Telefon",
+      "address": "Adres",
+      "website": "Web Sitesi",
+      "taxNumber": "Vergi Numarası",
+      "taxOffice": "Vergi Dairesi",
+      "logoUrl": "Logo URL",
+      "currency": "Para Birimi"
+    },
+    "jsonHint": "JSON biçiminde bir değer.",
+    "loadError": "Ayarlar yüklenirken bir hata oluştu.",
+    "empty": "Tanımlı firma ayarı bulunamadı.",
+    "resetChanges": "Değişiklikleri Geri Al",
+    "errors": {
+      "invalidNumber": "Geçerli bir sayı girin.",
+      "invalidJson": "Geçerli bir JSON değeri girin.",
+      "fixBeforeSave": "Bazı alanlar hatalı — kaydetmeden önce düzeltin."
+    }
+  },
+  "keys": {
+    "company": {
+      "name": { "description": "Firma ticari unvanı" },
+      "email": { "description": "Firma iletişim e-postası" },
+      "phone": { "description": "Firma telefon numarası" },
+      "address": { "description": "Firma adresi" },
+      "tax_number": { "description": "Vergi kimlik numarası" }
+    }
+  },
+  "customFields": {
+    "entityTypes": {
+      "leads": "Potansiyeller (Leads)",
+      "contacts": "Kişiler",
+      "companies": "Firmalar",
+      "deals": "Fırsatlar",
+      "tickets": "Destek Talepleri",
+      "products": "Ürünler"
+    },
+    "fieldTypes": {
+      "text": "Metin",
+      "textarea": "Uzun Metin",
+      "number": "Sayı",
+      "date": "Tarih",
+      "select": "Seçim (Tekli)",
+      "multiselect": "Seçim (Çoklu)",
+      "boolean": "Evet/Hayır"
+    },
+    "addField": "Alan Ekle",
+    "required": "Zorunlu",
+    "deactivate": "Pasifleştir",
+    "activate": "Aktifleştir",
+    "loadError": "Özel alanlar yüklenirken bir hata oluştu.",
+    "empty": {
+      "title": "Özel alan yok",
+      "description": "Bu kayıt türü için henüz tanımlı bir özel alan yok."
+    }
+  },
+  "customFieldForm": {
+    "titleCreate": "Yeni Özel Alan",
+    "titleEdit": "Özel Alanı Düzenle",
+    "entityTypeLabel": "Kayıt Türü",
+    "entityTypeHintLocked": "Oluşturulduktan sonra değiştirilemez.",
+    "fieldTypeLabel": "Alan Türü",
+    "nameLabel": "Alan Adı",
+    "keyLabel": "Anahtar (key)",
+    "keyHintLocked": "Oluşturulduktan sonra değiştirilemez.",
+    "keyHintPattern": "Yalnızca küçük harf, rakam ve alt çizgi.",
+    "optionsLabel": "Seçenekler",
+    "optionPlaceholder": "Seçenek {{index}}",
+    "removeOption": "Seçeneği kaldır",
+    "addOption": "Seçenek Ekle",
+    "requiredLabel": "Zorunlu alan",
+    "errors": {
+      "nameRequired": "Alan adı zorunludur.",
+      "keyRequired": "Alan anahtarı zorunludur.",
+      "optionsRequired": "En az bir seçenek eklemelisiniz."
+    }
+  },
+  "emailTemplates": {
+    "newTemplate": "Yeni Şablon",
+    "loadError": "E-posta şablonları yüklenirken bir hata oluştu.",
+    "empty": {
+      "title": "E-posta şablonu yok",
+      "description": "Henüz tanımlı bir e-posta şablonu bulunmuyor."
+    },
+    "variablesCount_one": "{{count}} değişken",
+    "variablesCount_other": "{{count}} değişken",
+    "delete": {
+      "title": "E-posta Şablonunu Sil",
+      "description": "Bu işlem GERİ ALINAMAZ. Şablon kalıcı olarak silinecek.",
+      "confirmSuffix": "şablonunu silmek istediğinize emin misiniz?"
+    }
+  },
+  "emailTemplateForm": {
+    "titleCreate": "Yeni E-posta Şablonu",
+    "titleEdit": "E-posta Şablonunu Düzenle",
+    "keyLabel": "Anahtar (key)",
+    "nameLabel": "Şablon Adı",
+    "subjectLabel": "Konu",
+    "bodyLabel": "İçerik (HTML)",
+    "variablesLabel": "Değişkenler",
+    "variablesHint": "Boş bırakabilirsiniz — sunucu, içerikteki {{placeholder}} yer tutucularından otomatik türetir.",
+    "variablePlaceholderExample": "ör. customer_name",
+    "removeVariable": "Değişkeni kaldır",
+    "addVariable": "Değişken Ekle",
+    "previewLabel": "Önizleme",
+    "previewSubjectLabel": "Konu",
+    "previewEmptySubject": "—",
+    "previewPlaceholder": "İçerik girildikçe burada görünecek.",
+    "previewNote": "Önizleme yazdığınız ham HTML'i gösterir. Kaydederken sunucu güvenli olmayan etiket/öznitelikleri (script, stil, olay işleyicileri) temizler; kaydedilen içerik önizlemeden daha sade olabilir.",
+    "previewIframeTitle": "E-posta şablonu önizlemesi",
+    "errors": {
+      "keyRequired": "Anahtar zorunludur.",
+      "nameRequired": "Şablon adı zorunludur.",
+      "subjectRequired": "Konu zorunludur.",
+      "bodyRequired": "İçerik zorunludur."
+    }
+  },
+  "pipeline": {
+    "dragHint": "Aşamaları sürükleyerek sıralayın. Aşamalar silinemez, yalnızca pasifleştirilip aktifleştirilebilir.",
+    "newStage": "Yeni Aşama",
+    "loadError": "Pipeline aşamaları yüklenirken bir hata oluştu.",
+    "empty": {
+      "title": "Aşama bulunamadı",
+      "description": "Henüz tanımlı bir pipeline aşaması yok."
+    },
+    "dealsCount_one": "{{count}} fırsat",
+    "dealsCount_other": "{{count}} fırsat",
+    "systemWon": "Sistem — Kazanıldı",
+    "systemLost": "Sistem — Kaybedildi",
+    "reorderAria": "{{name}} aşamasını yeniden sırala",
+    "deactivateDisabledTitle": "Sistem aşaması pasifleştirilemez",
+    "toast": {
+      "activated": "\"{{name}}\" aşaması aktifleştirildi.",
+      "deactivated": "\"{{name}}\" aşaması pasifleştirildi.",
+      "movedAndDeactivated": "Aşama pasifleştirildi, {{count}} fırsat {{target}} aşamasına taşındı."
+    },
+    "movedTargetFallback": "seçilen aşamaya"
+  },
+  "pipelineStageForm": {
+    "titleCreate": "Yeni Aşama",
+    "titleEdit": "Aşamayı Düzenle",
+    "systemBadgeWon": "Kazanıldı (sistem)",
+    "systemBadgeLost": "Kaybedildi (sistem)",
+    "systemNote": "Bu aşama sistem aşamasıdır, pasifleştirilemez.",
+    "nameLabel": "Aşama Adı",
+    "probabilityLabel": "Kazanma Olasılığı (%)",
+    "colorLabel": "Renk",
+    "previewLabel": "Önizleme:",
+    "previewDefaultName": "Aşama Adı",
+    "colors": {
+      "primary": "Birincil",
+      "success": "Yeşil (Başarı)",
+      "danger": "Kırmızı (Tehlike)",
+      "warning": "Turuncu (Uyarı)",
+      "neutral": "Gri (Nötr)",
+      "info": "Mavi (Bilgi)"
+    },
+    "errors": {
+      "nameRequired": "Aşama adı zorunludur.",
+      "probabilityInvalid": "Olasılık 0 ile 100 arasında bir sayı olmalıdır."
+    }
+  },
+  "deactivateStageModal": {
+    "title": "Aşamayı Pasifleştir",
+    "warning_one": "aşamasında {{count}} açık fırsat var. Pasifleştirmeden önce hangi aşamaya taşınsın?",
+    "warning_other": "aşamasında {{count}} açık fırsat var. Pasifleştirmeden önce hangi aşamaya taşınsın?",
+    "targetLabel": "Hedef Aşama",
+    "targetPlaceholder": "Bir aşama seçin…",
+    "confirm": "Taşı ve Pasifleştir"
+  },
+  "permissions": {
+    "description": "Bir kutuyu işaretleyip kaldırarak ilgili rolün iznini değiştirebilirsiniz. Değişiklik anında kaydedilir.",
+    "columns": { "permission": "İzin" },
+    "readOnlyBadge": "Kilitli",
+    "readOnlyNote": "Bu rozete sahip roller tüm izinlere sahiptir ve düzenlenemez.",
+    "loadError": "İzin matrisi yüklenirken bir hata oluştu.",
+    "ariaAlwaysGranted": "{{role}} — {{permission}} (her zaman izinli)",
+    "ariaToggle": "{{role}} — {{permission}}"
+  },
+  "exchangeRates": {
+    "loadError": "Kurlar yüklenirken bir hata oluştu.",
+    "noRate": "Kur girilmedi",
+    "rateAsOf": "Kur {{date}} tarihli",
+    "stale_one": "Kur {{count}} gündür güncel değil",
+    "stale_other": "Kur {{count}} gündür güncel değil",
+    "source": {
+      "tcmb": "TCMB",
+      "manual": "Manuel"
+    },
+    "form": {
+      "title": "Manuel Kur Girişi",
+      "hint": "TCMB'ye ulaşılamadığında günlük kuru burada elle girebilirsiniz.",
+      "currencyLabel": "Para Birimi",
+      "currencyPlaceholder": "Seçin",
+      "rateLabel": "Kur (1 birim = ? TRY)",
+      "dateLabel": "Tarih",
+      "submit": "Kaydet",
+      "errors": {
+        "currencyRequired": "Para birimi seçin.",
+        "rateRequired": "Kur girin."
+      }
+    }
+  },
+  "automationRules": {
+    "description": "Sabit bir katalogdan tetikleyici + eylem seçerek küçük otomasyon kuralları kurun (ör. \"fırsat bir aşamaya gelince görev oluştur\"). Serbest kod veya AI yok.",
+    "newRule": "Yeni Kural",
+    "ruleSummary": "{{trigger}} → {{action}}",
+    "loadError": "Otomasyon kuralları yüklenirken bir hata oluştu.",
+    "empty": {
+      "title": "Otomasyon kuralı yok",
+      "description": "Henüz tanımlı bir otomasyon kuralı bulunmuyor."
+    },
+    "delete": {
+      "title": "Otomasyon Kuralını Sil",
+      "description": "Bu işlem GERİ ALINAMAZ. Kural kalıcı olarak silinecek.",
+      "confirmSuffix": "kuralını silmek istediğinize emin misiniz?"
+    },
+    "triggers": {
+      "deal_stage_changed": "Fırsat belirli bir aşamaya geçtiğinde",
+      "deal_status_changed": "Fırsat kazanıldığında/kaybedildiğinde",
+      "ticket_created": "Yeni destek talebi açıldığında"
+    },
+    "actions": {
+      "task_create": "Görev oluştur",
+      "notification_send": "Bildirim gönder",
+      "deal_assign_owner": "Fırsat sahibini değiştir"
+    },
+    "form": {
+      "titleCreate": "Yeni Otomasyon Kuralı",
+      "titleEdit": "Otomasyon Kuralını Düzenle",
+      "nameLabel": "Kural Adı",
+      "triggerSection": "Tetikleyici",
+      "actionSection": "Eylem",
+      "triggerTypeLabel": "Tetikleyici",
+      "actionTypeLabel": "Eylem",
+      "pipelineStageLabel": "Hedef Aşama",
+      "pipelineStagePlaceholder": "Bir aşama seçin…",
+      "dealStatusLabel": "Hedef Durum",
+      "dealStatusWon": "Kazanıldı",
+      "dealStatusLost": "Kaybedildi",
+      "ticketPriorityFilterLabel": "Öncelik Filtresi (opsiyonel)",
+      "ticketPriorityAny": "Herhangi bir öncelik",
+      "ticketPriorityHint": "Boş bırakılırsa her öncelikteki yeni talep bu kuralı tetikler.",
+      "priorities": {
+        "low": "Düşük",
+        "normal": "Normal",
+        "high": "Yüksek",
+        "urgent": "Acil"
+      },
+      "titleTemplateLabel": "Görev Başlığı Şablonu",
+      "messageTemplateLabel": "Bildirim Mesajı Şablonu",
+      "placeholderHint": "Kullanılabilir yer tutucular: {{list}}",
+      "assigneeTypeLabel": "Atanacak Kişi",
+      "assigneeRecordOwner": "Kaydın sahibi",
+      "assigneeFixedUser": "Sabit kullanıcı",
+      "assigneeUserLabel": "Kullanıcı",
+      "recipientTypeLabel": "Alıcı",
+      "recipientRecordOwner": "Kaydın sahibi",
+      "recipientFixedUser": "Sabit kullanıcı",
+      "recipientUserLabel": "Kullanıcı",
+      "dueInDaysLabel": "Son Tarih (gün sonra)",
+      "newOwnerLabel": "Yeni Sahip",
+      "userPlaceholder": "Bir kullanıcı seçin…",
+      "usersForbidden": "Kullanıcı listesini görme izniniz yok.",
+      "errors": {
+        "nameRequired": "Kural adı zorunludur.",
+        "stageRequired": "Hedef aşama seçilmelidir.",
+        "titleTemplateRequired": "Görev başlığı şablonu zorunludur.",
+        "assigneeRequired": "Atanacak kullanıcı seçilmelidir.",
+        "dueInDaysRequired": "Son tarih (gün) zorunludur.",
+        "messageTemplateRequired": "Bildirim mesajı şablonu zorunludur.",
+        "recipientRequired": "Alıcı kullanıcı seçilmelidir.",
+        "newOwnerRequired": "Yeni sahip seçilmelidir."
+      }
+    }
+  },
+  "toast": {
+    "customFieldCreated": "Özel alan oluşturuldu.",
+    "customFieldUpdated": "Özel alan güncellendi.",
+    "customFieldDeactivated": "Özel alan pasifleştirildi.",
+    "templateCreated": "E-posta şablonu oluşturuldu.",
+    "templateUpdated": "E-posta şablonu güncellendi.",
+    "templateDeleted": "E-posta şablonu silindi.",
+    "stageCreated": "Aşama oluşturuldu.",
+    "settingsSaved": "Ayarlar kaydedildi.",
+    "roleNotEditable": "Bu rol düzenlenemez.",
+    "cannotRevokeOwnAccess": "Bu değişiklik kendi ayar erişiminizi kaldırırdı.",
+    "unknownPermissions": "Tanımsız izin(ler): {{list}}",
+    "exchangeRateSaved": "Kur kaydedildi.",
+    "automationRuleCreated": "Otomasyon kuralı oluşturuldu.",
+    "automationRuleUpdated": "Otomasyon kuralı güncellendi.",
+    "automationRuleDeleted": "Otomasyon kuralı silindi."
+  }
+}

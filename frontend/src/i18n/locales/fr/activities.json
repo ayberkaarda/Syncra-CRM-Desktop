@@ -1,0 +1,76 @@
+{
+  "breadcrumb": {
+    "home": "Accueil",
+    "activities": "Activités"
+  },
+  "list": {
+    "title": "Activités",
+    "subtitle_one": "{{count}} activité",
+    "subtitle_other": "{{count}} activités",
+    "createButton": "Enregistrer une activité",
+    "error": "Une erreur est survenue lors du chargement des activités.",
+    "retry": "Réessayer",
+    "empty": {
+      "title": "Aucune activité trouvée",
+      "description": "Aucune activité ne correspond à vos critères de recherche ou de filtre."
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Rechercher un sujet...",
+    "searchAria": "Rechercher une activité",
+    "typeAria": "Filtre de type",
+    "userAria": "Filtre par utilisateur",
+    "recordTypeAria": "Filtre par type d'enregistrement",
+    "fromDateAria": "Date de début",
+    "toDateAria": "Date de fin",
+    "allTypes": "Tous les types",
+    "allUsers": "Tous les utilisateurs",
+    "allRecordTypes": "Tous les types d'enregistrement"
+  },
+  "table": {
+    "type": "Type",
+    "subject": "Sujet",
+    "relatedRecord": "Enregistrement lié",
+    "user": "Utilisateur",
+    "occurredAt": "Date",
+    "duration": "Durée",
+    "outcome": "Résultat",
+    "actions": "Actions",
+    "durationValue_one": "{{count}} min",
+    "durationValue_other": "{{count}} min",
+    "edit": "Modifier",
+    "editForbidden": "Vous n'êtes pas l'auteur de cette activité, vous ne pouvez pas la modifier.",
+    "delete": "Supprimer"
+  },
+  "form": {
+    "titleCreate": "Enregistrer une activité",
+    "titleEdit": "Modifier l'activité",
+    "cancel": "Annuler",
+    "submitCreate": "Créer",
+    "submitEdit": "Enregistrer",
+    "fields": {
+      "type": "Type",
+      "subject": "Sujet",
+      "occurredAt": "Date de réalisation",
+      "durationMinutes": "Durée (minutes)",
+      "outcome": "Résultat",
+      "body": "Description"
+    },
+    "validation": {
+      "subjectRequired": "Le sujet est obligatoire.",
+      "occurredAtRequired": "La date de réalisation est obligatoire.",
+      "occurredAtFuture": "La date de l'activité ne peut pas être dans le futur.",
+      "durationRange": "La durée doit être comprise entre 0 et 1440 minutes."
+    }
+  },
+  "deleteModal": {
+    "title": "Supprimer l'activité",
+    "description": "Cette action est irréversible. L'activité sera définitivement supprimée.",
+    "confirm": "Voulez-vous vraiment supprimer l'activité <strong>{{subject}}</strong> ?"
+  },
+  "toast": {
+    "created": "Activité enregistrée.",
+    "updated": "Activité mise à jour.",
+    "deleted": "Activité supprimée."
+  }
+}

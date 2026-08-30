@@ -1,0 +1,138 @@
+{
+  "actions": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "add": "Hinzufügen",
+    "create": "Erstellen",
+    "close": "Schließen",
+    "confirm": "Bestätigen",
+    "retry": "Erneut versuchen",
+    "loadMore": "Mehr laden",
+    "search": "Suchen",
+    "clear": "Leeren",
+    "apply": "Anwenden",
+    "back": "Zurück",
+    "view": "Anzeigen",
+    "download": "Herunterladen",
+    "upload": "Hochladen",
+    "export": "Exportieren",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "states": {
+    "loading": "Wird geladen…",
+    "noRecords": "Keine Einträge gefunden",
+    "empty": "Nichts anzuzeigen",
+    "error": "Ein Fehler ist aufgetreten"
+  },
+  "pagination": {
+    "aria": "Seitennavigation",
+    "summary": "{{from}} - {{to}} von {{total}} Einträgen",
+    "previous": "Vorherige Seite",
+    "next": "Nächste Seite"
+  },
+  "timeline": {
+    "justNow": "gerade eben",
+    "loadError": "Der Verlauf konnte nicht geladen werden.",
+    "loadMoreError": "Weitere Einträge konnten nicht geladen werden.",
+    "loadMore": "Mehr laden",
+    "emptyTitle": "Noch keine Interaktionen",
+    "emptyDescription": "Für diesen Eintrag gibt es noch nichts anzuzeigen."
+  },
+  "toast": {
+    "genericError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+    "saveSuccess": "Änderungen gespeichert.",
+    "saveError": "Beim Speichern ist ein Fehler aufgetreten.",
+    "deleteSuccess": "Eintrag gelöscht.",
+    "deleteError": "Beim Löschen ist ein Fehler aufgetreten."
+  },
+  "nav": {
+    "aria": "Hauptnavigation",
+    "sections": {
+      "main": "START",
+      "sales": "VERTRIEB",
+      "work": "ARBEIT",
+      "analysis": "ANALYSE",
+      "admin": "VERWALTUNG"
+    },
+    "dashboard": "Dashboard",
+    "leads": "Interessenten",
+    "contacts": "Kontakte",
+    "companies": "Unternehmen",
+    "deals": "Verkaufschancen",
+    "quotes": "Angebote",
+    "products": "Produkte",
+    "tasks": "Aufgaben",
+    "tickets": "Tickets",
+    "chat": "Chat",
+    "reports": "Berichte",
+    "users": "Benutzer",
+    "logs": "Protokolle",
+    "settings": "Einstellungen"
+  },
+  "layout": {
+    "toggleSidebar": "Seitenleiste ein-/ausblenden",
+    "search": "Suchen",
+    "searchPlaceholder": "Suchen...",
+    "themeAria": "Design: {{theme}}. Zum Ändern klicken.",
+    "theme": {
+      "light": "Helles Design",
+      "dark": "Dunkles Design",
+      "system": "Systemdesign"
+    },
+    "realtimeDisconnected": "Echtzeitverbindung unterbrochen",
+    "userMenu": "Benutzermenü",
+    "userFallback": "Benutzer",
+    "profile": "Profil",
+    "logout": "Abmelden"
+  },
+  "language": {
+    "label": "Sprache",
+    "aria": "Sprache der Oberfläche",
+    "names": {
+      "tr": "Türkçe",
+      "en": "English",
+      "de": "Deutsch",
+      "fr": "Français"
+    },
+    "saveFailed": "Spracheinstellung konnte nicht gespeichert werden."
+  },
+  "currency": {
+    "label": "Währung",
+    "aria": "Anzeigewährung",
+    "names": {
+      "TRY": "Türkische Lira",
+      "USD": "US-Dollar",
+      "EUR": "Euro",
+      "GBP": "Britisches Pfund"
+    },
+    "saveFailed": "Währungseinstellung konnte nicht gespeichert werden."
+  },
+  "pages": {
+    "notFound": {
+      "title": "Seite nicht gefunden",
+      "description": "Die gesuchte Seite existiert nicht oder wurde verschoben."
+    },
+    "dashboard": {
+      "revenueTrend": {
+        "title": "Umsatztrend",
+        "subtitle": "Umsatz aus im gewählten Zeitraum gewonnenen Abschlüssen",
+        "day": "Tag",
+        "week": "Woche",
+        "month": "Monat"
+      },
+      "salesFunnel": {
+        "title": "Vertriebstrichter",
+        "subtitle": "Offener Verkaufschancenbetrag pro Phase"
+      },
+      "recentActivities": {
+        "title": "Letzte Aktivitäten"
+      },
+      "taskSummary": {
+        "title": "Aufgabenübersicht"
+      }
+    }
+  }
+}

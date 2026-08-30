@@ -1,0 +1,126 @@
+{
+  "time": {
+    "justNow": "à l'instant",
+    "today": "Aujourd'hui",
+    "yesterday": "Hier"
+  },
+  "conversationType": {
+    "dm": "Direct",
+    "group": "Groupe",
+    "record": "Enregistrement"
+  },
+  "message": {
+    "deletedPreview": "Ce message a été supprimé",
+    "unknownUser": "Inconnu",
+    "editAria": "Modifier le message",
+    "deleteAria": "Supprimer le message",
+    "sending": "Envoi en cours…",
+    "failed": "Échec de l'envoi",
+    "editedLabel": "modifié",
+    "tickSent": "Envoyé",
+    "tickDelivered": "Distribué",
+    "tickRead": "Lu"
+  },
+  "confirm": {
+    "deleteMessage": "Voulez-vous vraiment supprimer ce message ?",
+    "removeMember": "Voulez-vous vraiment retirer ce membre du groupe ?"
+  },
+  "composer": {
+    "placeholder": "Écrivez un message…",
+    "inputAria": "Écrire un message",
+    "sendAria": "Envoyer",
+    "attachFileAria": "Joindre un fichier",
+    "removeAttachmentAria": "Retirer la pièce jointe",
+    "dropFile": "Déposez le fichier",
+    "mentionSuggestionsAria": "Suggestions d'utilisateurs"
+  },
+  "typing": {
+    "single": "{{name}} est en train d'écrire…",
+    "double": "{{name1}} et {{name2}} sont en train d'écrire…",
+    "multiple": "Plusieurs personnes sont en train d'écrire…"
+  },
+  "messageList": {
+    "emptyTitle": "Aucun message pour le moment",
+    "emptyDescription": "Démarrez la conversation en envoyant le premier message.",
+    "logAria": "Messages",
+    "newMessage": "Nouveau message"
+  },
+  "search": {
+    "conversationAria": "Rechercher dans cette conversation",
+    "globalAria": "Rechercher dans les messages",
+    "conversationPlaceholder": "Rechercher dans cette conversation…",
+    "globalPlaceholder": "Rechercher dans tous les messages…",
+    "inputAria": "Texte de recherche",
+    "minLength_one": "Saisissez au moins {{count}} caractère pour rechercher.",
+    "minLength_other": "Saisissez au moins {{count}} caractères pour rechercher.",
+    "noResultsTitle": "Aucun résultat",
+    "noResultsDescription": "Aucun message ne correspond à votre recherche."
+  },
+  "conversationList": {
+    "title": "Messagerie",
+    "newConversationAria": "Démarrer une nouvelle conversation",
+    "searchPlaceholder": "Rechercher dans les conversations…",
+    "searchAria": "Rechercher dans les conversations",
+    "filterAria": "Filtre par type de conversation",
+    "filters": {
+      "all": "Toutes",
+      "dm": "DM",
+      "group": "Groupe",
+      "record": "Enregistrement"
+    },
+    "emptyTitle": "Aucune conversation trouvée",
+    "emptySearchDescription": "Aucune conversation ne correspond à vos critères de recherche.",
+    "emptyDescription": "Vous n'avez pas encore de conversation.",
+    "noMessagesYet": "Aucun message pour le moment",
+    "mutedAria": "Sourdine activée"
+  },
+  "header": {
+    "backAria": "Retour à la liste des conversations",
+    "membersCount_one": "{{count}} membre",
+    "membersCount_other": "{{count}} membres",
+    "muteAria": "Mettre en sourdine",
+    "unmuteAria": "Réactiver le son",
+    "optionsAria": "Options de la conversation",
+    "addMember": "Ajouter un membre",
+    "renameGroup": "Renommer le groupe",
+    "leaveGroup": "Quitter le groupe",
+    "leaveConfirmButton": "Quitter",
+    "leaveConfirmDescription": "Voulez-vous vraiment quitter ce groupe ?",
+    "deleteGroup": "Supprimer le groupe",
+    "deleteConfirmDescription": "Ce groupe sera définitivement supprimé. Cette action est irréversible.",
+    "membersDialogAria": "Membres",
+    "removeMemberAria": "Retirer {{name}}",
+    "noUsersToAdd": "Aucun utilisateur à ajouter."
+  },
+  "common": {
+    "groupNameLabel": "Nom du groupe",
+    "searchUsersPlaceholder": "Rechercher un utilisateur…",
+    "searchUsersAria": "Rechercher un utilisateur",
+    "startNewConversation": "Démarrer une nouvelle conversation"
+  },
+  "newConversation": {
+    "title": "Nouvelle conversation",
+    "typeAria": "Type de conversation",
+    "groupNamePlaceholder": "Ex. Équipe commerciale",
+    "noUsersFound": "Aucun utilisateur trouvé."
+  },
+  "page": {
+    "emptyTitle": "Sélectionnez une conversation ou démarrez-en une nouvelle"
+  },
+  "recordPanel": {
+    "title": "Messagerie",
+    "subtitle": "Échange interne à l'équipe au sujet de cet enregistrement",
+    "emptyTitle": "Aucun échange pour le moment au sujet de cet enregistrement.",
+    "emptyDescription": "Écrivez le premier message."
+  },
+  "toast": {
+    "created": "Conversation créée.",
+    "memberAdded": "Membre ajouté.",
+    "memberRemoved": "Membre retiré.",
+    "left": "Vous avez quitté la conversation.",
+    "renamed": "Nom de la conversation mis à jour.",
+    "deleted": "Conversation supprimée.",
+    "muted": "Notifications mises en sourdine.",
+    "unmuted": "Notifications réactivées."
+  }
+}

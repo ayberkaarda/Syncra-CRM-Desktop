@@ -1,0 +1,207 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "quotes": "Quotes"
+  },
+  "fields": {
+    "title": "Title",
+    "deal": "Deal",
+    "company": "Company",
+    "contact": "Contact",
+    "validUntil": "Valid Until",
+    "notes": "Notes",
+    "terms": "Terms",
+    "creator": "Created By",
+    "createdAt": "Created At",
+    "sentAt": "Sent At",
+    "acceptedAt": "Accepted At",
+    "rejectedAt": "Rejected At"
+  },
+  "actions": {
+    "detail": "Details",
+    "edit": "Edit",
+    "pdf": "PDF",
+    "pdfDownload": "Download PDF",
+    "revise": "Revise",
+    "createRevision": "Create Revision",
+    "delete": "Delete",
+    "send": "Send",
+    "changeStatus": "Change Status",
+    "openNewTab": "Open in New Tab"
+  },
+  "retry": "Retry",
+  "list": {
+    "title": "Quotes",
+    "subtitle_one": "{{count}} quote (filtered)",
+    "subtitle_other": "{{count}} quotes (filtered)",
+    "createButton": "New Quote",
+    "searchPlaceholder": "Search quote number, title...",
+    "searchAria": "Search quotes",
+    "statusAria": "Status filter",
+    "companyAria": "Company filter",
+    "dealAria": "Deal filter",
+    "expiredOnly": "Expired only",
+    "fromDateAria": "Start date",
+    "toDateAria": "End date",
+    "allStatuses": "All statuses",
+    "allCompanies": "All companies",
+    "allDeals": "All deals",
+    "loadError": "An error occurred while loading quotes.",
+    "emptyTitle": "No quotes found",
+    "emptyDescription": "No quotes match your search or filter criteria.",
+    "columns": {
+      "quoteNumber": "Quote No.",
+      "title": "Title",
+      "companyContact": "Company / Contact",
+      "deal": "Deal",
+      "status": "Status",
+      "total": "Total",
+      "validUntil": "Valid Until",
+      "items": "Items",
+      "actions": "Actions"
+    }
+  },
+  "deleteModal": {
+    "title": "Delete quote",
+    "description": "This action cannot be undone. The quote will be permanently deleted.",
+    "confirmText": "Are you sure you want to delete <bold>{{number}} — {{title}}</bold>?"
+  },
+  "statusModal": {
+    "title": "Change quote status",
+    "newStatusLabel": "New Status",
+    "reasonLabel": "Reason (optional)"
+  },
+  "form": {
+    "titleCreate": "New Quote",
+    "cardTitleEdit": "{{number}} — Edit",
+    "loadError": "An error occurred while loading the quote.",
+    "lockedFieldHint": "Cannot be changed after sending.",
+    "contactNone": "No contact",
+    "priceListLabel": "Price List",
+    "priceListDefaultOption": "(Default price list)",
+    "priceListDefaultSuffix": "{{name}} (default)",
+    "itemsTitle": "Items",
+    "itemsLockedHint": "Read-only because it affects the amount — changes require a revision.",
+    "discountTitle": "Discount",
+    "discountLockedHint": "Cannot be changed after sending.",
+    "discountTypeLabel": "Discount Type",
+    "discountAmountOption": "Fixed Amount",
+    "discountPercentOption": "Percentage",
+    "discountValueLabel": "Discount Value",
+    "totalsTitle": "Totals",
+    "validation": {
+      "titleRequired": "Quote title is required."
+    },
+    "lockedBanner": {
+      "statusText": "This quote is in \"{{status}}\" status. <bold>Cannot be changed:</bold> items, discount, company, contact. <bold>Can be edited:</bold> title, deal, valid-until date, notes, terms — these are presentation/administrative information only, they don't affect the quote amount and are saved with the normal \"Save\" action.",
+      "revisableHint": "If you need to change the items or discount, create a new revision.",
+      "notRevisableHint": "A revision cannot be created because this quote was accepted (an accepted commitment cannot be reversed) — open an independent new quote if a change affecting the amount is needed."
+    },
+    "priceListChangeModal": {
+      "title": "Price list changed",
+      "description": "Do you also want to update the prices of existing product-based items according to the new price list? Free (non-product) items are not affected by this operation. If you don't update, existing items keep their old prices — only products added from now on will use the new list.",
+      "keepPrices": "No, keep current prices",
+      "updatePrices": "Yes, update",
+      "note": "This action cannot be undone; however, if you leave the form without saving, no change is applied.",
+      "pricesUpdated": "Prices of product-based items were updated according to the new list."
+    }
+  },
+  "itemsEditor": {
+    "emptyMessage": "No items added yet.",
+    "emptyHint": "Start by searching for a product below or adding a free item.",
+    "columns": {
+      "order": "Order",
+      "item": "Item",
+      "quantity": "Quantity",
+      "unitPrice": "Unit Price",
+      "discountPercent": "Discount %",
+      "taxRate": "Tax %",
+      "lineTotal": "Line Total",
+      "actions": "Actions"
+    },
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "nameLabel": "Item name",
+    "namePlaceholder": "Item name",
+    "descriptionLabel": "Item description",
+    "descriptionPlaceholder": "Description (optional)",
+    "quantityLabel": "Quantity",
+    "unitPriceLabel": "Unit price",
+    "discountPercentLabel": "Item discount percentage",
+    "taxRateLabel": "Tax rate",
+    "removeItem": "Remove item",
+    "addProductLabel": "Add Product",
+    "addProductPlaceholder": "Search and add a product...",
+    "addFreeItem": "Add Free Item"
+  },
+  "totals": {
+    "calculating": "Calculating…",
+    "subtotal": "Subtotal (Tax Excluded)",
+    "discountRow": "Discount ({{label}})",
+    "discountPercent": "{{value}} discount",
+    "discountFixed": "Fixed amount discount",
+    "taxTotal": "Total Tax",
+    "taxBreakdownTitle": "Tax Base Summary",
+    "taxBreakdownColumns": {
+      "rate": "Rate",
+      "net": "Net",
+      "discountShare": "Discount Share",
+      "base": "Base",
+      "tax": "Tax"
+    },
+    "grandTotal": "Grand Total"
+  },
+  "detail": {
+    "revisionNoteWithParent": "This is revision {{revision}} of <link>{{quoteNumber}}</link>.",
+    "revisionNoteNoParent": "This is revision {{revision}} of the parent quote.",
+    "siblingsLabel": "Other revisions of this quote:",
+    "revisionBadge": "Revision {{revision}}",
+    "loadError": "An error occurred while loading the quote.",
+    "expiredSuffix": " (expired)",
+    "itemsCount_one": "{{count}} item",
+    "itemsCount_other": "{{count}} items",
+    "itemsTable": {
+      "columns": {
+        "position": "#",
+        "item": "Item",
+        "quantity": "Quantity",
+        "unitPrice": "Unit Price",
+        "discountPercent": "Discount %",
+        "taxRate": "Tax %",
+        "lineTotal": "Line Total"
+      },
+      "empty": "This quote has no items yet."
+    },
+    "notesTermsTitle": "Notes and Terms",
+    "pdfPreviewTitle": "PDF Preview",
+    "pdfPreview": {
+      "iframeTitle": "Quote PDF Preview",
+      "error": "Failed to load quote PDF: {{message}}",
+      "errorHint": "You can open the PDF directly using the \"Open in New Tab\" link above."
+    }
+  },
+  "companyCombobox": {
+    "label": "Company",
+    "placeholder": "Search for a company...",
+    "clearAria": "Clear company selection",
+    "clearOption": "No company / clear",
+    "loading": "Loading…",
+    "empty": "No results found"
+  },
+  "dealCombobox": {
+    "label": "Deal",
+    "placeholder": "Search for a deal...",
+    "clearAria": "Clear deal selection",
+    "clearOption": "No deal / clear",
+    "loading": "Loading…",
+    "empty": "No results found"
+  },
+  "toast": {
+    "created": "Quote created.",
+    "updated": "Quote updated.",
+    "deleted": "Quote deleted.",
+    "sent": "Quote sent.",
+    "statusChanged": "Quote status updated.",
+    "revised": "Revision created: {{number}}"
+  }
+}

@@ -1,0 +1,157 @@
+/*
+ * Design tokens — Faz 1 / Dalga 1.
+ * Kaynak: docs/DESIGN-SYSTEM.md (Figma REST API ile ölçüldü; açık tema §1.6'da
+ * tasarım kararı olarak tanımlandı, WCAG AA'ya göre doğrulandı).
+ *
+ * Yapı:
+ *   (a) Ham semantik değişkenler (--app-*)  — :root = açık tema, [data-theme=dark] = koyu tema
+ *   (b) @custom-variant dark                 — `dark:` utility'lerini [data-theme=dark] ile çalıştırır
+ *   (c) @theme inline                        — --app-* değişkenlerini Tailwind token isim alanına bağlar
+ *
+ * NOT (radius): Tasarımın varsayılan kart/buton radius'u 6px = `rounded-md` (bkz. §3.3).
+ *   Tailwind'in çıplak `rounded` utility'si kendi varsayılan --radius (4px) değerini kullanır;
+ *   bu dosya onu değiştirmez — bileşenler bilinçli olarak `rounded-md` yazmalı.
+ * NOT (spacing): Tailwind v4'ün varsayılan 4px tabanlı spacing ölçeği kullanılıyor, özel spacing
+ *   tanımlanmadı. Tasarımın baskın kart/panel padding'i 20px = `p-5`.
+ */
+
+:root {
+  /* --- Yüzeyler (açık tema — §1.6.1) --- */
+  --app-surface-0: #f4f6f9;
+  --app-surface-1: #ffffff;
+  --app-surface-2: #eff2f4;
+  --app-surface-3: #e9edf2;
+
+  /* --- Kenarlıklar --- */
+  --app-border: #e2e6ec;
+  --app-border-subtle: #eff2f4;
+  --app-border-strong: #878e99;
+
+  /* --- Metin --- */
+  --app-fg: #1e1e1e;
+  --app-fg-secondary: #444444;
+  --app-fg-muted: #667085;
+  --app-fg-disabled: #a0a6b1;
+
+  /* --- Marka / Aksiyon --- */
+  --app-primary: #0672c4;
+  --app-primary-tint: #ebf5ff;
+  --app-primary-fg: #ffffff;
+
+  /* --- Durum renkleri --- */
+  --app-success: #16794a;
+  --app-success-tint: #e2f6eb;
+  --app-danger: #c81e1e;
+  --app-danger-tint: #fdeded;
+  --app-warning: #a15c00;
+  --app-warning-tint: #fff3e0;
+
+  /* --- Gölgeler (açık temada yükseltmeyi gölge taşır — §1.6.3) --- */
+  --app-shadow-card: 0 1px 3px rgba(16, 24, 40, 0.05), 0 8px 24px rgba(16, 24, 40, 0.06);
+  --app-shadow-glow: 0 4px 14px rgba(6, 114, 196, 0.24);
+  --app-shadow-popover: 0 12px 32px rgba(23, 28, 38, 0.14);
+}
+
+[data-theme='dark'] {
+  /* --- Yüzeyler (koyu tema — §1.3, Figma'dan ölçüldü) --- */
+  --app-surface-0: #171717;
+  --app-surface-1: #1e1e1e;
+  --app-surface-2: #242424;
+  --app-surface-3: #2c2c2c;
+
+  /* --- Kenarlıklar --- */
+  --app-border: #444444;
+  --app-border-subtle: #2c2c2c;
+  /* Figma'da 50 kenarlik kullanimi. 4.70:1 vs surface-1 — WCAG AA UI bileseni (3:1) gecer.
+     --app-border (#444444) yalnizca dekoratif ayirici; form kontrolunde KULLANMA (1.71:1). */
+  --app-border-strong: #888888;
+
+  /* --- Metin (§1.4) --- */
+  --app-fg: #ffffff;
+  --app-fg-secondary: #b3b3b3;
+  --app-fg-muted: #828690;
+  --app-fg-disabled: #888888;
+
+  /* --- Marka / Aksiyon (§1.1) --- */
+  --app-primary: #0d99ff;
+  --app-primary-tint: rgb(13 153 255 / 10%);
+  --app-primary-fg: #ffffff;
+
+  /* --- Durum renkleri (§1.2) --- */
+  --app-success: #3ac977;
+  --app-success-tint: rgb(58 201 119 / 10%);
+  --app-danger: #ff5e5e;
+  --app-danger-tint: rgb(255 94 94 / 15%);
+  --app-warning: #ff9f00;
+  /* Figma'da warning icin ayri tint olcumu yok; primary/success ile tutarli %10 opaklik varsayildi. */
+  --app-warning-tint: rgb(255 159 0 / 10%);
+
+  /* --- Gölgeler (koyu temada yükseklik yüzey renginden anlaşılır — §5) --- */
+  --app-shadow-card: 0 15px 30px rgba(0, 0, 0, 0.02);
+  --app-shadow-glow: 0 0 20px rgba(13, 153, 255, 0.2);
+  --app-shadow-popover: 0 0 30px rgba(82, 63, 105, 0.15);
+}
+
+/* `dark:` utility'lerini [data-theme=dark] ile eşle (media query değil, attribute bazlı). */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@theme inline {
+  /* --- Font --- */
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+
+  /* --- Tipografi ölçeği (§2.2) --- */
+  --text-xs: 12px;
+  --text-xs--line-height: 18px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-base: 14px;
+  --text-base--line-height: 21px;
+  --text-md: 15px;
+  --text-md--line-height: 23px;
+  --text-lg: 16px;
+  --text-lg--line-height: 24px;
+  --text-xl: 20px;
+  --text-xl--line-height: 30px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+  --text-3xl: 38px;
+  --text-3xl--line-height: 57px;
+
+  /* --- Radius (§3.3) --- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-xl: 15px;
+  --radius-2xl: 20px;
+
+  /* --- Renkler --- */
+  --color-surface-0: var(--app-surface-0);
+  --color-surface-1: var(--app-surface-1);
+  --color-surface-2: var(--app-surface-2);
+  --color-surface-3: var(--app-surface-3);
+
+  --color-border: var(--app-border);
+  --color-border-subtle: var(--app-border-subtle);
+  --color-border-strong: var(--app-border-strong);
+
+  --color-fg: var(--app-fg);
+  --color-fg-secondary: var(--app-fg-secondary);
+  --color-fg-muted: var(--app-fg-muted);
+  --color-fg-disabled: var(--app-fg-disabled);
+
+  --color-primary: var(--app-primary);
+  --color-primary-tint: var(--app-primary-tint);
+  --color-primary-fg: var(--app-primary-fg);
+
+  --color-success: var(--app-success);
+  --color-success-tint: var(--app-success-tint);
+  --color-danger: var(--app-danger);
+  --color-danger-tint: var(--app-danger-tint);
+  --color-warning: var(--app-warning);
+  --color-warning-tint: var(--app-warning-tint);
+
+  /* --- Gölgeler --- */
+  --shadow-card: var(--app-shadow-card);
+  --shadow-glow: var(--app-shadow-glow);
+  --shadow-popover: var(--app-shadow-popover);
+}

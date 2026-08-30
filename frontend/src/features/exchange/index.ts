@@ -1,0 +1,11 @@
+// Kur/görüntüleme dönüşümü modülü barrel export'u (Faz 14 / İz E — GÖREV 2).
+export { useCurrentExchangeRates, exchangeRatesKeys } from './api/exchangeRatesApi'
+export { useAmountConverter } from './hooks/useAmountConverter'
+export type { UseAmountConverterResult } from './hooks/useAmountConverter'
+export { useConvertedAmountText } from './hooks/useConvertedAmountText'
+export type { ConvertedAmountText } from './hooks/useConvertedAmountText'
+export { computeConversion } from './convert'
+export type { AmountConversion } from './convert'
+export { ConvertedAmount } from './components/ConvertedAmount'
+export type { ConvertedAmountProps } from './components/ConvertedAmount'
+export type { ExchangeRateCurrentRow, ExchangeRatesCurrentResponse } from './types'

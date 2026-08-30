@@ -1,0 +1,76 @@
+{
+  "breadcrumb": {
+    "home": "Startseite",
+    "activities": "Aktivitäten"
+  },
+  "list": {
+    "title": "Aktivitäten",
+    "subtitle_one": "{{count}} Aktivität",
+    "subtitle_other": "{{count}} Aktivitäten",
+    "createButton": "Aktivität erfassen",
+    "error": "Beim Laden der Aktivitäten ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen",
+    "empty": {
+      "title": "Keine Aktivität gefunden",
+      "description": "Keine Aktivität entspricht Ihren Such- oder Filterkriterien."
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Betreff suchen...",
+    "searchAria": "Aktivität suchen",
+    "typeAria": "Typfilter",
+    "userAria": "Benutzerfilter",
+    "recordTypeAria": "Filter nach Datensatztyp",
+    "fromDateAria": "Startdatum",
+    "toDateAria": "Enddatum",
+    "allTypes": "Alle Typen",
+    "allUsers": "Alle Benutzer",
+    "allRecordTypes": "Alle Datensatztypen"
+  },
+  "table": {
+    "type": "Typ",
+    "subject": "Betreff",
+    "relatedRecord": "Verknüpfter Datensatz",
+    "user": "Benutzer",
+    "occurredAt": "Zeitpunkt",
+    "duration": "Dauer",
+    "outcome": "Ergebnis",
+    "actions": "Aktionen",
+    "durationValue_one": "{{count}} Min.",
+    "durationValue_other": "{{count}} Min.",
+    "edit": "Bearbeiten",
+    "editForbidden": "Sie sind nicht der Verfasser dieser Aktivität und können sie nicht bearbeiten.",
+    "delete": "Löschen"
+  },
+  "form": {
+    "titleCreate": "Aktivität erfassen",
+    "titleEdit": "Aktivität bearbeiten",
+    "cancel": "Abbrechen",
+    "submitCreate": "Erstellen",
+    "submitEdit": "Speichern",
+    "fields": {
+      "type": "Typ",
+      "subject": "Betreff",
+      "occurredAt": "Zeitpunkt",
+      "durationMinutes": "Dauer (Minuten)",
+      "outcome": "Ergebnis",
+      "body": "Beschreibung"
+    },
+    "validation": {
+      "subjectRequired": "Betreff ist erforderlich.",
+      "occurredAtRequired": "Zeitpunkt ist erforderlich.",
+      "occurredAtFuture": "Das Aktivitätsdatum darf nicht in der Zukunft liegen.",
+      "durationRange": "Die Dauer muss zwischen 0 und 1440 Minuten liegen."
+    }
+  },
+  "deleteModal": {
+    "title": "Aktivität löschen",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Die Aktivität wird endgültig gelöscht.",
+    "confirm": "Möchten Sie die Aktivität <strong>{{subject}}</strong> wirklich löschen?"
+  },
+  "toast": {
+    "created": "Aktivität erfasst.",
+    "updated": "Aktivität aktualisiert.",
+    "deleted": "Aktivität gelöscht."
+  }
+}

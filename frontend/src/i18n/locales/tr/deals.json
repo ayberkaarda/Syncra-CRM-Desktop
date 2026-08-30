@@ -1,0 +1,264 @@
+{
+  "board": {
+    "title": "Fırsatlar",
+    "openTotalLabel": "Açık fırsat toplamı:",
+    "viewSwitcher": {
+      "aria": "Görünüm",
+      "board": "Pano",
+      "list": "Liste"
+    },
+    "refresh": "Yenile",
+    "newDeal": "Fırsat",
+    "offlineWarning": "Canlı bağlantı yok — başkalarının yaptığı taşımalar şu anda görünmüyor. Bağlantı döndüğünde pano otomatik tazelenecek.",
+    "readOnlyHint": "Kartları taşıma yetkiniz yok; pano salt okunur görüntüleniyor.",
+    "loadError": {
+      "title": "Pano yüklenemedi",
+      "description": "Fırsat panosu getirilirken bir sorun oluştu.",
+      "retry": "Tekrar dene"
+    },
+    "empty": {
+      "title": "Gösterilecek fırsat yok",
+      "description": "Seçili filtrelerle eşleşen bir fırsat bulunamadı.",
+      "create": "Fırsat oluştur"
+    },
+    "column": {
+      "aria_one": "{{stage}} aşaması, {{count}} kart",
+      "aria_other": "{{stage}} aşaması, {{count}} kart",
+      "empty": "Bu aşamada kart yok",
+      "moreHidden_one": "Daha fazla ({{count}} kart) — filtreleyerek daraltın",
+      "moreHidden_other": "Daha fazla ({{count}} kart) — filtreleyerek daraltın",
+      "addDeal": "Fırsat"
+    },
+    "card": {
+      "lockedTooltip": "Bu kartın sahibi değilsiniz, taşıyamazsınız.",
+      "unassigned": "Sahipsiz",
+      "movedBy": "{{name}} bu kartı taşıdı",
+      "overdueSrOnly": "(gecikmiş)",
+      "draggableRole": "Sürüklenebilir fırsat kartı",
+      "ariaLabel": "{{title}}, {{amount}}"
+    },
+    "announcements": {
+      "pickedUp": "{{title}} kartı alındı. Ok tuşlarıyla taşıyın.",
+      "overStage": "{{title}} kartı {{stage}} aşamasının üzerinde.",
+      "overNone": "{{title}} kartı bırakılabilir bir alanın dışında.",
+      "droppedOnStage": "{{title}} kartı {{stage}} aşamasına bırakıldı.",
+      "droppedBack": "{{title}} kartı eski konumuna geri alındı.",
+      "cancelled": "{{title}} kartının taşınması iptal edildi.",
+      "defaultCardName": "Kart",
+      "keyboardInstructions": "Bir fırsat kartını klavyeyle taşımak için boşluk veya enter tuşuna basarak kartı alın. Ok tuşlarıyla kartı aşamalar arasında ve aşama içinde taşıyın. Bırakmak için tekrar boşluk veya enter tuşuna, iptal etmek için escape tuşuna basın."
+    },
+    "filters": {
+      "searchLabel": "Ara",
+      "searchPlaceholder": "Fırsat başlığı veya açıklaması",
+      "ownerLabel": "Sahip",
+      "allOwners": "Tüm sahipler",
+      "companyLabel": "Firma",
+      "allCompanies": "Tüm firmalar",
+      "closeFrom": "Kapanış (baş.)",
+      "closeTo": "Kapanış (bit.)",
+      "clear": "Temizle"
+    },
+    "toast": {
+      "conflict": "Bu kartı bu sırada başkası taşıdı; kart sunucudaki güncel hâliyle güncellendi.",
+      "networkError": "Bağlantı hatası: kart taşınamadı, eski konumuna geri alındı."
+    }
+  },
+  "stageReason": {
+    "lostRequired": "Kayıp nedeni zorunludur.",
+    "titleLost": "Kayıp nedeni",
+    "titleWon": "Kazanma nedeni",
+    "description": "\"{{dealTitle}}\" kartı \"{{stageName}}\" aşamasına taşınıyor.",
+    "cancel": "Vazgeç",
+    "submitLost": "Kaybedildi olarak taşı",
+    "submitWon": "Kazanıldı olarak taşı",
+    "fieldLabelLost": "Kayıp nedeni",
+    "fieldLabelWon": "Kazanma nedeni (opsiyonel)",
+    "placeholderLost": "Örn. Fiyat rakip teklifin üzerinde kaldı",
+    "placeholderWon": "Örn. Referans müşteri etkisi",
+    "hintLost": "Kayıp nedeni satış analitiğinin en değerli verisidir; bu yüzden zorunludur.",
+    "hintWon": "Boş bırakabilirsiniz."
+  },
+  "form": {
+    "titleCreate": "Yeni Fırsat",
+    "titleEdit": "Fırsatı Düzenle",
+    "cancel": "Vazgeç",
+    "submitCreate": "Oluştur",
+    "submitEdit": "Kaydet",
+    "titleLabel": "Başlık",
+    "descriptionLabel": "Açıklama",
+    "amountLabel": "Tutar",
+    "currencyLabel": "Para Birimi",
+    "currency": {
+      "try": "TRY — Türk Lirası",
+      "usd": "USD — Amerikan Doları",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — İngiliz Sterlini"
+    },
+    "probabilityLabel": "Olasılık (%)",
+    "probabilityHint": "Bu aşamanın varsayılanı: %{{value}}. Boş bırakılırsa bu değer kullanılır.",
+    "expectedCloseDateLabel": "Tahmini Kapanış Tarihi",
+    "stageLabel": "Aşama",
+    "stageReadonlyHint": "Aşama değişikliği pano üzerinden sürükle-bırak ile yapılır.",
+    "stageHint": "Belirtilmezse sunucu en baştaki aktif aşamaya koyar.",
+    "statusLabel": "Durum",
+    "companyLabel": "Firma",
+    "contactLabel": "Kişi",
+    "contactHint": "Firma seçilirse kişi listesi o firmaya göre filtrelenir.",
+    "contactLoading": "Yükleniyor…",
+    "contactNone": "Kişi yok",
+    "ownerLabel": "Sahip",
+    "ownerPlaceholder": "Sahip seçin",
+    "validation": {
+      "titleRequired": "Başlık zorunludur.",
+      "amountRequired": "Tutar zorunludur.",
+      "amountInvalid": "Tutar geçerli bir sayı olmalıdır.",
+      "probabilityRange": "Olasılık 0 ile 100 arasında olmalıdır."
+    }
+  },
+  "customFields": {
+    "sectionTitle": "Özel Alanlar",
+    "selectPlaceholder": "Seçin…",
+    "noOptions": "Seçenek tanımlı değil."
+  },
+  "tagSelect": {
+    "label": "Etiketler",
+    "placeholder": "Etiket seç...",
+    "loading": "Yükleniyor…",
+    "empty": "Etiket bulunamadı",
+    "removeAria": "{{name}} etiketini kaldır"
+  },
+  "companyCombobox": {
+    "label": "Firma",
+    "placeholder": "Firma ara...",
+    "clearAria": "Firma seçimini temizle",
+    "clearOption": "Firma yok / temizle",
+    "loading": "Yükleniyor…",
+    "empty": "Sonuç bulunamadı"
+  },
+  "assignOwner": {
+    "title": "Sahip Ata",
+    "description": "{{title}} için sahip seçin.",
+    "cancel": "Vazgeç",
+    "submit": "Ata",
+    "ownerLabel": "Sahip",
+    "ownerPlaceholder": "Sahip seçin",
+    "forbidden": "Kullanıcı listesine erişim izniniz yok."
+  },
+  "list": {
+    "breadcrumbHome": "Anasayfa",
+    "breadcrumbCurrent": "Fırsatlar",
+    "title": "Fırsatlar",
+    "subtitle_one": "{{count}} fırsat",
+    "subtitle_other": "{{count}} fırsat",
+    "viewSwitcher": {
+      "aria": "Görünüm",
+      "board": "Pano",
+      "list": "Liste"
+    },
+    "newDeal": "Yeni Fırsat",
+    "searchPlaceholder": "Fırsat başlığı ara...",
+    "searchAria": "Fırsat ara",
+    "stageFilterAria": "Aşama filtresi",
+    "statusFilterAria": "Durum filtresi",
+    "ownerFilterAria": "Sahip filtresi",
+    "companyFilterAria": "Firma filtresi",
+    "tagFilterAria": "Etiket filtresi",
+    "allStages": "Tüm aşamalar",
+    "allStatuses": "Tüm durumlar",
+    "allOwners": "Tüm sahipler",
+    "allCompanies": "Tüm firmalar",
+    "allTags": "Tüm etiketler",
+    "minAmountPlaceholder": "Min tutar",
+    "minAmountAria": "Minimum tutar",
+    "maxAmountPlaceholder": "Maks tutar",
+    "maxAmountAria": "Maksimum tutar",
+    "fromDateAria": "Başlangıç tarihi (tahmini kapanış)",
+    "toDateAria": "Bitiş tarihi (tahmini kapanış)",
+    "totals": {
+      "count_one": "{{count}} kayıt (filtrelenmiş toplam)",
+      "count_other": "{{count}} kayıt (filtrelenmiş toplam)",
+      "tooltip": "Toplam: {{total}} · Kazanılan: {{won}} · Kaybedilen: {{lost}}",
+      "open": "Açık tutar: {{amount}}",
+      "wonLost": "Kazanılan {{won}} · Kaybedilen {{lost}}"
+    },
+    "loadError": "Fırsatlar yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "empty": {
+      "title": "Fırsat bulunamadı",
+      "description": "Arama veya filtre kriterlerinizle eşleşen fırsat yok."
+    },
+    "columns": {
+      "title": "Başlık",
+      "company": "Firma",
+      "contact": "Kişi",
+      "stage": "Aşama",
+      "status": "Durum",
+      "amount": "Tutar",
+      "probability": "Olasılık",
+      "expectedClose": "Tahmini Kapanış",
+      "owner": "Sahip",
+      "tags": "Etiketler",
+      "actions": "İşlemler"
+    },
+    "actions": {
+      "detail": "Detay",
+      "edit": "Düzenle",
+      "editLockedTooltip": "Bu kaydın sahibi değilsiniz, düzenleyemezsiniz.",
+      "assign": "Sahip ata",
+      "delete": "Sil"
+    },
+    "deleteModal": {
+      "title": "Fırsatı sil",
+      "description": "Bu işlem geri alınamaz. Fırsat kalıcı olarak silinecek.",
+      "cancel": "Vazgeç",
+      "confirm": "Sil",
+      "confirmText": "{{title}} adlı fırsatı silmek istediğinize emin misiniz?"
+    }
+  },
+  "detail": {
+    "backToList": "Fırsatlar",
+    "loadError": "Fırsat yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "wonBanner": "Bu fırsat {{date}} tarihinde kazanıldı.",
+    "lostBanner": "Bu fırsat {{date}} tarihinde kaybedildi.",
+    "noReason": "Neden belirtilmemiş.",
+    "showOnBoard": "Panoda Göster",
+    "assignOwner": "Sahip Ata",
+    "edit": "Düzenle",
+    "editLockedTooltip": "Bu kaydın sahibi değilsiniz, düzenleyemezsiniz.",
+    "delete": "Sil",
+    "probabilityBadge": "Olasılık: %{{value}}",
+    "fields": {
+      "company": "Firma",
+      "contact": "Kişi",
+      "owner": "Sahip",
+      "expectedClose": "Tahmini Kapanış"
+    },
+    "unassignedOwner": "Atanmamış",
+    "overdueSuffix": " (gecikmiş)",
+    "descriptionLabel": "Açıklama",
+    "tagsLabel": "Etiketler",
+    "noTags": "Etiket yok.",
+    "customFieldsTitle": "Özel Alanlar",
+    "timeline": {
+      "title": "İletişim Geçmişi",
+      "notice": "Fırsatlara özel bir zaman çizelgesi uç noktası henüz yok. Bunun yerine bu fırsatın bağlı olduğu kişinin ya da firmanın kendi zaman çizelgesini görüntüleyebilirsiniz.",
+      "viewContact": "Bu fırsatın kişisinin iletişim geçmişini görüntüle",
+      "viewCompany": "Bu fırsatın firmasının iletişim geçmişini görüntüle",
+      "none": "Bu fırsata bağlı bir kişi veya firma yok."
+    },
+    "deleteModal": {
+      "title": "Fırsatı sil",
+      "description": "Bu işlem geri alınamaz. Fırsat kalıcı olarak silinecek.",
+      "cancel": "Vazgeç",
+      "confirm": "Sil",
+      "confirmText": "{{title}} adlı fırsatı silmek istediğinize emin misiniz?"
+    }
+  },
+  "toast": {
+    "created": "Fırsat oluşturuldu.",
+    "updated": "Fırsat güncellendi.",
+    "deleted": "Fırsat silindi.",
+    "ownerAssigned": "Sahip ataması güncellendi."
+  }
+}

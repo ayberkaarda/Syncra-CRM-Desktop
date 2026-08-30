@@ -1,0 +1,119 @@
+{
+  "breadcrumb": {
+    "products": "Produkte",
+    "priceLists": "Preislisten"
+  },
+  "status": {
+    "active": "Aktiv",
+    "inactive": "Inaktiv"
+  },
+  "unlimited": "Unbefristet",
+  "defaultBadge": "Standard",
+  "retry": "Erneut versuchen",
+  "actions": {
+    "edit": "Bearbeiten",
+    "delete": "Löschen"
+  },
+  "list": {
+    "title": "Preislisten",
+    "subtitle_one": "{{count}} Liste",
+    "subtitle_other": "{{count}} Listen",
+    "createButton": "Neue Liste",
+    "searchPlaceholder": "Listenname oder -code suchen...",
+    "searchAria": "Preislisten durchsuchen",
+    "statusAria": "Statusfilter",
+    "defaultAria": "Standardfilter",
+    "allStatuses": "Alle Status",
+    "allDefault": "Alle",
+    "onlyDefault": "Nur Standard",
+    "notDefault": "Nur Nicht-Standard",
+    "loadError": "Beim Laden der Preislisten ist ein Fehler aufgetreten.",
+    "emptyTitle": "Keine Preisliste gefunden",
+    "emptyDescription": "Keine Preisliste entspricht Ihren Such- oder Filterkriterien.",
+    "columns": {
+      "list": "Liste",
+      "itemCount": "Produktanzahl",
+      "validity": "Gültigkeit",
+      "default": "Standard",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "manageAction": "Preise verwalten",
+    "deleteDisabledAction": "Standardliste kann nicht gelöscht werden"
+  },
+  "deleteModal": {
+    "title": "Preisliste löschen",
+    "descriptionDefault": "Die Standardpreisliste kann nicht gelöscht werden. Legen Sie zuerst eine andere Liste als Standard fest oder deaktivieren Sie diese Liste.",
+    "descriptionNormal": "Diese Aktion kann nicht rückgängig gemacht werden. Die Preisliste und alle darin enthaltenen Produktpreise werden dauerhaft gelöscht.",
+    "confirmText": "Sind Sie sicher, dass Sie <bold>{{name}}</bold> löschen möchten?"
+  },
+  "form": {
+    "titleCreate": "Neue Preisliste",
+    "titleEdit": "Preisliste bearbeiten",
+    "nameLabel": "Listenname",
+    "codeLabel": "Code",
+    "codeHint": "Muss eindeutig sein. Wird automatisch in GROSSBUCHSTABEN mit Unterstrichen normalisiert.",
+    "descriptionLabel": "Beschreibung",
+    "currencyLabel": "Währung",
+    "currency": {
+      "try": "TRY — Türkische Lira",
+      "usd": "USD — US-Dollar",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — Britisches Pfund"
+    },
+    "validFromLabel": "Gültig Ab",
+    "validUntilLabel": "Gültig Bis",
+    "defaultCheckbox": "Standardliste",
+    "defaultWarningWithCurrent": "Die aktuelle Standardliste („{{name}}“) wird geändert — diese Liste wird stattdessen als Standard markiert.",
+    "defaultWarningNoCurrent": "Diese Liste wird als Standardpreisliste markiert.",
+    "activeCheckbox": "Aktiv",
+    "validation": {
+      "nameRequired": "Listenname ist erforderlich.",
+      "codeRequired": "Listencode ist erforderlich.",
+      "validUntilBeforeFrom": "Das Enddatum darf nicht vor dem Startdatum liegen."
+    }
+  },
+  "detail": {
+    "validityLabel": "Gültigkeit",
+    "loadError": "Beim Laden der Preisliste ist ein Fehler aufgetreten.",
+    "addProductPriceLabel": "Listenpreis",
+    "addOrUpdateAction": "Hinzufügen / Aktualisieren",
+    "addProductRequired": "Wählen Sie ein Produkt aus.",
+    "addPriceInvalid": "Geben Sie einen gültigen, nicht negativen Preis ein.",
+    "addHint": "Wenn ein bereits in der Liste enthaltenes Produkt ausgewählt wird, wird sein aktueller Preis mit diesem Wert aktualisiert.",
+    "emptyTitle": "Diese Liste hat noch keine Produktpreise",
+    "emptyDescription": "Katalogpreise gelten — Sie können einen speziellen Preis für diese Liste festlegen, indem Sie oben ein Produkt hinzufügen.",
+    "columns": {
+      "product": "Produkt",
+      "catalogPrice": "Katalogpreis",
+      "listPrice": "Listenpreis",
+      "diff": "Differenz",
+      "actions": "Aktionen"
+    },
+    "noDiff": "Kein Unterschied",
+    "priceInputAria": "Listenpreis für {{name}}",
+    "productFallback": "Produkt",
+    "editPrice": "Preis bearbeiten",
+    "removeAction": "Entfernen",
+    "removeModal": {
+      "title": "Produkt aus Liste entfernen",
+      "confirmText": "Sind Sie sicher, dass Sie <bold>{{name}}</bold> aus dieser Preisliste entfernen möchten?",
+      "warning": "Nach der Entfernung gilt für dieses Produkt der Katalogpreis."
+    },
+    "readOnlyHint": "Sie haben keine Berechtigung, Preise zu bearbeiten, Sie können sie nur ansehen."
+  },
+  "productCombobox": {
+    "label": "Produkt",
+    "placeholder": "Produktname oder SKU suchen...",
+    "clearAria": "Produktauswahl löschen",
+    "loading": "Wird geladen…",
+    "empty": "Keine Ergebnisse gefunden"
+  },
+  "toast": {
+    "created": "Preisliste erstellt.",
+    "updated": "Preisliste aktualisiert.",
+    "deleted": "Preisliste gelöscht.",
+    "priceSaved": "Produktpreis gespeichert.",
+    "priceRemoved": "Produkt aus der Preisliste entfernt. Für dieses Produkt gilt nun der Katalogpreis."
+  }
+}

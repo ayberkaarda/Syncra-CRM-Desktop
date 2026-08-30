@@ -1,0 +1,89 @@
+{
+  "activity": {
+    "type": {
+      "call": "Arama",
+      "meeting": "Toplantı",
+      "email": "E-posta",
+      "note": "Not",
+      "unknown": "Diğer"
+    }
+  },
+  "deal": {
+    "status": {
+      "open": "Açık",
+      "won": "Kazanıldı",
+      "lost": "Kaybedildi"
+    }
+  },
+  "task": {
+    "priority": { "low": "Düşük", "normal": "Normal", "high": "Yüksek", "urgent": "Acil" },
+    "status": { "pending": "Beklemede", "in_progress": "Devam Ediyor", "completed": "Tamamlandı", "cancelled": "İptal Edildi" }
+  },
+  "ticket": {
+    "priority": {
+      "low": "Düşük",
+      "normal": "Normal",
+      "high": "Yüksek",
+      "urgent": "Acil"
+    },
+    "status": {
+      "open": "Açık",
+      "pending": "Beklemede",
+      "in_progress": "Devam Ediyor",
+      "resolved": "Çözüldü",
+      "closed": "Kapandı"
+    }
+  },
+  "quote": {
+    "status": {
+      "draft": "Taslak",
+      "sent": "Gönderildi",
+      "accepted": "Kabul Edildi",
+      "rejected": "Reddedildi",
+      "expired": "Süresi Doldu"
+    }
+  },
+  "lead": {
+    "status": {
+      "new": "Yeni",
+      "contacted": "İletişime Geçildi",
+      "qualified": "Nitelikli",
+      "unqualified": "Niteliksiz",
+      "converted": "Dönüştürüldü"
+    },
+    "source": {
+      "website": "Web Sitesi",
+      "referral": "Referans",
+      "cold_call": "Soğuk Arama",
+      "email_campaign": "E-posta Kampanyası",
+      "social_media": "Sosyal Medya",
+      "event": "Etkinlik",
+      "other": "Diğer"
+    }
+  },
+  "role": {
+    "super_admin": "Süper Yönetici",
+    "admin": "Yönetici",
+    "sales_manager": "Satış Müdürü",
+    "sales_rep": "Satış Temsilcisi",
+    "support_agent": "Destek Temsilcisi",
+    "viewer": "İzleyici"
+  },
+  "ticketCategory": {
+    "technical_support": "Teknik Destek",
+    "billing": "Faturalandırma",
+    "product_info": "Ürün Bilgisi",
+    "complaint": "Şikayet",
+    "installation": "Kurulum",
+    "training_request": "Eğitim Talebi"
+  },
+  "pipelineStage": {
+    "yeni-firsat": "Yeni Fırsat",
+    "iletisim-kuruldu": "İletişim Kuruldu",
+    "teklif-hazirlaniyor": "Teklif Hazırlanıyor",
+    "teklif-gonderildi": "Teklif Gönderildi",
+    "muzakere": "Müzakere",
+    "kazanildi": "Kazanıldı",
+    "kaybedildi": "Kaybedildi"
+  }
+}

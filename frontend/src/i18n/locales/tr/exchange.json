@@ -1,0 +1,6 @@
+{
+  "convertedTooltip": "Orijinal tutar: {{amount}} ({{date}} tarihli kur)",
+  "unavailable": "{{currency}} için güncel kur yok; tutar kendi para biriminde gösteriliyor.",
+  "stale_one": "Kullanılan kur {{count}} gün önce yayımlanmış olabilir; güncel olmayabilir.",
+  "stale_other": "Kullanılan kur {{count}} gün önce yayımlanmış olabilir; güncel olmayabilir."
+}

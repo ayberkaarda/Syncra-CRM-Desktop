@@ -1,0 +1,119 @@
+{
+  "breadcrumb": {
+    "products": "Produits",
+    "priceLists": "Listes de Prix"
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "unlimited": "Illimité",
+  "defaultBadge": "Par défaut",
+  "retry": "Réessayer",
+  "actions": {
+    "edit": "Modifier",
+    "delete": "Supprimer"
+  },
+  "list": {
+    "title": "Listes de Prix",
+    "subtitle_one": "{{count}} liste",
+    "subtitle_other": "{{count}} listes",
+    "createButton": "Nouvelle Liste",
+    "searchPlaceholder": "Rechercher nom ou code de liste...",
+    "searchAria": "Rechercher des listes de prix",
+    "statusAria": "Filtre de statut",
+    "defaultAria": "Filtre par défaut",
+    "allStatuses": "Tous les statuts",
+    "allDefault": "Toutes",
+    "onlyDefault": "Par défaut uniquement",
+    "notDefault": "Non par défaut uniquement",
+    "loadError": "Une erreur s'est produite lors du chargement des listes de prix.",
+    "emptyTitle": "Aucune liste de prix trouvée",
+    "emptyDescription": "Aucune liste de prix ne correspond à vos critères de recherche ou de filtre.",
+    "columns": {
+      "list": "Liste",
+      "itemCount": "Nombre de Produits",
+      "validity": "Validité",
+      "default": "Par défaut",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "manageAction": "Gérer les Prix",
+    "deleteDisabledAction": "La liste par défaut ne peut pas être supprimée"
+  },
+  "deleteModal": {
+    "title": "Supprimer la liste de prix",
+    "descriptionDefault": "La liste de prix par défaut ne peut pas être supprimée. Définissez d'abord une autre liste comme liste par défaut ou désactivez cette liste.",
+    "descriptionNormal": "Cette action est irréversible. La liste de prix et tous les prix de produits qu'elle contient seront définitivement supprimés.",
+    "confirmText": "Êtes-vous sûr de vouloir supprimer <bold>{{name}}</bold> ?"
+  },
+  "form": {
+    "titleCreate": "Nouvelle Liste de Prix",
+    "titleEdit": "Modifier la Liste de Prix",
+    "nameLabel": "Nom de la Liste",
+    "codeLabel": "Code",
+    "codeHint": "Doit être unique. Automatiquement normalisé en MAJUSCULES avec traits de soulignement.",
+    "descriptionLabel": "Description",
+    "currencyLabel": "Devise",
+    "currency": {
+      "try": "TRY — Livre turque",
+      "usd": "USD — Dollar américain",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — Livre sterling"
+    },
+    "validFromLabel": "Valide À Partir Du",
+    "validUntilLabel": "Valide Jusqu'au",
+    "defaultCheckbox": "Liste par défaut",
+    "defaultWarningWithCurrent": "La liste par défaut actuelle (« {{name}} ») va changer — cette liste sera marquée comme liste par défaut à sa place.",
+    "defaultWarningNoCurrent": "Cette liste sera marquée comme liste de prix par défaut.",
+    "activeCheckbox": "Actif",
+    "validation": {
+      "nameRequired": "Le nom de la liste est obligatoire.",
+      "codeRequired": "Le code de la liste est obligatoire.",
+      "validUntilBeforeFrom": "La date de fin ne peut pas être antérieure à la date de début."
+    }
+  },
+  "detail": {
+    "validityLabel": "Validité",
+    "loadError": "Une erreur s'est produite lors du chargement de la liste de prix.",
+    "addProductPriceLabel": "Prix de Liste",
+    "addOrUpdateAction": "Ajouter / Mettre à jour",
+    "addProductRequired": "Sélectionnez un produit.",
+    "addPriceInvalid": "Entrez un prix valide et non négatif.",
+    "addHint": "Si un produit déjà présent dans la liste est sélectionné, son prix actuel est mis à jour avec cette valeur.",
+    "emptyTitle": "Cette liste n'a pas encore de prix de produits",
+    "emptyDescription": "Les prix du catalogue s'appliquent — vous pouvez définir un prix spécifique pour cette liste en ajoutant un produit ci-dessus.",
+    "columns": {
+      "product": "Produit",
+      "catalogPrice": "Prix Catalogue",
+      "listPrice": "Prix de Liste",
+      "diff": "Écart",
+      "actions": "Actions"
+    },
+    "noDiff": "Aucun écart",
+    "priceInputAria": "Prix de liste de {{name}}",
+    "productFallback": "Produit",
+    "editPrice": "Modifier le prix",
+    "removeAction": "Retirer",
+    "removeModal": {
+      "title": "Retirer le produit de la liste",
+      "confirmText": "Êtes-vous sûr de vouloir retirer <bold>{{name}}</bold> de cette liste de prix ?",
+      "warning": "Après le retrait, le prix catalogue s'appliquera à ce produit."
+    },
+    "readOnlyHint": "Vous n'avez pas la permission de modifier les prix, vous pouvez seulement les consulter."
+  },
+  "productCombobox": {
+    "label": "Produit",
+    "placeholder": "Rechercher un nom de produit ou une référence...",
+    "clearAria": "Effacer la sélection de produit",
+    "loading": "Chargement…",
+    "empty": "Aucun résultat trouvé"
+  },
+  "toast": {
+    "created": "Liste de prix créée.",
+    "updated": "Liste de prix mise à jour.",
+    "deleted": "Liste de prix supprimée.",
+    "priceSaved": "Prix du produit enregistré.",
+    "priceRemoved": "Produit retiré de la liste de prix. Le prix catalogue s'appliquera désormais à ce produit."
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "actions": {
+    "manage": "Vues",
+    "saveCurrent": "Enregistrer les filtres actuels",
+    "share": "Partager",
+    "unshare": "Ne plus partager"
+  },
+  "modal": {
+    "title": "Vues enregistrées — {{module}}"
+  },
+  "form": {
+    "nameLabel": "Nom de la vue",
+    "namePlaceholder": "ex. Mes opportunités ouvertes ce mois-ci",
+    "sharedLabel": "Partager avec l'équipe",
+    "sharedHint": "Une vue partagée peut être vue et appliquée par tout le monde ; vous seul pouvez la modifier ou la supprimer."
+  },
+  "list": {
+    "empty": "Aucune vue enregistrée pour le moment.",
+    "sharedBadge": "Partagée",
+    "ownedBy": "Partagée par {{name}}"
+  },
+  "deleteConfirm": {
+    "title": "Supprimer « {{name}} » ?",
+    "confirm": "Supprimer",
+    "cancel": "Annuler"
+  },
+  "aria": {
+    "apply": "Appliquer la vue : {{name}}",
+    "share": "Partager : {{name}}",
+    "unshare": "Ne plus partager : {{name}}",
+    "delete": "Supprimer la vue : {{name}}"
+  }
+}

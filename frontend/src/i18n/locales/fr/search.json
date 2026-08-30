@@ -1,0 +1,15 @@
+{
+  "palette": {
+    "title": "Palette de commandes",
+    "inputPlaceholder": "Rechercher des enregistrements, contacts ou utilisateurs...",
+    "inputAriaLabel": "Rechercher des enregistrements",
+    "resultsAria": "Résultats de recherche",
+    "prompt": "Saisissez au moins 2 caractères pour rechercher",
+    "loading": "Recherche en cours…",
+    "empty": "Aucun résultat trouvé",
+    "error": "Une erreur est survenue lors de la recherche",
+    "hintNavigate": "↑↓ naviguer",
+    "hintSelect": "↵ sélectionner",
+    "hintClose": "esc fermer"
+  }
+}

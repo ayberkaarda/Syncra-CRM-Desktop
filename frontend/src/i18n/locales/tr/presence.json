@@ -1,0 +1,14 @@
+{
+  "trigger": {
+    "aria": "Çevrimiçi kullanıcılar ({{count}})"
+  },
+  "panel": {
+    "aria": "Çevrimiçi kullanıcılar",
+    "title": "Çevrimiçi ({{count}})",
+    "staleWarning": "Liste güncel olmayabilir."
+  },
+  "empty": {
+    "title": "Çevrimiçi kullanıcı yok",
+    "description": "Şu anda başka kimse bağlı değil."
+  }
+}

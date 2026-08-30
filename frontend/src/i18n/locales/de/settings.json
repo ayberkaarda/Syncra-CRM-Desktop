@@ -1,0 +1,315 @@
+{
+  "page": {
+    "title": "Einstellungen",
+    "subtitle": "Verwalten Sie die systemweite Konfiguration."
+  },
+  "tabs": {
+    "company": "Unternehmensprofil",
+    "pipeline": "Pipeline-Phasen",
+    "customFields": "Benutzerdefinierte Felder",
+    "emailTemplates": "E-Mail-Vorlagen",
+    "permissions": "Rollen-/Berechtigungsmatrix",
+    "exchangeRates": "Wechselkurs",
+    "automationRules": "Automatisierungsregeln"
+  },
+  "status": {
+    "active": "Aktiv",
+    "inactive": "Inaktiv"
+  },
+  "company": {
+    "fields": {
+      "name": "Unternehmensname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "address": "Adresse",
+      "website": "Website",
+      "taxNumber": "Steuernummer",
+      "taxOffice": "Finanzamt",
+      "logoUrl": "Logo-URL",
+      "currency": "Währung"
+    },
+    "jsonHint": "Ein Wert im JSON-Format.",
+    "loadError": "Beim Laden der Einstellungen ist ein Fehler aufgetreten.",
+    "empty": "Keine Unternehmenseinstellungen gefunden.",
+    "resetChanges": "Änderungen verwerfen",
+    "errors": {
+      "invalidNumber": "Geben Sie eine gültige Zahl ein.",
+      "invalidJson": "Geben Sie einen gültigen JSON-Wert ein.",
+      "fixBeforeSave": "Einige Felder sind ungültig — beheben Sie sie vor dem Speichern."
+    }
+  },
+  "keys": {
+    "company": {
+      "name": { "description": "Unternehmensname (Handelsname)" },
+      "email": { "description": "Kontakt-E-Mail des Unternehmens" },
+      "phone": { "description": "Telefonnummer des Unternehmens" },
+      "address": { "description": "Adresse des Unternehmens" },
+      "tax_number": { "description": "Steuernummer" }
+    }
+  },
+  "customFields": {
+    "entityTypes": {
+      "leads": "Interessenten",
+      "contacts": "Kontakte",
+      "companies": "Unternehmen",
+      "deals": "Verkaufschancen",
+      "tickets": "Tickets",
+      "products": "Produkte"
+    },
+    "fieldTypes": {
+      "text": "Text",
+      "textarea": "Langtext",
+      "number": "Zahl",
+      "date": "Datum",
+      "select": "Auswahl (Einzeln)",
+      "multiselect": "Auswahl (Mehrfach)",
+      "boolean": "Ja/Nein"
+    },
+    "addField": "Feld hinzufügen",
+    "required": "Pflichtfeld",
+    "deactivate": "Deaktivieren",
+    "activate": "Aktivieren",
+    "loadError": "Beim Laden der benutzerdefinierten Felder ist ein Fehler aufgetreten.",
+    "empty": {
+      "title": "Keine benutzerdefinierten Felder",
+      "description": "Für diesen Datensatztyp sind noch keine benutzerdefinierten Felder definiert."
+    }
+  },
+  "customFieldForm": {
+    "titleCreate": "Neues benutzerdefiniertes Feld",
+    "titleEdit": "Benutzerdefiniertes Feld bearbeiten",
+    "entityTypeLabel": "Datensatztyp",
+    "entityTypeHintLocked": "Kann nach der Erstellung nicht mehr geändert werden.",
+    "fieldTypeLabel": "Feldtyp",
+    "nameLabel": "Feldname",
+    "keyLabel": "Schlüssel",
+    "keyHintLocked": "Kann nach der Erstellung nicht mehr geändert werden.",
+    "keyHintPattern": "Nur Kleinbuchstaben, Zahlen und Unterstriche.",
+    "optionsLabel": "Optionen",
+    "optionPlaceholder": "Option {{index}}",
+    "removeOption": "Option entfernen",
+    "addOption": "Option hinzufügen",
+    "requiredLabel": "Pflichtfeld",
+    "errors": {
+      "nameRequired": "Feldname ist erforderlich.",
+      "keyRequired": "Feldschlüssel ist erforderlich.",
+      "optionsRequired": "Sie müssen mindestens eine Option hinzufügen."
+    }
+  },
+  "emailTemplates": {
+    "newTemplate": "Neue Vorlage",
+    "loadError": "Beim Laden der E-Mail-Vorlagen ist ein Fehler aufgetreten.",
+    "empty": {
+      "title": "Keine E-Mail-Vorlagen",
+      "description": "Es sind noch keine E-Mail-Vorlagen definiert."
+    },
+    "variablesCount_one": "{{count}} Variable",
+    "variablesCount_other": "{{count}} Variablen",
+    "delete": {
+      "title": "E-Mail-Vorlage löschen",
+      "description": "Diese Aktion KANN NICHT RÜCKGÄNGIG GEMACHT WERDEN. Die Vorlage wird dauerhaft gelöscht.",
+      "confirmSuffix": "Möchten Sie diese Vorlage wirklich löschen?"
+    }
+  },
+  "emailTemplateForm": {
+    "titleCreate": "Neue E-Mail-Vorlage",
+    "titleEdit": "E-Mail-Vorlage bearbeiten",
+    "keyLabel": "Schlüssel",
+    "nameLabel": "Vorlagenname",
+    "subjectLabel": "Betreff",
+    "bodyLabel": "Inhalt (HTML)",
+    "variablesLabel": "Variablen",
+    "variablesHint": "Sie können dies leer lassen — der Server leitet Variablen automatisch aus {{placeholder}}-Platzhaltern im Inhalt ab.",
+    "variablePlaceholderExample": "z. B. customer_name",
+    "removeVariable": "Variable entfernen",
+    "addVariable": "Variable hinzufügen",
+    "previewLabel": "Vorschau",
+    "previewSubjectLabel": "Betreff",
+    "previewEmptySubject": "—",
+    "previewPlaceholder": "Die Vorschau erscheint hier, während Sie tippen.",
+    "previewNote": "Die Vorschau zeigt das von Ihnen eingegebene rohe HTML. Beim Speichern entfernt der Server unsichere Tags/Attribute (Script, Style, Event-Handler); der gespeicherte Inhalt kann einfacher sein als die Vorschau.",
+    "previewIframeTitle": "Vorschau der E-Mail-Vorlage",
+    "errors": {
+      "keyRequired": "Schlüssel ist erforderlich.",
+      "nameRequired": "Vorlagenname ist erforderlich.",
+      "subjectRequired": "Betreff ist erforderlich.",
+      "bodyRequired": "Inhalt ist erforderlich."
+    }
+  },
+  "pipeline": {
+    "dragHint": "Ziehen Sie die Phasen, um sie neu anzuordnen. Phasen können nicht gelöscht, nur deaktiviert und wieder aktiviert werden.",
+    "newStage": "Neue Phase",
+    "loadError": "Beim Laden der Pipeline-Phasen ist ein Fehler aufgetreten.",
+    "empty": {
+      "title": "Keine Phasen gefunden",
+      "description": "Es sind noch keine Pipeline-Phasen definiert."
+    },
+    "dealsCount_one": "{{count}} Verkaufschance",
+    "dealsCount_other": "{{count}} Verkaufschancen",
+    "systemWon": "System — Gewonnen",
+    "systemLost": "System — Verloren",
+    "reorderAria": "Phase {{name}} neu anordnen",
+    "deactivateDisabledTitle": "Eine Systemphase kann nicht deaktiviert werden",
+    "toast": {
+      "activated": "Phase \"{{name}}\" wurde aktiviert.",
+      "deactivated": "Phase \"{{name}}\" wurde deaktiviert.",
+      "movedAndDeactivated": "Phase deaktiviert, {{count}} Verkaufschancen wurden nach {{target}} verschoben."
+    },
+    "movedTargetFallback": "die gewählte Phase"
+  },
+  "pipelineStageForm": {
+    "titleCreate": "Neue Phase",
+    "titleEdit": "Phase bearbeiten",
+    "systemBadgeWon": "Gewonnen (System)",
+    "systemBadgeLost": "Verloren (System)",
+    "systemNote": "Dies ist eine Systemphase und kann nicht deaktiviert werden.",
+    "nameLabel": "Phasenname",
+    "probabilityLabel": "Gewinnwahrscheinlichkeit (%)",
+    "colorLabel": "Farbe",
+    "previewLabel": "Vorschau:",
+    "previewDefaultName": "Phasenname",
+    "colors": {
+      "primary": "Primär",
+      "success": "Grün (Erfolg)",
+      "danger": "Rot (Gefahr)",
+      "warning": "Orange (Warnung)",
+      "neutral": "Grau (Neutral)",
+      "info": "Blau (Info)"
+    },
+    "errors": {
+      "nameRequired": "Phasenname ist erforderlich.",
+      "probabilityInvalid": "Die Wahrscheinlichkeit muss eine Zahl zwischen 0 und 100 sein."
+    }
+  },
+  "deactivateStageModal": {
+    "title": "Phase deaktivieren",
+    "warning_one": "hat {{count}} offene Verkaufschance. In welche Phase soll sie vor der Deaktivierung verschoben werden?",
+    "warning_other": "hat {{count}} offene Verkaufschancen. In welche Phase sollen sie vor der Deaktivierung verschoben werden?",
+    "targetLabel": "Zielphase",
+    "targetPlaceholder": "Eine Phase auswählen…",
+    "confirm": "Verschieben und deaktivieren"
+  },
+  "permissions": {
+    "description": "Aktivieren oder deaktivieren Sie ein Kästchen, um die Berechtigung dieser Rolle zu ändern. Änderungen werden sofort gespeichert.",
+    "columns": { "permission": "Berechtigung" },
+    "readOnlyBadge": "Gesperrt",
+    "readOnlyNote": "Rollen mit diesem Abzeichen besitzen alle Berechtigungen und können nicht bearbeitet werden.",
+    "loadError": "Beim Laden der Berechtigungsmatrix ist ein Fehler aufgetreten.",
+    "ariaAlwaysGranted": "{{role}} — {{permission}} (immer erteilt)",
+    "ariaToggle": "{{role}} — {{permission}}"
+  },
+  "exchangeRates": {
+    "loadError": "Beim Laden der Wechselkurse ist ein Fehler aufgetreten.",
+    "noRate": "Kein Kurs hinterlegt",
+    "rateAsOf": "Kurs vom {{date}}",
+    "stale_one": "Kurs ist seit {{count}} Tag veraltet",
+    "stale_other": "Kurs ist seit {{count}} Tagen veraltet",
+    "source": {
+      "tcmb": "TCMB",
+      "manual": "Manuell"
+    },
+    "form": {
+      "title": "Manuelle Kurseingabe",
+      "hint": "Geben Sie den Tageskurs manuell ein, wenn die TCMB nicht erreichbar ist.",
+      "currencyLabel": "Währung",
+      "currencyPlaceholder": "Auswählen",
+      "rateLabel": "Kurs (1 Einheit = ? TRY)",
+      "dateLabel": "Datum",
+      "submit": "Speichern",
+      "errors": {
+        "currencyRequired": "Wählen Sie eine Währung.",
+        "rateRequired": "Geben Sie einen Kurs ein."
+      }
+    }
+  },
+  "automationRules": {
+    "description": "Richten Sie kleine Automatisierungsregeln ein, indem Sie einen Auslöser und eine Aktion aus einem festen Katalog wählen (z. B. \"Aufgabe erstellen, wenn eine Verkaufschance eine Phase erreicht\"). Kein eigener Code oder KI.",
+    "newRule": "Neue Regel",
+    "ruleSummary": "{{trigger}} → {{action}}",
+    "loadError": "Beim Laden der Automatisierungsregeln ist ein Fehler aufgetreten.",
+    "empty": {
+      "title": "Keine Automatisierungsregeln",
+      "description": "Es wurde noch keine Automatisierungsregel definiert."
+    },
+    "delete": {
+      "title": "Automatisierungsregel löschen",
+      "description": "Diese Aktion kann NICHT RÜCKGÄNGIG gemacht werden. Die Regel wird dauerhaft gelöscht.",
+      "confirmSuffix": "löschen möchten?"
+    },
+    "triggers": {
+      "deal_stage_changed": "Wenn eine Verkaufschance eine bestimmte Phase erreicht",
+      "deal_status_changed": "Wenn eine Verkaufschance gewonnen/verloren wird",
+      "ticket_created": "Wenn ein neues Support-Ticket eröffnet wird"
+    },
+    "actions": {
+      "task_create": "Aufgabe erstellen",
+      "notification_send": "Benachrichtigung senden",
+      "deal_assign_owner": "Inhaber der Verkaufschance ändern"
+    },
+    "form": {
+      "titleCreate": "Neue Automatisierungsregel",
+      "titleEdit": "Automatisierungsregel bearbeiten",
+      "nameLabel": "Regelname",
+      "triggerSection": "Auslöser",
+      "actionSection": "Aktion",
+      "triggerTypeLabel": "Auslöser",
+      "actionTypeLabel": "Aktion",
+      "pipelineStageLabel": "Zielphase",
+      "pipelineStagePlaceholder": "Phase auswählen…",
+      "dealStatusLabel": "Zielstatus",
+      "dealStatusWon": "Gewonnen",
+      "dealStatusLost": "Verloren",
+      "ticketPriorityFilterLabel": "Prioritätsfilter (optional)",
+      "ticketPriorityAny": "Beliebige Priorität",
+      "ticketPriorityHint": "Bleibt dies leer, löst ein neues Ticket jeder Priorität diese Regel aus.",
+      "priorities": {
+        "low": "Niedrig",
+        "normal": "Normal",
+        "high": "Hoch",
+        "urgent": "Dringend"
+      },
+      "titleTemplateLabel": "Aufgabentitel-Vorlage",
+      "messageTemplateLabel": "Benachrichtigungstext-Vorlage",
+      "placeholderHint": "Verfügbare Platzhalter: {{list}}",
+      "assigneeTypeLabel": "Zugewiesen an",
+      "assigneeRecordOwner": "Inhaber des Datensatzes",
+      "assigneeFixedUser": "Fester Benutzer",
+      "assigneeUserLabel": "Benutzer",
+      "recipientTypeLabel": "Empfänger",
+      "recipientRecordOwner": "Inhaber des Datensatzes",
+      "recipientFixedUser": "Fester Benutzer",
+      "recipientUserLabel": "Benutzer",
+      "dueInDaysLabel": "Fällig in (Tagen)",
+      "newOwnerLabel": "Neuer Inhaber",
+      "userPlaceholder": "Benutzer auswählen…",
+      "usersForbidden": "Sie haben keine Berechtigung, die Benutzerliste anzuzeigen.",
+      "errors": {
+        "nameRequired": "Regelname ist erforderlich.",
+        "stageRequired": "Eine Zielphase muss ausgewählt werden.",
+        "titleTemplateRequired": "Aufgabentitel-Vorlage ist erforderlich.",
+        "assigneeRequired": "Ein zugewiesener Benutzer muss ausgewählt werden.",
+        "dueInDaysRequired": "Fällig in (Tagen) ist erforderlich.",
+        "messageTemplateRequired": "Benachrichtigungstext-Vorlage ist erforderlich.",
+        "recipientRequired": "Ein Empfänger muss ausgewählt werden.",
+        "newOwnerRequired": "Ein neuer Inhaber muss ausgewählt werden."
+      }
+    }
+  },
+  "toast": {
+    "customFieldCreated": "Benutzerdefiniertes Feld erstellt.",
+    "customFieldUpdated": "Benutzerdefiniertes Feld aktualisiert.",
+    "customFieldDeactivated": "Benutzerdefiniertes Feld deaktiviert.",
+    "templateCreated": "E-Mail-Vorlage erstellt.",
+    "templateUpdated": "E-Mail-Vorlage aktualisiert.",
+    "templateDeleted": "E-Mail-Vorlage gelöscht.",
+    "stageCreated": "Phase erstellt.",
+    "settingsSaved": "Einstellungen gespeichert.",
+    "roleNotEditable": "Diese Rolle kann nicht bearbeitet werden.",
+    "cannotRevokeOwnAccess": "Diese Änderung würde Ihren eigenen Einstellungszugriff entziehen.",
+    "unknownPermissions": "Unbekannte Berechtigung(en): {{list}}",
+    "exchangeRateSaved": "Kurs gespeichert.",
+    "automationRuleCreated": "Automatisierungsregel erstellt.",
+    "automationRuleUpdated": "Automatisierungsregel aktualisiert.",
+    "automationRuleDeleted": "Automatisierungsregel gelöscht."
+  }
+}

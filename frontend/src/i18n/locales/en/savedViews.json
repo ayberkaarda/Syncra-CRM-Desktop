@@ -1,0 +1,33 @@
+{
+  "actions": {
+    "manage": "Views",
+    "saveCurrent": "Save current filters",
+    "share": "Share",
+    "unshare": "Unshare"
+  },
+  "modal": {
+    "title": "Saved Views — {{module}}"
+  },
+  "form": {
+    "nameLabel": "View name",
+    "namePlaceholder": "e.g. My open deals this month",
+    "sharedLabel": "Share with team",
+    "sharedHint": "A shared view can be seen and applied by everyone; only you can edit or delete it."
+  },
+  "list": {
+    "empty": "No saved views yet.",
+    "sharedBadge": "Shared",
+    "ownedBy": "Shared by {{name}}"
+  },
+  "deleteConfirm": {
+    "title": "Delete \"{{name}}\"?",
+    "confirm": "Delete",
+    "cancel": "Cancel"
+  },
+  "aria": {
+    "apply": "Apply view: {{name}}",
+    "share": "Share: {{name}}",
+    "unshare": "Unshare: {{name}}",
+    "delete": "Delete view: {{name}}"
+  }
+}

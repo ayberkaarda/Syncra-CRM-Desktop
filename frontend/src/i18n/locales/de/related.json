@@ -1,0 +1,26 @@
+{
+  "panel": {
+    "title": "Verknüpfte Datensätze",
+    "moreNotShown_one": "+{{count}} weiterer Datensatz",
+    "moreNotShown_other": "+{{count}} weitere Datensätze"
+  },
+  "groups": {
+    "company": "Unternehmen",
+    "contact": "Kontakt",
+    "deal": "Verkaufschance",
+    "convertedContact": "Umgewandelter Kontakt",
+    "convertedCompany": "Umgewandeltes Unternehmen",
+    "convertedDeal": "Umgewandelte Verkaufschance"
+  },
+  "empty": {
+    "deals": "Keine verknüpften Verkaufschancen.",
+    "quotes": "Keine verknüpften Angebote.",
+    "tickets": "Keine verknüpften Tickets.",
+    "company": "Kein verknüpftes Unternehmen.",
+    "contact": "Kein verknüpfter Kontakt.",
+    "deal": "Keine verknüpfte Verkaufschance.",
+    "convertedContact": "Dieser Interessent wurde noch nicht in einen Kontakt umgewandelt.",
+    "convertedCompany": "Dieser Interessent wurde noch nicht in ein Unternehmen umgewandelt.",
+    "convertedDeal": "Bei dieser Umwandlung wurde keine Verkaufschance erstellt."
+  }
+}

@@ -1,0 +1,315 @@
+{
+  "page": {
+    "title": "Paramètres",
+    "subtitle": "Gérez la configuration globale du système."
+  },
+  "tabs": {
+    "company": "Profil de l'entreprise",
+    "pipeline": "Étapes du pipeline",
+    "customFields": "Champs personnalisés",
+    "emailTemplates": "Modèles d'e-mail",
+    "permissions": "Matrice rôles / permissions",
+    "exchangeRates": "Taux de change",
+    "automationRules": "Règles d'automatisation"
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "company": {
+    "fields": {
+      "name": "Nom de l'entreprise",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "address": "Adresse",
+      "website": "Site web",
+      "taxNumber": "Numéro fiscal",
+      "taxOffice": "Centre des impôts",
+      "logoUrl": "URL du logo",
+      "currency": "Devise"
+    },
+    "jsonHint": "Une valeur au format JSON.",
+    "loadError": "Une erreur est survenue lors du chargement des paramètres.",
+    "empty": "Aucun paramètre d'entreprise trouvé.",
+    "resetChanges": "Annuler les modifications",
+    "errors": {
+      "invalidNumber": "Saisissez un nombre valide.",
+      "invalidJson": "Saisissez une valeur JSON valide.",
+      "fixBeforeSave": "Certains champs sont invalides — corrigez-les avant d'enregistrer."
+    }
+  },
+  "keys": {
+    "company": {
+      "name": { "description": "Raison sociale de l'entreprise" },
+      "email": { "description": "E-mail de contact de l'entreprise" },
+      "phone": { "description": "Numéro de téléphone de l'entreprise" },
+      "address": { "description": "Adresse de l'entreprise" },
+      "tax_number": { "description": "Numéro d'identification fiscale" }
+    }
+  },
+  "customFields": {
+    "entityTypes": {
+      "leads": "Prospects",
+      "contacts": "Contacts",
+      "companies": "Entreprises",
+      "deals": "Opportunités",
+      "tickets": "Tickets",
+      "products": "Produits"
+    },
+    "fieldTypes": {
+      "text": "Texte",
+      "textarea": "Texte long",
+      "number": "Nombre",
+      "date": "Date",
+      "select": "Sélection (unique)",
+      "multiselect": "Sélection (multiple)",
+      "boolean": "Oui/Non"
+    },
+    "addField": "Ajouter un champ",
+    "required": "Obligatoire",
+    "deactivate": "Désactiver",
+    "activate": "Activer",
+    "loadError": "Une erreur est survenue lors du chargement des champs personnalisés.",
+    "empty": {
+      "title": "Aucun champ personnalisé",
+      "description": "Aucun champ personnalisé n'est encore défini pour ce type d'enregistrement."
+    }
+  },
+  "customFieldForm": {
+    "titleCreate": "Nouveau champ personnalisé",
+    "titleEdit": "Modifier le champ personnalisé",
+    "entityTypeLabel": "Type d'enregistrement",
+    "entityTypeHintLocked": "Ne peut plus être modifié après la création.",
+    "fieldTypeLabel": "Type de champ",
+    "nameLabel": "Nom du champ",
+    "keyLabel": "Clé",
+    "keyHintLocked": "Ne peut plus être modifiée après la création.",
+    "keyHintPattern": "Lettres minuscules, chiffres et underscores uniquement.",
+    "optionsLabel": "Options",
+    "optionPlaceholder": "Option {{index}}",
+    "removeOption": "Supprimer l'option",
+    "addOption": "Ajouter une option",
+    "requiredLabel": "Champ obligatoire",
+    "errors": {
+      "nameRequired": "Le nom du champ est obligatoire.",
+      "keyRequired": "La clé du champ est obligatoire.",
+      "optionsRequired": "Vous devez ajouter au moins une option."
+    }
+  },
+  "emailTemplates": {
+    "newTemplate": "Nouveau modèle",
+    "loadError": "Une erreur est survenue lors du chargement des modèles d'e-mail.",
+    "empty": {
+      "title": "Aucun modèle d'e-mail",
+      "description": "Aucun modèle d'e-mail n'est encore défini."
+    },
+    "variablesCount_one": "{{count}} variable",
+    "variablesCount_other": "{{count}} variables",
+    "delete": {
+      "title": "Supprimer le modèle d'e-mail",
+      "description": "Cette action est IRRÉVERSIBLE. Le modèle sera définitivement supprimé.",
+      "confirmSuffix": "Voulez-vous vraiment supprimer ce modèle ?"
+    }
+  },
+  "emailTemplateForm": {
+    "titleCreate": "Nouveau modèle d'e-mail",
+    "titleEdit": "Modifier le modèle d'e-mail",
+    "keyLabel": "Clé",
+    "nameLabel": "Nom du modèle",
+    "subjectLabel": "Objet",
+    "bodyLabel": "Contenu (HTML)",
+    "variablesLabel": "Variables",
+    "variablesHint": "Vous pouvez laisser ce champ vide — le serveur les déduit automatiquement des espaces réservés {{placeholder}} présents dans le contenu.",
+    "variablePlaceholderExample": "ex. customer_name",
+    "removeVariable": "Supprimer la variable",
+    "addVariable": "Ajouter une variable",
+    "previewLabel": "Aperçu",
+    "previewSubjectLabel": "Objet",
+    "previewEmptySubject": "—",
+    "previewPlaceholder": "L'aperçu apparaîtra ici au fur et à mesure de la saisie.",
+    "previewNote": "L'aperçu affiche le HTML brut que vous avez saisi. Lors de l'enregistrement, le serveur supprime les balises/attributs non sécurisés (script, style, gestionnaires d'événements) ; le contenu enregistré peut donc être plus simple que l'aperçu.",
+    "previewIframeTitle": "Aperçu du modèle d'e-mail",
+    "errors": {
+      "keyRequired": "La clé est obligatoire.",
+      "nameRequired": "Le nom du modèle est obligatoire.",
+      "subjectRequired": "L'objet est obligatoire.",
+      "bodyRequired": "Le contenu est obligatoire."
+    }
+  },
+  "pipeline": {
+    "dragHint": "Faites glisser les étapes pour les réorganiser. Les étapes ne peuvent pas être supprimées, seulement désactivées puis réactivées.",
+    "newStage": "Nouvelle étape",
+    "loadError": "Une erreur est survenue lors du chargement des étapes du pipeline.",
+    "empty": {
+      "title": "Aucune étape trouvée",
+      "description": "Aucune étape de pipeline n'est encore définie."
+    },
+    "dealsCount_one": "{{count}} opportunité",
+    "dealsCount_other": "{{count}} opportunités",
+    "systemWon": "Système — Gagnée",
+    "systemLost": "Système — Perdue",
+    "reorderAria": "Réorganiser l'étape {{name}}",
+    "deactivateDisabledTitle": "Une étape système ne peut pas être désactivée",
+    "toast": {
+      "activated": "L'étape « {{name}} » a été activée.",
+      "deactivated": "L'étape « {{name}} » a été désactivée.",
+      "movedAndDeactivated": "Étape désactivée, {{count}} opportunités déplacées vers {{target}}."
+    },
+    "movedTargetFallback": "l'étape sélectionnée"
+  },
+  "pipelineStageForm": {
+    "titleCreate": "Nouvelle étape",
+    "titleEdit": "Modifier l'étape",
+    "systemBadgeWon": "Gagnée (système)",
+    "systemBadgeLost": "Perdue (système)",
+    "systemNote": "Il s'agit d'une étape système ; elle ne peut pas être désactivée.",
+    "nameLabel": "Nom de l'étape",
+    "probabilityLabel": "Probabilité de gain (%)",
+    "colorLabel": "Couleur",
+    "previewLabel": "Aperçu :",
+    "previewDefaultName": "Nom de l'étape",
+    "colors": {
+      "primary": "Primaire",
+      "success": "Vert (Succès)",
+      "danger": "Rouge (Danger)",
+      "warning": "Orange (Avertissement)",
+      "neutral": "Gris (Neutre)",
+      "info": "Bleu (Info)"
+    },
+    "errors": {
+      "nameRequired": "Le nom de l'étape est obligatoire.",
+      "probabilityInvalid": "La probabilité doit être un nombre entre 0 et 100."
+    }
+  },
+  "deactivateStageModal": {
+    "title": "Désactiver l'étape",
+    "warning_one": "compte {{count}} opportunité ouverte. Vers quelle étape doit-elle être déplacée avant la désactivation ?",
+    "warning_other": "compte {{count}} opportunités ouvertes. Vers quelle étape doivent-elles être déplacées avant la désactivation ?",
+    "targetLabel": "Étape cible",
+    "targetPlaceholder": "Sélectionnez une étape…",
+    "confirm": "Déplacer et désactiver"
+  },
+  "permissions": {
+    "description": "Cochez ou décochez une case pour modifier la permission de ce rôle. Les modifications sont enregistrées instantanément.",
+    "columns": { "permission": "Permission" },
+    "readOnlyBadge": "Verrouillé",
+    "readOnlyNote": "Les rôles portant ce badge disposent de toutes les permissions et ne peuvent pas être modifiés.",
+    "loadError": "Une erreur s'est produite lors du chargement de la matrice des permissions.",
+    "ariaAlwaysGranted": "{{role}} — {{permission}} (toujours accordée)",
+    "ariaToggle": "{{role}} — {{permission}}"
+  },
+  "exchangeRates": {
+    "loadError": "Une erreur est survenue lors du chargement des taux de change.",
+    "noRate": "Aucun taux renseigné",
+    "rateAsOf": "Taux du {{date}}",
+    "stale_one": "Le taux n'a pas été mis à jour depuis {{count}} jour",
+    "stale_other": "Le taux n'a pas été mis à jour depuis {{count}} jours",
+    "source": {
+      "tcmb": "TCMB",
+      "manual": "Manuel"
+    },
+    "form": {
+      "title": "Saisie manuelle du taux",
+      "hint": "Saisissez manuellement le taux du jour si la TCMB est inaccessible.",
+      "currencyLabel": "Devise",
+      "currencyPlaceholder": "Sélectionner",
+      "rateLabel": "Taux (1 unité = ? TRY)",
+      "dateLabel": "Date",
+      "submit": "Enregistrer",
+      "errors": {
+        "currencyRequired": "Sélectionnez une devise.",
+        "rateRequired": "Saisissez un taux."
+      }
+    }
+  },
+  "automationRules": {
+    "description": "Configurez de petites règles d'automatisation en choisissant un déclencheur et une action dans un catalogue fixe (ex. \"créer une tâche quand une opportunité atteint une étape\"). Aucun code personnalisé ni IA.",
+    "newRule": "Nouvelle règle",
+    "ruleSummary": "{{trigger}} → {{action}}",
+    "loadError": "Une erreur s'est produite lors du chargement des règles d'automatisation.",
+    "empty": {
+      "title": "Aucune règle d'automatisation",
+      "description": "Aucune règle d'automatisation n'a encore été définie."
+    },
+    "delete": {
+      "title": "Supprimer la règle d'automatisation",
+      "description": "Cette action est IRRÉVERSIBLE. La règle sera supprimée définitivement.",
+      "confirmSuffix": "?"
+    },
+    "triggers": {
+      "deal_stage_changed": "Quand une opportunité atteint une étape spécifique",
+      "deal_status_changed": "Quand une opportunité est gagnée/perdue",
+      "ticket_created": "Quand un nouveau ticket de support est ouvert"
+    },
+    "actions": {
+      "task_create": "Créer une tâche",
+      "notification_send": "Envoyer une notification",
+      "deal_assign_owner": "Changer le propriétaire de l'opportunité"
+    },
+    "form": {
+      "titleCreate": "Nouvelle règle d'automatisation",
+      "titleEdit": "Modifier la règle d'automatisation",
+      "nameLabel": "Nom de la règle",
+      "triggerSection": "Déclencheur",
+      "actionSection": "Action",
+      "triggerTypeLabel": "Déclencheur",
+      "actionTypeLabel": "Action",
+      "pipelineStageLabel": "Étape cible",
+      "pipelineStagePlaceholder": "Sélectionnez une étape…",
+      "dealStatusLabel": "Statut cible",
+      "dealStatusWon": "Gagnée",
+      "dealStatusLost": "Perdue",
+      "ticketPriorityFilterLabel": "Filtre de priorité (optionnel)",
+      "ticketPriorityAny": "Toute priorité",
+      "ticketPriorityHint": "Si laissé vide, un nouveau ticket de n'importe quelle priorité déclenche cette règle.",
+      "priorities": {
+        "low": "Basse",
+        "normal": "Normale",
+        "high": "Haute",
+        "urgent": "Urgente"
+      },
+      "titleTemplateLabel": "Modèle de titre de tâche",
+      "messageTemplateLabel": "Modèle de message de notification",
+      "placeholderHint": "Espaces réservés disponibles : {{list}}",
+      "assigneeTypeLabel": "Assigné à",
+      "assigneeRecordOwner": "Le propriétaire de la fiche",
+      "assigneeFixedUser": "Utilisateur fixe",
+      "assigneeUserLabel": "Utilisateur",
+      "recipientTypeLabel": "Destinataire",
+      "recipientRecordOwner": "Le propriétaire de la fiche",
+      "recipientFixedUser": "Utilisateur fixe",
+      "recipientUserLabel": "Utilisateur",
+      "dueInDaysLabel": "Échéance (jours)",
+      "newOwnerLabel": "Nouveau propriétaire",
+      "userPlaceholder": "Sélectionnez un utilisateur…",
+      "usersForbidden": "Vous n'avez pas la permission de voir la liste des utilisateurs.",
+      "errors": {
+        "nameRequired": "Le nom de la règle est requis.",
+        "stageRequired": "Une étape cible doit être sélectionnée.",
+        "titleTemplateRequired": "Le modèle de titre de tâche est requis.",
+        "assigneeRequired": "Un utilisateur assigné doit être sélectionné.",
+        "dueInDaysRequired": "L'échéance (jours) est requise.",
+        "messageTemplateRequired": "Le modèle de message de notification est requis.",
+        "recipientRequired": "Un utilisateur destinataire doit être sélectionné.",
+        "newOwnerRequired": "Un nouveau propriétaire doit être sélectionné."
+      }
+    }
+  },
+  "toast": {
+    "customFieldCreated": "Champ personnalisé créé.",
+    "customFieldUpdated": "Champ personnalisé mis à jour.",
+    "customFieldDeactivated": "Champ personnalisé désactivé.",
+    "templateCreated": "Modèle d'e-mail créé.",
+    "templateUpdated": "Modèle d'e-mail mis à jour.",
+    "templateDeleted": "Modèle d'e-mail supprimé.",
+    "stageCreated": "Étape créée.",
+    "settingsSaved": "Paramètres enregistrés.",
+    "roleNotEditable": "Ce rôle ne peut pas être modifié.",
+    "cannotRevokeOwnAccess": "Cette modification retirerait votre propre accès aux paramètres.",
+    "unknownPermissions": "Permission(s) inconnue(s) : {{list}}",
+    "exchangeRateSaved": "Taux enregistré.",
+    "automationRuleCreated": "Règle d'automatisation créée.",
+    "automationRuleUpdated": "Règle d'automatisation mise à jour.",
+    "automationRuleDeleted": "Règle d'automatisation supprimée."
+  }
+}

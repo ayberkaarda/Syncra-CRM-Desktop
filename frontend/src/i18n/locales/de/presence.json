@@ -1,0 +1,14 @@
+{
+  "trigger": {
+    "aria": "Online-Benutzer ({{count}})"
+  },
+  "panel": {
+    "aria": "Online-Benutzer",
+    "title": "Online ({{count}})",
+    "staleWarning": "Diese Liste ist möglicherweise nicht aktuell."
+  },
+  "empty": {
+    "title": "Niemand online",
+    "description": "Derzeit ist sonst niemand verbunden."
+  }
+}

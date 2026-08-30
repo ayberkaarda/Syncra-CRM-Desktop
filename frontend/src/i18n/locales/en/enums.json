@@ -1,0 +1,89 @@
+{
+  "activity": {
+    "type": {
+      "call": "Call",
+      "meeting": "Meeting",
+      "email": "Email",
+      "note": "Note",
+      "unknown": "Other"
+    }
+  },
+  "deal": {
+    "status": {
+      "open": "Open",
+      "won": "Won",
+      "lost": "Lost"
+    }
+  },
+  "task": {
+    "priority": { "low": "Low", "normal": "Normal", "high": "High", "urgent": "Urgent" },
+    "status": { "pending": "Pending", "in_progress": "In Progress", "completed": "Completed", "cancelled": "Cancelled" }
+  },
+  "ticket": {
+    "priority": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "status": {
+      "open": "Open",
+      "pending": "Pending",
+      "in_progress": "In Progress",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    }
+  },
+  "quote": {
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "expired": "Expired"
+    }
+  },
+  "lead": {
+    "status": {
+      "new": "New",
+      "contacted": "Contacted",
+      "qualified": "Qualified",
+      "unqualified": "Unqualified",
+      "converted": "Converted"
+    },
+    "source": {
+      "website": "Website",
+      "referral": "Referral",
+      "cold_call": "Cold Call",
+      "email_campaign": "Email Campaign",
+      "social_media": "Social Media",
+      "event": "Event",
+      "other": "Other"
+    }
+  },
+  "role": {
+    "super_admin": "Super Admin",
+    "admin": "Admin",
+    "sales_manager": "Sales Manager",
+    "sales_rep": "Sales Representative",
+    "support_agent": "Support Agent",
+    "viewer": "Viewer"
+  },
+  "ticketCategory": {
+    "technical_support": "Technical Support",
+    "billing": "Billing",
+    "product_info": "Product Information",
+    "complaint": "Complaint",
+    "installation": "Installation",
+    "training_request": "Training Request"
+  },
+  "pipelineStage": {
+    "yeni-firsat": "New Opportunity",
+    "iletisim-kuruldu": "Contact Made",
+    "teklif-hazirlaniyor": "Preparing Proposal",
+    "teklif-gonderildi": "Proposal Sent",
+    "muzakere": "Negotiation",
+    "kazanildi": "Won",
+    "kaybedildi": "Lost"
+  }
+}

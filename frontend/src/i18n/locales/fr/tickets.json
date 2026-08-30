@@ -1,0 +1,276 @@
+{
+  "filters": {
+    "searchPlaceholder": "Rechercher un numéro de ticket, un sujet...",
+    "searchAria": "Rechercher des tickets",
+    "statusAria": "Filtre de statut",
+    "priorityAria": "Filtre de priorité",
+    "assignedAria": "Filtre de responsable",
+    "companyAria": "Filtre d'entreprise",
+    "categoryAria": "Filtre de catégorie",
+    "tagAria": "Filtre d'étiquette",
+    "allStatuses": "Tous les statuts",
+    "allPriorities": "Toutes les priorités",
+    "allAssignees": "Tous les responsables",
+    "allCompanies": "Toutes les entreprises",
+    "allCategories": "Toutes les catégories",
+    "allTags": "Toutes les étiquettes",
+    "slaBreachedOnly": "Violations SLA uniquement",
+    "fromDateAria": "Date de début",
+    "toDateAria": "Date de fin"
+  },
+  "list": {
+    "breadcrumbHome": "Accueil",
+    "breadcrumbCurrent": "Tickets",
+    "title": "Tickets",
+    "subtitle_one": "{{count}} ticket (filtré)",
+    "subtitle_other": "{{count}} tickets (filtrés)",
+    "newTicket": "Nouveau ticket",
+    "summaryLabel": "Résumé général (indépendant des filtres actifs) :",
+    "stats": {
+      "total": "Total",
+      "breached": "Violations SLA",
+      "atRisk": "À risque",
+      "avgResolution": "Temps de résolution moyen"
+    },
+    "avgResolutionNoData": "Aucune donnée",
+    "avgResolutionMinutes_one": "{{count}} min",
+    "avgResolutionMinutes_other": "{{count}} min",
+    "avgResolutionHours": "{{hours}} h",
+    "loadError": "Une erreur est survenue lors du chargement des tickets.",
+    "retry": "Réessayer",
+    "empty": {
+      "title": "Aucun ticket trouvé",
+      "description": "Aucun ticket ne correspond à vos critères de recherche ou de filtrage."
+    },
+    "columns": {
+      "ticketNumber": "N° de ticket",
+      "subject": "Sujet",
+      "priority": "Priorité",
+      "status": "Statut",
+      "sla": "SLA",
+      "companyContact": "Entreprise / Contact",
+      "assignee": "Responsable",
+      "created": "Créé le",
+      "actions": "Actions"
+    },
+    "actions": {
+      "detail": "Détail",
+      "edit": "Modifier",
+      "editLockedTooltip": "Vous n'êtes pas le propriétaire de ce ticket, vous ne pouvez pas le modifier.",
+      "assign": "Assigner",
+      "delete": "Supprimer"
+    },
+    "deleteModal": {
+      "title": "Supprimer le ticket",
+      "description": "Cette action est irréversible. Le ticket sera définitivement supprimé.",
+      "cancel": "Annuler",
+      "confirm": "Supprimer",
+      "confirmText": "Êtes-vous sûr de vouloir supprimer le ticket <bold>{{ticketNumber}} — {{subject}}</bold> ?"
+    }
+  },
+  "detail": {
+    "backToList": "Tickets",
+    "assign": "Assigner",
+    "edit": "Modifier",
+    "editLockedTooltip": "Vous n'êtes pas le propriétaire de ce ticket, vous ne pouvez pas le modifier.",
+    "delete": "Supprimer",
+    "loadError": "Une erreur est survenue lors du chargement du ticket.",
+    "retry": "Réessayer",
+    "fields": {
+      "company": "Entreprise",
+      "contact": "Contact",
+      "assignee": "Responsable",
+      "creator": "Créateur"
+    },
+    "unassignedAssignee": "Non assigné",
+    "descriptionLabel": "Description",
+    "tagsLabel": "Étiquettes",
+    "noTags": "Aucune étiquette.",
+    "customFieldsTitle": "Champs personnalisés",
+    "timestampsTitle": "Horodatages",
+    "timestamps": {
+      "created": "Créé le",
+      "firstResponse": "Première réponse",
+      "resolved": "Résolu",
+      "closed": "Clôturé",
+      "slaDue": "Échéance SLA",
+      "slaTargetHours": "Durée cible du SLA"
+    },
+    "noResponseYet": "Aucune réponse pour le moment",
+    "slaTargetHoursValue": "{{hours}} h",
+    "deleteModal": {
+      "title": "Supprimer le ticket",
+      "description": "Cette action est irréversible. Le ticket sera définitivement supprimé.",
+      "cancel": "Annuler",
+      "confirm": "Supprimer",
+      "confirmText": "Êtes-vous sûr de vouloir supprimer le ticket <bold>{{ticketNumber}} — {{subject}}</bold> ?"
+    }
+  },
+  "form": {
+    "titleCreate": "Nouveau ticket",
+    "titleEdit": "Modifier le ticket",
+    "cancel": "Annuler",
+    "submitCreate": "Créer",
+    "submitEdit": "Enregistrer",
+    "newTicketHint": "Le numéro de ticket et le statut sont déterminés par le serveur ; les nouveaux tickets sont toujours créés avec le statut \"{{status}}\".",
+    "subjectLabel": "Sujet",
+    "descriptionLabel": "Description",
+    "priorityLabel": "Priorité",
+    "priorityChangedWarning": "L'objectif SLA sera recalculé ; le ticket peut immédiatement passer en violation (une priorité plus élevée raccourcit l'objectif).",
+    "categoryLabel": "Catégorie",
+    "categoryPlaceholder": "Choisir une catégorie ou en saisir une",
+    "contactLabel": "Contact",
+    "contactHint": "Si une entreprise est sélectionnée, la liste des contacts est filtrée pour cette entreprise.",
+    "contactLoading": "Chargement…",
+    "contactNone": "Aucun contact",
+    "assigneeLabel": "Responsable",
+    "unassignedOption": "Non assigné",
+    "validation": {
+      "subjectRequired": "Le sujet est obligatoire.",
+      "descriptionRequired": "La description est obligatoire."
+    }
+  },
+  "companyCombobox": {
+    "label": "Entreprise",
+    "placeholder": "Rechercher une entreprise...",
+    "clearAria": "Effacer la sélection d'entreprise",
+    "clearOption": "Aucune entreprise / effacer",
+    "loading": "Chargement…",
+    "empty": "Aucun résultat trouvé"
+  },
+  "customFields": {
+    "sectionTitle": "Champs personnalisés",
+    "selectPlaceholder": "Sélectionner…",
+    "noOptions": "Aucune option définie."
+  },
+  "tagSelect": {
+    "label": "Étiquettes",
+    "trigger": "Sélectionner des étiquettes...",
+    "loading": "Chargement…",
+    "empty": "Aucune étiquette trouvée",
+    "removeAria": "Retirer l'étiquette {{name}}"
+  },
+  "assign": {
+    "title": "Assigner le ticket",
+    "description": "Choisissez le responsable pour <bold>{{ticketNumber}} — {{subject}}</bold>.",
+    "cancel": "Annuler",
+    "submit": "Assigner",
+    "forbidden": "Vous n'avez pas la permission d'accéder à la liste des utilisateurs.",
+    "unassignedOption": "Non assigné (remettre dans le pool)",
+    "assigneeLabel": "Responsable"
+  },
+  "sla": {
+    "pausedLabel": "En pause",
+    "breachedLabel": "Violé",
+    "breachedHistorical": "Violé (historique)",
+    "metStatus": "Respecté",
+    "resolvedWithinTarget": "Résolu dans les délais du SLA.",
+    "resolvedBreached": "Résolu après dépassement de l'objectif SLA (violation historique).",
+    "noInfo": "Aucune information SLA disponible.",
+    "targetLabel": "Objectif : {{hours}} h",
+    "pausedHint": "Le compteur SLA s'arrête tant que le ticket est au statut \"{{status}}\" ; le compte à rebours ne continue pas.",
+    "units": {
+      "day": "j",
+      "hour": "h",
+      "minute": "min",
+      "second": "s"
+    }
+  },
+  "activity": {
+    "notesTitle": "Notes",
+    "notesSubtitle_one": "{{count}} note — note interne, ne déclenche pas la \"Première réponse\"",
+    "notesSubtitle_other": "{{count}} notes — notes internes, ne déclenchent pas la \"Première réponse\"",
+    "addNote": "Ajouter une note",
+    "notesLoadError": "Une erreur est survenue lors du chargement des notes.",
+    "retry": "Réessayer",
+    "noNotes": "Aucune note ajoutée pour le moment.",
+    "unknownUser": "Inconnu",
+    "interactionsTitle": "Interactions",
+    "interactionsSubtitle_one": "{{count}} enregistrement — appel/e-mail/réunion",
+    "interactionsSubtitle_other": "{{count}} enregistrements — appel/e-mail/réunion",
+    "addInteraction": "Ajouter une interaction",
+    "interactionsLoadError": "Une erreur est survenue lors du chargement des interactions.",
+    "noInteractions": "Aucune interaction enregistrée pour le moment.",
+    "durationMinutes_one": "{{count}} min",
+    "durationMinutes_other": "{{count}} min",
+    "outcomeLabel": "Résultat : {{outcome}}",
+    "form": {
+      "titleNote": "Ajouter une note",
+      "titleInteraction": "Enregistrer une interaction",
+      "descriptionNote": "Ceci est une note interne ; elle ne compte pas comme une réponse donnée au client et ne déclenche PAS l'horodatage \"Première réponse\" du ticket.",
+      "descriptionInteraction": "Un appel/e-mail/réunion est une réponse donnée au client — si le ticket n'a pas encore d'horodatage \"Première réponse\", cet enregistrement le déclenche.",
+      "cancel": "Annuler",
+      "save": "Enregistrer",
+      "titleFieldLabel": "Titre",
+      "titlePlaceholder": "ex. Résumé de l'appel client",
+      "typeLabel": "Type",
+      "subjectLabel": "Sujet",
+      "occurredAtLabel": "Date de réalisation",
+      "durationLabel": "Durée (minutes)",
+      "outcomeFieldLabel": "Résultat",
+      "bodyLabelNote": "Contenu de la note",
+      "bodyLabelInteraction": "Description",
+      "validation": {
+        "titleRequired": "Le titre est obligatoire.",
+        "subjectRequired": "Le sujet est obligatoire.",
+        "bodyRequired": "Le contenu de la note est obligatoire.",
+        "occurredAtRequired": "La date de réalisation est obligatoire.",
+        "occurredAtFuture": "La date de l'activité ne peut pas être dans le futur.",
+        "durationRange": "La durée doit être comprise entre 0 et 1440 minutes."
+      }
+    }
+  },
+  "tasks": {
+    "title": "Tâches",
+    "subtitle_one": "{{count}} tâche",
+    "subtitle_other": "{{count}} tâches",
+    "add": "Ajouter une tâche",
+    "loadError": "Une erreur est survenue lors du chargement des tâches.",
+    "retry": "Réessayer",
+    "empty": "Aucune tâche liée à ce ticket.",
+    "dueLabel": "Échéance : {{value}}",
+    "form": {
+      "title": "Ajouter une tâche au ticket",
+      "cancel": "Annuler",
+      "submit": "Créer",
+      "titleFieldLabel": "Titre",
+      "descriptionLabel": "Description",
+      "dueLabel": "Échéance",
+      "reminderLabel": "Rappel",
+      "reminderHint": "Choisissez d'abord une date d'échéance.",
+      "priorityLabel": "Priorité",
+      "statusLabel": "Statut",
+      "assigneeLabel": "Responsable",
+      "unassignedOption": "Non assigné",
+      "autoLinkedHint": "Cette tâche est automatiquement liée au ticket ({{ticketNumber}}).",
+      "validation": {
+        "titleRequired": "Le titre est obligatoire.",
+        "reminderAfterDue": "Le rappel ne peut pas être postérieur à la date d'échéance."
+      }
+    }
+  },
+  "status": {
+    "changeLabel": "Changer le statut :",
+    "terminalHint": "Le statut \"{{status}}\" est terminal ; le statut de ce ticket ne peut plus être modifié.",
+    "ownershipLockedHint": "Vous n'êtes pas le propriétaire de ce ticket, vous ne pouvez pas changer son statut.",
+    "resolveModal": {
+      "title": "Marquer le ticket comme résolu",
+      "description": "Ajouter une note de résolution n'est pas obligatoire mais recommandé — si vous en ajoutez une, elle sera enregistrée comme note interne sur le ticket.",
+      "cancel": "Annuler",
+      "confirm": "Marquer comme résolu",
+      "noteLabel": "Note de résolution (optionnel)",
+      "notePlaceholder": "Comment le problème a-t-il été résolu ?",
+      "defaultNoteSubject": "Note de résolution"
+    },
+    "toastNoteFailed": "Statut mis à jour mais la note n'a pas pu être enregistrée : {{error}}"
+  },
+  "toast": {
+    "created": "Ticket créé.",
+    "updated": "Ticket mis à jour.",
+    "deleted": "Ticket supprimé.",
+    "statusUpdated": "Statut mis à jour.",
+    "assignUpdated": "Attribution du ticket mise à jour.",
+    "slaWarning": "{{ticketNumber}} — Objectif SLA proche : {{subject}}",
+    "slaBreached": "{{ticketNumber}} — SLA violé : {{subject}}"
+  }
+}

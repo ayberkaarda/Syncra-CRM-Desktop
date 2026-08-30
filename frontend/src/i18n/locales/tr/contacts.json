@@ -1,0 +1,116 @@
+{
+  "breadcrumb": {
+    "home": "Anasayfa",
+    "contacts": "Kişiler"
+  },
+  "list": {
+    "title": "Kişiler",
+    "subtitle_one": "{{count}} kişi",
+    "subtitle_other": "{{count}} kişi",
+    "createButton": "Yeni Kişi",
+    "error": "Kişiler yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "empty": {
+      "title": "Kişi bulunamadı",
+      "description": "Arama veya filtre kriterlerinizle eşleşen kişi yok."
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Kişi ara...",
+    "searchAria": "Kişi ara",
+    "companyAria": "Firma filtresi",
+    "ownerAria": "Sahip filtresi",
+    "cityPlaceholder": "Şehir",
+    "cityAria": "Şehir filtresi",
+    "tagAria": "Etiket filtresi",
+    "primaryAria": "Birincil filtresi",
+    "fromDateAria": "Başlangıç tarihi",
+    "toDateAria": "Bitiş tarihi",
+    "allCompanies": "Tüm firmalar",
+    "allOwners": "Tüm sahipler",
+    "allTags": "Tüm etiketler",
+    "all": "Tümü",
+    "yes": "Evet",
+    "no": "Hayır"
+  },
+  "table": {
+    "contact": "Kişi",
+    "company": "Firma",
+    "email": "E-posta",
+    "phone": "Telefon",
+    "city": "Şehir",
+    "owner": "Sahip",
+    "tags": "Etiketler",
+    "primary": "Birincil",
+    "actions": "İşlemler",
+    "detail": "Detay",
+    "edit": "Düzenle",
+    "delete": "Sil"
+  },
+  "deleteModal": {
+    "title": "Kişiyi sil",
+    "description": "Bu işlem geri alınamaz. Kişi kalıcı olarak silinecek.",
+    "confirm": "<strong>{{name}}</strong> adlı kişiyi silmek istediğinize emin misiniz?"
+  },
+  "company": {
+    "label": "Firma",
+    "placeholder": "Firma ara...",
+    "clearAria": "Firma seçimini temizle",
+    "clearOption": "Firma yok",
+    "loading": "Yükleniyor…",
+    "noResults": "Sonuç bulunamadı"
+  },
+  "tags": {
+    "label": "Etiketler",
+    "removeAria": "{{name}} etiketini kaldır",
+    "select": "Etiket seçin",
+    "loading": "Yükleniyor…",
+    "notFound": "Etiket bulunamadı."
+  },
+  "form": {
+    "validation": {
+      "firstNameRequired": "Ad zorunludur.",
+      "lastNameRequired": "Soyad zorunludur."
+    },
+    "selectOwner": "Sahip seçilmedi",
+    "titleEdit": "Kişiyi Düzenle",
+    "titleCreate": "Yeni Kişi",
+    "cancel": "Vazgeç",
+    "submitEdit": "Kaydet",
+    "submitCreate": "Oluştur",
+    "fields": {
+      "firstName": "Ad",
+      "lastName": "Soyad",
+      "email": "E-posta",
+      "phone": "Telefon",
+      "mobile": "Mobil",
+      "position": "Pozisyon",
+      "owner": "Sahip",
+      "isPrimary": "Birincil kişi",
+      "address": "Adres",
+      "city": "Şehir",
+      "country": "Ülke",
+      "notes": "Notlar"
+    },
+    "primaryWarning": "Bu kişi, seçilen firmanın birincil iletişim kişisi olarak işaretlenecek.",
+    "customFields": "Özel Alanlar"
+  },
+  "detail": {
+    "breadcrumbError": "Hata",
+    "loadError": "Kişi yüklenirken bir hata oluştu.",
+    "title": "Kişi Özeti",
+    "primaryBadge": "Birincil",
+    "dealsBadge_one": "{{count}} fırsat",
+    "dealsBadge_other": "{{count}} fırsat",
+    "ticketsBadge_one": "{{count}} talep",
+    "ticketsBadge_other": "{{count}} talep",
+    "cityCountry": "Şehir / Ülke",
+    "timelineTitle": "Zaman Çizelgesi",
+    "timelineEmptyDescription": "Bu kişi için henüz görüntülenecek bir etkileşim yok."
+  },
+  "toast": {
+    "created": "Kişi oluşturuldu.",
+    "updated": "Kişi güncellendi.",
+    "deleted": "Kişi silindi."
+  }
+}

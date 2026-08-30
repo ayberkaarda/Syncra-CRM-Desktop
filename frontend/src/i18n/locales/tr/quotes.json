@@ -1,0 +1,207 @@
+{
+  "breadcrumb": {
+    "home": "Anasayfa",
+    "quotes": "Teklifler"
+  },
+  "fields": {
+    "title": "Başlık",
+    "deal": "Fırsat",
+    "company": "Firma",
+    "contact": "Kişi",
+    "validUntil": "Geçerlilik Tarihi",
+    "notes": "Notlar",
+    "terms": "Şartlar",
+    "creator": "Oluşturan",
+    "createdAt": "Oluşturma Tarihi",
+    "sentAt": "Gönderim Tarihi",
+    "acceptedAt": "Kabul Tarihi",
+    "rejectedAt": "Red Tarihi"
+  },
+  "actions": {
+    "detail": "Detay",
+    "edit": "Düzenle",
+    "pdf": "PDF",
+    "pdfDownload": "PDF İndir",
+    "revise": "Revize Et",
+    "createRevision": "Revizyon Oluştur",
+    "delete": "Sil",
+    "send": "Gönder",
+    "changeStatus": "Durum Değiştir",
+    "openNewTab": "Yeni Sekmede Aç"
+  },
+  "retry": "Tekrar dene",
+  "list": {
+    "title": "Teklifler",
+    "subtitle_one": "{{count}} teklif (filtrelenmiş)",
+    "subtitle_other": "{{count}} teklif (filtrelenmiş)",
+    "createButton": "Yeni Teklif",
+    "searchPlaceholder": "Teklif no, başlık ara...",
+    "searchAria": "Teklif ara",
+    "statusAria": "Durum filtresi",
+    "companyAria": "Firma filtresi",
+    "dealAria": "Fırsat filtresi",
+    "expiredOnly": "Sadece süresi dolmuşlar",
+    "fromDateAria": "Başlangıç tarihi",
+    "toDateAria": "Bitiş tarihi",
+    "allStatuses": "Tüm durumlar",
+    "allCompanies": "Tüm firmalar",
+    "allDeals": "Tüm fırsatlar",
+    "loadError": "Teklifler yüklenirken bir hata oluştu.",
+    "emptyTitle": "Teklif bulunamadı",
+    "emptyDescription": "Arama veya filtre kriterlerinizle eşleşen teklif yok.",
+    "columns": {
+      "quoteNumber": "Teklif No",
+      "title": "Başlık",
+      "companyContact": "Firma / Kişi",
+      "deal": "Fırsat",
+      "status": "Durum",
+      "total": "Toplam",
+      "validUntil": "Geçerlilik",
+      "items": "Kalem",
+      "actions": "İşlemler"
+    }
+  },
+  "deleteModal": {
+    "title": "Teklifi sil",
+    "description": "Bu işlem geri alınamaz. Teklif kalıcı olarak silinecek.",
+    "confirmText": "<bold>{{number}} — {{title}}</bold> adlı teklifi silmek istediğinize emin misiniz?"
+  },
+  "statusModal": {
+    "title": "Teklif durumunu değiştir",
+    "newStatusLabel": "Yeni Durum",
+    "reasonLabel": "Gerekçe (opsiyonel)"
+  },
+  "form": {
+    "titleCreate": "Yeni Teklif",
+    "cardTitleEdit": "{{number}} — Düzenle",
+    "loadError": "Teklif yüklenirken bir hata oluştu.",
+    "lockedFieldHint": "Gönderildikten sonra değiştirilemez.",
+    "contactNone": "Kişi yok",
+    "priceListLabel": "Fiyat Listesi",
+    "priceListDefaultOption": "(Varsayılan fiyat listesi)",
+    "priceListDefaultSuffix": "{{name}} (varsayılan)",
+    "itemsTitle": "Kalemler",
+    "itemsLockedHint": "Tutarı etkilediği için salt okunur — değişiklik revizyon gerektirir.",
+    "discountTitle": "İndirim",
+    "discountLockedHint": "Gönderildikten sonra değiştirilemez.",
+    "discountTypeLabel": "İndirim Tipi",
+    "discountAmountOption": "Sabit Tutar",
+    "discountPercentOption": "Yüzde",
+    "discountValueLabel": "İndirim Değeri",
+    "totalsTitle": "Toplamlar",
+    "validation": {
+      "titleRequired": "Teklif başlığı zorunludur."
+    },
+    "lockedBanner": {
+      "statusText": "Bu teklif \"{{status}}\" durumunda. <bold>Değiştirilemez:</bold> kalemler, indirim, firma, kişi. <bold>Düzenlenebilir:</bold> başlık, fırsat, geçerlilik tarihi, notlar, şartlar — bunlar yalnızca sunum/idari bilgidir, teklifin tutarını etkilemez ve normal \"Kaydet\" ile kaydedilir.",
+      "revisableHint": "Kalemleri veya indirimi değiştirmeniz gerekiyorsa yeni bir revizyon oluşturun.",
+      "notRevisableHint": "Bu teklif kabul edildiği için revizyon oluşturulamaz (kabul edilmiş bir taahhüt geri alınamaz) — tutarı etkileyen bir değişiklik gerekiyorsa bağımsız yeni bir teklif açın."
+    },
+    "priceListChangeModal": {
+      "title": "Fiyat listesi değişti",
+      "description": "Ürün bazlı mevcut kalemlerin fiyatlarını yeni fiyat listesine göre de güncellemek ister misiniz? Serbest (ürünsüz) kalemler bu işlemden etkilenmez. Güncellemezseniz mevcut kalemler eski fiyatlarıyla kalır, yalnızca bundan sonra eklenen ürünler yeni listeyi kullanır.",
+      "keepPrices": "Hayır, mevcut fiyatları koru",
+      "updatePrices": "Evet, güncelle",
+      "note": "Bu işlem geri alınamaz; ancak kaydetmeden formdan çıkarsanız değişiklik uygulanmaz.",
+      "pricesUpdated": "Ürün bazlı kalemlerin fiyatları yeni listeye göre güncellendi."
+    }
+  },
+  "itemsEditor": {
+    "emptyMessage": "Henüz kalem eklenmedi.",
+    "emptyHint": "Aşağıdan ürün arayarak ya da serbest kalem ekleyerek başlayın.",
+    "columns": {
+      "order": "Sıra",
+      "item": "Kalem",
+      "quantity": "Miktar",
+      "unitPrice": "Birim Fiyat",
+      "discountPercent": "İndirim %",
+      "taxRate": "KDV %",
+      "lineTotal": "Satır Toplamı",
+      "actions": "İşlemler"
+    },
+    "moveUp": "Yukarı taşı",
+    "moveDown": "Aşağı taşı",
+    "nameLabel": "Kalem adı",
+    "namePlaceholder": "Kalem adı",
+    "descriptionLabel": "Kalem açıklaması",
+    "descriptionPlaceholder": "Açıklama (opsiyonel)",
+    "quantityLabel": "Miktar",
+    "unitPriceLabel": "Birim fiyat",
+    "discountPercentLabel": "Kalem indirim yüzdesi",
+    "taxRateLabel": "KDV oranı",
+    "removeItem": "Kalemi sil",
+    "addProductLabel": "Ürün Ekle",
+    "addProductPlaceholder": "Ürün ara ve ekle...",
+    "addFreeItem": "Serbest Kalem Ekle"
+  },
+  "totals": {
+    "calculating": "Hesaplanıyor…",
+    "subtotal": "Ara Toplam (KDV Hariç)",
+    "discountRow": "İndirim ({{label}})",
+    "discountPercent": "{{value}} indirim",
+    "discountFixed": "Sabit tutar indirim",
+    "taxTotal": "KDV Toplamı",
+    "taxBreakdownTitle": "KDV Matrah Özeti",
+    "taxBreakdownColumns": {
+      "rate": "Oran",
+      "net": "Net",
+      "discountShare": "İndirim Payı",
+      "base": "Matrah",
+      "tax": "KDV"
+    },
+    "grandTotal": "Genel Toplam"
+  },
+  "detail": {
+    "revisionNoteWithParent": "Bu, <link>{{quoteNumber}}</link> teklifinin {{revision}}. revizyonudur.",
+    "revisionNoteNoParent": "Bu, ebeveyn teklifin {{revision}}. revizyonudur.",
+    "siblingsLabel": "Bu teklifin diğer revizyonları:",
+    "revisionBadge": "Revizyon {{revision}}",
+    "loadError": "Teklif yüklenirken bir hata oluştu.",
+    "expiredSuffix": " (süresi doldu)",
+    "itemsCount_one": "{{count}} kalem",
+    "itemsCount_other": "{{count}} kalem",
+    "itemsTable": {
+      "columns": {
+        "position": "#",
+        "item": "Kalem",
+        "quantity": "Miktar",
+        "unitPrice": "Birim Fiyat",
+        "discountPercent": "İndirim %",
+        "taxRate": "KDV %",
+        "lineTotal": "Satır Toplamı"
+      },
+      "empty": "Bu teklifte henüz kalem yok."
+    },
+    "notesTermsTitle": "Notlar ve Şartlar",
+    "pdfPreviewTitle": "PDF Önizleme",
+    "pdfPreview": {
+      "iframeTitle": "Teklif PDF Önizleme",
+      "error": "Teklif PDF'i yüklenemedi: {{message}}",
+      "errorHint": "Yukarıdaki \"Yeni Sekmede Aç\" bağlantısını kullanarak PDF'i doğrudan açabilirsiniz."
+    }
+  },
+  "companyCombobox": {
+    "label": "Firma",
+    "placeholder": "Firma ara...",
+    "clearAria": "Firma seçimini temizle",
+    "clearOption": "Firma yok / temizle",
+    "loading": "Yükleniyor…",
+    "empty": "Sonuç bulunamadı"
+  },
+  "dealCombobox": {
+    "label": "Fırsat",
+    "placeholder": "Fırsat ara...",
+    "clearAria": "Fırsat seçimini temizle",
+    "clearOption": "Fırsat yok / temizle",
+    "loading": "Yükleniyor…",
+    "empty": "Sonuç bulunamadı"
+  },
+  "toast": {
+    "created": "Teklif oluşturuldu.",
+    "updated": "Teklif güncellendi.",
+    "deleted": "Teklif silindi.",
+    "sent": "Teklif gönderildi.",
+    "statusChanged": "Teklif durumu güncellendi.",
+    "revised": "Revizyon oluşturuldu: {{number}}"
+  }
+}

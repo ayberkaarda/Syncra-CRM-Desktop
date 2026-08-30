@@ -1,0 +1,6 @@
+{
+  "convertedTooltip": "Ursprünglicher Betrag: {{amount}} (Kurs vom {{date}})",
+  "unavailable": "Kein aktueller Kurs für {{currency}}; der Betrag wird in seiner eigenen Währung angezeigt.",
+  "stale_one": "Der verwendete Kurs ist möglicherweise {{count}} Tag alt und nicht aktuell.",
+  "stale_other": "Der verwendete Kurs ist möglicherweise {{count}} Tage alt und nicht aktuell."
+}

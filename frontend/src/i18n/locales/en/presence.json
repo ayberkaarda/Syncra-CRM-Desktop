@@ -1,0 +1,14 @@
+{
+  "trigger": {
+    "aria": "Online users ({{count}})"
+  },
+  "panel": {
+    "aria": "Online users",
+    "title": "Online ({{count}})",
+    "staleWarning": "This list may be out of date."
+  },
+  "empty": {
+    "title": "No one is online",
+    "description": "No one else is currently connected."
+  }
+}

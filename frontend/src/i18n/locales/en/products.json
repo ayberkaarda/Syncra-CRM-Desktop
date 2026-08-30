@@ -1,0 +1,107 @@
+{
+  "list": {
+    "breadcrumbHome": "Home",
+    "breadcrumbCurrent": "Products",
+    "title": "Products",
+    "subtitle_one": "{{count}} product",
+    "subtitle_other": "{{count}} products",
+    "priceListsLink": "Price Lists",
+    "newProduct": "New Product",
+    "searchPlaceholder": "Search product name or SKU...",
+    "searchAria": "Search products",
+    "categoryFilterAria": "Category filter",
+    "statusFilterAria": "Status filter",
+    "tagFilterAria": "Tag filter",
+    "allCategories": "All categories",
+    "allStatuses": "All statuses",
+    "allTags": "All tags",
+    "minPricePlaceholder": "Min price",
+    "minPriceAria": "Minimum price",
+    "maxPricePlaceholder": "Max price",
+    "maxPriceAria": "Maximum price",
+    "inStockOnly": "In stock only",
+    "loadError": "Something went wrong while loading products.",
+    "retry": "Try again",
+    "empty": {
+      "title": "No products found",
+      "description": "No product matches your search or filter criteria."
+    },
+    "columns": {
+      "product": "Product",
+      "category": "Category",
+      "unitPrice": "Unit Price",
+      "taxRate": "VAT %",
+      "unit": "Unit",
+      "stock": "Stock",
+      "status": "Status",
+      "tags": "Tags",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "deleteModal": {
+      "title": "Delete product",
+      "description": "This action cannot be undone. The product will be permanently deleted.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "confirmText": "Are you sure you want to delete <bold>{{name}}</bold>?"
+    }
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "form": {
+    "titleCreate": "New Product",
+    "titleEdit": "Edit Product",
+    "cancel": "Cancel",
+    "submitCreate": "Create",
+    "submitEdit": "Save",
+    "nameLabel": "Product Name",
+    "skuLabel": "SKU",
+    "skuHint": "Can be left blank; if provided, it must be unique.",
+    "descriptionLabel": "Description",
+    "categoryLabel": "Category",
+    "categoryPlaceholder": "Choose an existing category or type a new one",
+    "categoryHint": "You can pick from the list or freely type a new category.",
+    "unitPriceLabel": "Unit Price",
+    "currencyLabel": "Currency",
+    "currency": {
+      "try": "TRY — Turkish Lira",
+      "usd": "USD — US Dollar",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — British Pound"
+    },
+    "taxRateLabel": "VAT %",
+    "unitLabel": "Unit",
+    "stockQuantityLabel": "Stock Quantity",
+    "stockQuantityHint": "Leave blank if stock isn't tracked for this product.",
+    "activeLabel": "Active",
+    "validation": {
+      "nameRequired": "Product name is required.",
+      "unitPriceRequired": "Unit price is required.",
+      "unitPriceInvalid": "Unit price must be a valid, non-negative number.",
+      "taxRateRange": "VAT rate must be between 0 and 100.",
+      "stockQuantityInvalid": "Stock quantity must be a non-negative whole number."
+    }
+  },
+  "customFields": {
+    "sectionTitle": "Custom Fields",
+    "selectPlaceholder": "Select…",
+    "noOptions": "No options defined."
+  },
+  "tagSelect": {
+    "label": "Tags",
+    "placeholder": "Select tags...",
+    "loading": "Loading…",
+    "empty": "No tags found",
+    "removeAria": "Remove {{name}} tag"
+  },
+  "toast": {
+    "created": "Product created.",
+    "updated": "Product updated.",
+    "deleted": "Product deleted."
+  }
+}

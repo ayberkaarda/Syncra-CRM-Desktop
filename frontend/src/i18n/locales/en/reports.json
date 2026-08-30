@@ -1,0 +1,102 @@
+{
+  "breadcrumb": { "home": "Home", "reports": "Reports" },
+  "page": {
+    "title": "Reports",
+    "subtitle": "Review sales performance, user and source distribution"
+  },
+  "tabs": {
+    "salesPerformance": "Sales Performance",
+    "userPerformance": "User Performance",
+    "sourceAnalysis": "Source Analysis",
+    "conversion": "Conversion"
+  },
+  "dateRange": {
+    "presets": {
+      "today": "Today",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "last90": "Last 90 days"
+    },
+    "menuAria": "Date range",
+    "fromLabel": "Start",
+    "toLabel": "End"
+  },
+  "export": {
+    "button": "Export",
+    "menuAria": "Export format",
+    "csv": "CSV",
+    "excel": "Excel"
+  },
+  "groupBy": { "day": "Day", "week": "Week", "month": "Month" },
+  "noRecords": "No records found.",
+  "salesPerformance": {
+    "userFilterAria": "User filter",
+    "allUsers": "All users",
+    "emptyTitle": "No sales data for this range",
+    "emptyDescription": "No record matches the selected filters.",
+    "tooltipWonLost": "{{won}} won · {{lost}} lost",
+    "columns": {
+      "period": "Period",
+      "revenue": "Revenue",
+      "won": "Won",
+      "lost": "Lost",
+      "deals": "Total Deals"
+    },
+    "totalsRow": "Total"
+  },
+  "userPerformance": {
+    "unknownUser": "Unknown user",
+    "emptyTitle": "No user performance data for this range",
+    "emptyDescription": "No assigned deal was found in the selected date range.",
+    "tooltipWonConversion": "{{won}} won · {{rate}}% conversion",
+    "columns": {
+      "user": "User",
+      "revenue": "Revenue",
+      "won": "Won",
+      "lost": "Lost",
+      "openDeals": "Open Deals",
+      "openDealsValue": "Open Deals Value",
+      "conversion": "Conversion",
+      "avgDeal": "Avg. Deal",
+      "activities": "Activities"
+    }
+  },
+  "sourceAnalysis": {
+    "unknownSource": "Unknown",
+    "emptyTitle": "No source data for this range",
+    "emptyDescription": "No lead with a marked source was found in the selected date range.",
+    "tooltipLeadsConversion": "{{leads}} leads · {{rate}}% conversion",
+    "columns": {
+      "source": "Source",
+      "leads": "Leads",
+      "converted": "Converted",
+      "conversion": "Conversion",
+      "revenue": "Revenue"
+    }
+  },
+  "conversion": {
+    "totalLeads": "Total Leads",
+    "converted": "Converted",
+    "conversionRate": "Conversion Rate",
+    "avgConversionTime": "Avg. Conversion Time",
+    "avgConversionTimeValue": "{{days}} days",
+    "emptyTitle": "No conversion data for this range",
+    "emptyDescription": "No lead was created in the selected date range.",
+    "tooltipShare": "{{value}}% share",
+    "columns": {
+      "status": "Status",
+      "count": "Lead Count"
+    }
+  },
+  "rateInfo": {
+    "open": "Open deals were converted to {{currency}} using the rate as of {{date}}.",
+    "closedFrozen": "Closed deals are frozen at their closing-day rate (a stable figure).",
+    "closedConverted": "Closed deals are frozen at their closing-day rate; for display they were converted to {{currency}} using the rate as of {{date}} (this figure may change with the current rate).",
+    "stale_one": "The exchange rate used is {{count}} day old and may be out of date.",
+    "stale_other": "The exchange rate used is {{count}} days old and may be out of date.",
+    "unconvertedOpen_one": "{{count}} currency could not be converted because no rate was found; it counts as 0 in the totals.",
+    "unconvertedOpen_other": "{{count}} currencies could not be converted because no rate was found; they count as 0 in the totals.",
+    "unconvertedClosed_one": "{{count}} closed deal has no frozen amount and is excluded from revenue.",
+    "unconvertedClosed_other": "{{count}} closed deals have no frozen amount and are excluded from revenue."
+  }
+}

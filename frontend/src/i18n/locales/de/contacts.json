@@ -1,0 +1,116 @@
+{
+  "breadcrumb": {
+    "home": "Startseite",
+    "contacts": "Kontakte"
+  },
+  "list": {
+    "title": "Kontakte",
+    "subtitle_one": "{{count}} Kontakt",
+    "subtitle_other": "{{count}} Kontakte",
+    "createButton": "Neuer Kontakt",
+    "error": "Beim Laden der Kontakte ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen",
+    "empty": {
+      "title": "Keine Kontakte gefunden",
+      "description": "Kein Kontakt entspricht Ihren Such- oder Filterkriterien."
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Kontakte suchen...",
+    "searchAria": "Kontakte suchen",
+    "companyAria": "Unternehmensfilter",
+    "ownerAria": "Inhaberfilter",
+    "cityPlaceholder": "Stadt",
+    "cityAria": "Stadtfilter",
+    "tagAria": "Tag-Filter",
+    "primaryAria": "Primärfilter",
+    "fromDateAria": "Startdatum",
+    "toDateAria": "Enddatum",
+    "allCompanies": "Alle Unternehmen",
+    "allOwners": "Alle Inhaber",
+    "allTags": "Alle Tags",
+    "all": "Alle",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "table": {
+    "contact": "Kontakt",
+    "company": "Unternehmen",
+    "email": "E-Mail",
+    "phone": "Telefon",
+    "city": "Stadt",
+    "owner": "Inhaber",
+    "tags": "Tags",
+    "primary": "Primär",
+    "actions": "Aktionen",
+    "detail": "Details",
+    "edit": "Bearbeiten",
+    "delete": "Löschen"
+  },
+  "deleteModal": {
+    "title": "Kontakt löschen",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Der Kontakt wird endgültig gelöscht.",
+    "confirm": "Möchten Sie <strong>{{name}}</strong> wirklich löschen?"
+  },
+  "company": {
+    "label": "Unternehmen",
+    "placeholder": "Unternehmen suchen...",
+    "clearAria": "Unternehmensauswahl löschen",
+    "clearOption": "Kein Unternehmen",
+    "loading": "Lädt…",
+    "noResults": "Keine Ergebnisse gefunden"
+  },
+  "tags": {
+    "label": "Tags",
+    "removeAria": "Tag {{name}} entfernen",
+    "select": "Tags auswählen",
+    "loading": "Lädt…",
+    "notFound": "Keine Tags gefunden."
+  },
+  "form": {
+    "validation": {
+      "firstNameRequired": "Vorname ist erforderlich.",
+      "lastNameRequired": "Nachname ist erforderlich."
+    },
+    "selectOwner": "Kein Inhaber ausgewählt",
+    "titleEdit": "Kontakt bearbeiten",
+    "titleCreate": "Neuer Kontakt",
+    "cancel": "Abbrechen",
+    "submitEdit": "Speichern",
+    "submitCreate": "Erstellen",
+    "fields": {
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "mobile": "Mobil",
+      "position": "Position",
+      "owner": "Inhaber",
+      "isPrimary": "Primärer Kontakt",
+      "address": "Adresse",
+      "city": "Stadt",
+      "country": "Land",
+      "notes": "Notizen"
+    },
+    "primaryWarning": "Dieser Kontakt wird als primärer Ansprechpartner des ausgewählten Unternehmens markiert.",
+    "customFields": "Benutzerdefinierte Felder"
+  },
+  "detail": {
+    "breadcrumbError": "Fehler",
+    "loadError": "Beim Laden des Kontakts ist ein Fehler aufgetreten.",
+    "title": "Kontaktübersicht",
+    "primaryBadge": "Primär",
+    "dealsBadge_one": "{{count}} Verkaufschance",
+    "dealsBadge_other": "{{count}} Verkaufschancen",
+    "ticketsBadge_one": "{{count}} Ticket",
+    "ticketsBadge_other": "{{count}} Tickets",
+    "cityCountry": "Stadt / Land",
+    "timelineTitle": "Zeitleiste",
+    "timelineEmptyDescription": "Für diesen Kontakt gibt es noch keine anzuzeigenden Interaktionen."
+  },
+  "toast": {
+    "created": "Kontakt erstellt.",
+    "updated": "Kontakt aktualisiert.",
+    "deleted": "Kontakt gelöscht."
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "contacts": "Contacts"
+  },
+  "list": {
+    "title": "Contacts",
+    "subtitle_one": "{{count}} contact",
+    "subtitle_other": "{{count}} contacts",
+    "createButton": "New Contact",
+    "error": "An error occurred while loading contacts.",
+    "retry": "Retry",
+    "empty": {
+      "title": "No contacts found",
+      "description": "No contacts match your search or filter criteria."
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Search contacts...",
+    "searchAria": "Search contacts",
+    "companyAria": "Company filter",
+    "ownerAria": "Owner filter",
+    "cityPlaceholder": "City",
+    "cityAria": "City filter",
+    "tagAria": "Tag filter",
+    "primaryAria": "Primary filter",
+    "fromDateAria": "Start date",
+    "toDateAria": "End date",
+    "allCompanies": "All companies",
+    "allOwners": "All owners",
+    "allTags": "All tags",
+    "all": "All",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "table": {
+    "contact": "Contact",
+    "company": "Company",
+    "email": "Email",
+    "phone": "Phone",
+    "city": "City",
+    "owner": "Owner",
+    "tags": "Tags",
+    "primary": "Primary",
+    "actions": "Actions",
+    "detail": "Details",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "deleteModal": {
+    "title": "Delete contact",
+    "description": "This action cannot be undone. The contact will be permanently deleted.",
+    "confirm": "Are you sure you want to delete <strong>{{name}}</strong>?"
+  },
+  "company": {
+    "label": "Company",
+    "placeholder": "Search companies...",
+    "clearAria": "Clear company selection",
+    "clearOption": "No company",
+    "loading": "Loading…",
+    "noResults": "No results found"
+  },
+  "tags": {
+    "label": "Tags",
+    "removeAria": "Remove {{name}} tag",
+    "select": "Select tags",
+    "loading": "Loading…",
+    "notFound": "No tags found."
+  },
+  "form": {
+    "validation": {
+      "firstNameRequired": "First name is required.",
+      "lastNameRequired": "Last name is required."
+    },
+    "selectOwner": "No owner selected",
+    "titleEdit": "Edit Contact",
+    "titleCreate": "New Contact",
+    "cancel": "Cancel",
+    "submitEdit": "Save",
+    "submitCreate": "Create",
+    "fields": {
+      "firstName": "First Name",
+      "lastName": "Last Name",
+      "email": "Email",
+      "phone": "Phone",
+      "mobile": "Mobile",
+      "position": "Position",
+      "owner": "Owner",
+      "isPrimary": "Primary contact",
+      "address": "Address",
+      "city": "City",
+      "country": "Country",
+      "notes": "Notes"
+    },
+    "primaryWarning": "This contact will be marked as the primary contact for the selected company.",
+    "customFields": "Custom Fields"
+  },
+  "detail": {
+    "breadcrumbError": "Error",
+    "loadError": "An error occurred while loading the contact.",
+    "title": "Contact Summary",
+    "primaryBadge": "Primary",
+    "dealsBadge_one": "{{count}} deal",
+    "dealsBadge_other": "{{count}} deals",
+    "ticketsBadge_one": "{{count}} ticket",
+    "ticketsBadge_other": "{{count}} tickets",
+    "cityCountry": "City / Country",
+    "timelineTitle": "Timeline",
+    "timelineEmptyDescription": "There are no interactions to show for this contact yet."
+  },
+  "toast": {
+    "created": "Contact created.",
+    "updated": "Contact updated.",
+    "deleted": "Contact deleted."
+  }
+}

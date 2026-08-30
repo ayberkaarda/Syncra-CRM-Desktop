@@ -1,0 +1,76 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "activities": "Activities"
+  },
+  "list": {
+    "title": "Activities",
+    "subtitle_one": "{{count}} activity",
+    "subtitle_other": "{{count}} activities",
+    "createButton": "Log Activity",
+    "error": "Something went wrong while loading activities.",
+    "retry": "Retry",
+    "empty": {
+      "title": "No activities found",
+      "description": "No activity matches your search or filter criteria."
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Search subject...",
+    "searchAria": "Search activities",
+    "typeAria": "Type filter",
+    "userAria": "User filter",
+    "recordTypeAria": "Related record type filter",
+    "fromDateAria": "Start date",
+    "toDateAria": "End date",
+    "allTypes": "All types",
+    "allUsers": "All users",
+    "allRecordTypes": "All record types"
+  },
+  "table": {
+    "type": "Type",
+    "subject": "Subject",
+    "relatedRecord": "Related Record",
+    "user": "User",
+    "occurredAt": "Occurred",
+    "duration": "Duration",
+    "outcome": "Outcome",
+    "actions": "Actions",
+    "durationValue_one": "{{count}} min",
+    "durationValue_other": "{{count}} min",
+    "edit": "Edit",
+    "editForbidden": "You aren't the author of this activity, so you can't edit it.",
+    "delete": "Delete"
+  },
+  "form": {
+    "titleCreate": "Log Activity",
+    "titleEdit": "Edit Activity",
+    "cancel": "Cancel",
+    "submitCreate": "Create",
+    "submitEdit": "Save",
+    "fields": {
+      "type": "Type",
+      "subject": "Subject",
+      "occurredAt": "Occurred At",
+      "durationMinutes": "Duration (minutes)",
+      "outcome": "Outcome",
+      "body": "Description"
+    },
+    "validation": {
+      "subjectRequired": "Subject is required.",
+      "occurredAtRequired": "Occurred date is required.",
+      "occurredAtFuture": "The activity date can't be in the future.",
+      "durationRange": "Duration must be between 0 and 1440 minutes."
+    }
+  },
+  "deleteModal": {
+    "title": "Delete activity",
+    "description": "This action cannot be undone. The activity will be permanently deleted.",
+    "confirm": "Are you sure you want to delete the activity <strong>{{subject}}</strong>?"
+  },
+  "toast": {
+    "created": "Activity logged.",
+    "updated": "Activity updated.",
+    "deleted": "Activity deleted."
+  }
+}

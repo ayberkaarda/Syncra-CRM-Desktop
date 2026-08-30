@@ -1,0 +1,146 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "logs": "Logs"
+  },
+  "page": {
+    "title": "Logs",
+    "subtitle_one": "{{count}} record",
+    "subtitle_other": "{{count}} records"
+  },
+  "tabs": {
+    "sessions": "Sessions",
+    "pageVisits": "Page Visits",
+    "activities": "Actions",
+    "live": "Live Stream"
+  },
+  "filterBar": {
+    "searchPlaceholder": "Search...",
+    "searchAria": "Search logs",
+    "userFilterAria": "User filter",
+    "allUsers": "All users",
+    "fromDateAria": "Start date",
+    "toDateAria": "End date",
+    "eventFilterAria": "Event type filter",
+    "subjectTypeFilterAria": "Entity type filter",
+    "allEvents": "All events",
+    "allSubjectTypes": "All entities"
+  },
+  "sessions": {
+    "loadError": "An error occurred while loading the session records.",
+    "emptyTitle": "No session records found",
+    "emptyDescription": "No session record matches your search or filter criteria.",
+    "columns": {
+      "user": "User",
+      "event": "Event",
+      "ip": "IP",
+      "device": "Device / Browser / Platform",
+      "loginAt": "Login",
+      "logoutAt": "Logout",
+      "duration": "Duration"
+    }
+  },
+  "pageVisits": {
+    "loadError": "An error occurred while loading the page visit records.",
+    "emptyTitle": "No page visit records found",
+    "emptyDescription": "No page visit matches your search or filter criteria.",
+    "columns": {
+      "user": "User",
+      "page": "Page",
+      "path": "Path",
+      "enteredAt": "Entered",
+      "duration": "Duration",
+      "ip": "IP"
+    }
+  },
+  "activities": {
+    "loadError": "An error occurred while loading the action records.",
+    "emptyTitle": "No action records found",
+    "emptyDescription": "No action record matches your search or filter criteria.",
+    "columns": {
+      "user": "User",
+      "event": "Event",
+      "subject": "Entity",
+      "date": "Date",
+      "detail": "Detail"
+    },
+    "detailButton": "Detail"
+  },
+  "detailModal": {
+    "noDetailTitle": "There is no change detail for this record.",
+    "responseTruncatedWarning": "This record's change data may have been partially truncated due to the size limit.",
+    "fieldTruncatedNote": "(truncated at 1024 characters)",
+    "columns": {
+      "field": "Field",
+      "old": "Old",
+      "new": "New"
+    }
+  },
+  "liveStream": {
+    "recordCount_one": "{{count}} record (up to 100 kept)",
+    "recordCount_other": "{{count}} records (up to 100 kept)",
+    "connection": {
+      "connected": "Connected",
+      "connecting": "Connecting",
+      "disconnected": "Disconnected"
+    },
+    "pause": "Pause",
+    "resume": "Resume",
+    "disconnectedBanner": "The real-time connection is currently down — new records will keep streaming once it reconnects.",
+    "emptyTitle": "No live records yet",
+    "emptyDescription": "When a new action happens in the system, it will appear here instantly."
+  },
+  "onlineUsers": {
+    "title": "Online Users",
+    "count_one": "{{count}} person",
+    "count_other": "{{count}} people",
+    "loadError": "The list of online users cannot be displayed right now.",
+    "staleWarning": "The list may not be up to date.",
+    "emptyTitle": "No users online",
+    "emptyDescription": "No one else is currently connected."
+  },
+  "exportMenu": {
+    "button": "Export",
+    "menuAria": "Export format",
+    "csv": "CSV",
+    "excel": "Excel"
+  },
+  "duration": {
+    "hoursShort": "{{count}}h",
+    "minutesShort": "{{count}}m",
+    "secondsShort": "{{count}}s"
+  },
+  "enums": {
+    "sessionEvent": {
+      "login": "Login",
+      "logout": "Logout",
+      "failed_login": "Failed Login",
+      "locked_out": "Account Locked"
+    },
+    "activityEvent": {
+      "created": "Created",
+      "updated": "Updated",
+      "deleted": "Deleted",
+      "restored": "Restored"
+    },
+    "subjectType": {
+      "lead": "Lead",
+      "contact": "Contact",
+      "company": "Company",
+      "deal": "Deal",
+      "task": "Task",
+      "activity": "Activity",
+      "ticket": "Ticket",
+      "quote": "Quote",
+      "product": "Product",
+      "user": "User"
+    },
+    "context": {
+      "system": "System",
+      "console": "Console",
+      "queue": "Queue",
+      "seed": "Seeding",
+      "test": "Test"
+    }
+  }
+}

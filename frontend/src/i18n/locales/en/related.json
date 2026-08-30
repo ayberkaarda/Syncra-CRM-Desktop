@@ -1,0 +1,26 @@
+{
+  "panel": {
+    "title": "Related Records",
+    "moreNotShown_one": "+{{count}} more record",
+    "moreNotShown_other": "+{{count}} more records"
+  },
+  "groups": {
+    "company": "Company",
+    "contact": "Contact",
+    "deal": "Deal",
+    "convertedContact": "Converted Contact",
+    "convertedCompany": "Converted Company",
+    "convertedDeal": "Converted Deal"
+  },
+  "empty": {
+    "deals": "No linked deals.",
+    "quotes": "No linked quotes.",
+    "tickets": "No linked tickets.",
+    "company": "No linked company.",
+    "contact": "No linked contact.",
+    "deal": "No linked deal.",
+    "convertedContact": "This lead has not been converted to a contact yet.",
+    "convertedCompany": "This lead has not been converted to a company yet.",
+    "convertedDeal": "No deal was created in this conversion."
+  }
+}

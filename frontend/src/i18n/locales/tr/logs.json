@@ -1,0 +1,146 @@
+{
+  "breadcrumb": {
+    "home": "Anasayfa",
+    "logs": "Loglar"
+  },
+  "page": {
+    "title": "Loglar",
+    "subtitle_one": "{{count}} kayıt",
+    "subtitle_other": "{{count}} kayıt"
+  },
+  "tabs": {
+    "sessions": "Oturum",
+    "pageVisits": "Gezinme",
+    "activities": "Aksiyon",
+    "live": "Canlı Akış"
+  },
+  "filterBar": {
+    "searchPlaceholder": "Ara...",
+    "searchAria": "Loglarda ara",
+    "userFilterAria": "Kullanıcı filtresi",
+    "allUsers": "Tüm kullanıcılar",
+    "fromDateAria": "Başlangıç tarihi",
+    "toDateAria": "Bitiş tarihi",
+    "eventFilterAria": "Olay tipi filtresi",
+    "subjectTypeFilterAria": "Varlık tipi filtresi",
+    "allEvents": "Tüm olaylar",
+    "allSubjectTypes": "Tüm varlıklar"
+  },
+  "sessions": {
+    "loadError": "Oturum kayıtları yüklenirken bir hata oluştu.",
+    "emptyTitle": "Oturum kaydı bulunamadı",
+    "emptyDescription": "Arama veya filtre kriterlerinizle eşleşen oturum kaydı yok.",
+    "columns": {
+      "user": "Kullanıcı",
+      "event": "Olay",
+      "ip": "IP",
+      "device": "Cihaz / Tarayıcı / Platform",
+      "loginAt": "Giriş",
+      "logoutAt": "Çıkış",
+      "duration": "Süre"
+    }
+  },
+  "pageVisits": {
+    "loadError": "Gezinme kayıtları yüklenirken bir hata oluştu.",
+    "emptyTitle": "Gezinme kaydı bulunamadı",
+    "emptyDescription": "Arama veya filtre kriterlerinizle eşleşen sayfa ziyareti yok.",
+    "columns": {
+      "user": "Kullanıcı",
+      "page": "Sayfa",
+      "path": "Yol",
+      "enteredAt": "Giriş",
+      "duration": "Süre",
+      "ip": "IP"
+    }
+  },
+  "activities": {
+    "loadError": "Aksiyon kayıtları yüklenirken bir hata oluştu.",
+    "emptyTitle": "Aksiyon kaydı bulunamadı",
+    "emptyDescription": "Arama veya filtre kriterlerinizle eşleşen aksiyon kaydı yok.",
+    "columns": {
+      "user": "Kullanıcı",
+      "event": "Olay",
+      "subject": "Varlık",
+      "date": "Tarih",
+      "detail": "Detay"
+    },
+    "detailButton": "Detay"
+  },
+  "detailModal": {
+    "noDetailTitle": "Bu kayıt için değişiklik ayrıntısı bulunmuyor.",
+    "responseTruncatedWarning": "Bu kaydın değişiklik verisi boyut sınırı nedeniyle kısmen kırpılmış olabilir.",
+    "fieldTruncatedNote": "(1024 karakterde kırpıldı)",
+    "columns": {
+      "field": "Alan",
+      "old": "Eski",
+      "new": "Yeni"
+    }
+  },
+  "liveStream": {
+    "recordCount_one": "{{count}} kayıt (en fazla 100 tutulur)",
+    "recordCount_other": "{{count}} kayıt (en fazla 100 tutulur)",
+    "connection": {
+      "connected": "Bağlı",
+      "connecting": "Bağlanıyor",
+      "disconnected": "Bağlantı yok"
+    },
+    "pause": "Duraklat",
+    "resume": "Devam Et",
+    "disconnectedBanner": "Gerçek zamanlı bağlantı şu anda kopuk — yeni kayıtlar bağlantı kurulunca akmaya devam edecek.",
+    "emptyTitle": "Henüz canlı kayıt yok",
+    "emptyDescription": "Sistemde yeni bir aksiyon gerçekleştiğinde burada anlık olarak görünecek."
+  },
+  "onlineUsers": {
+    "title": "Çevrimiçi Kullanıcılar",
+    "count_one": "{{count}} kişi",
+    "count_other": "{{count}} kişi",
+    "loadError": "Çevrimiçi kullanıcı listesi şu anda görüntülenemiyor.",
+    "staleWarning": "Liste güncel olmayabilir.",
+    "emptyTitle": "Çevrimiçi kullanıcı yok",
+    "emptyDescription": "Şu anda başka kimse bağlı değil."
+  },
+  "exportMenu": {
+    "button": "Dışa Aktar",
+    "menuAria": "Dışa aktarma biçimi",
+    "csv": "CSV",
+    "excel": "Excel"
+  },
+  "duration": {
+    "hoursShort": "{{count}} sa",
+    "minutesShort": "{{count}} dk",
+    "secondsShort": "{{count}} sn"
+  },
+  "enums": {
+    "sessionEvent": {
+      "login": "Giriş",
+      "logout": "Çıkış",
+      "failed_login": "Başarısız Giriş",
+      "locked_out": "Hesap Kilitlendi"
+    },
+    "activityEvent": {
+      "created": "Oluşturuldu",
+      "updated": "Güncellendi",
+      "deleted": "Silindi",
+      "restored": "Geri Yüklendi"
+    },
+    "subjectType": {
+      "lead": "Aday",
+      "contact": "Kişi",
+      "company": "Firma",
+      "deal": "Fırsat",
+      "task": "Görev",
+      "activity": "Aktivite",
+      "ticket": "Talep",
+      "quote": "Teklif",
+      "product": "Ürün",
+      "user": "Kullanıcı"
+    },
+    "context": {
+      "system": "Sistem",
+      "console": "Konsol",
+      "queue": "Kuyruk",
+      "seed": "Tohumlama",
+      "test": "Test"
+    }
+  }
+}

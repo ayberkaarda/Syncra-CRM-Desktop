@@ -1,0 +1,107 @@
+{
+  "list": {
+    "breadcrumbHome": "Startseite",
+    "breadcrumbCurrent": "Produkte",
+    "title": "Produkte",
+    "subtitle_one": "{{count}} Produkt",
+    "subtitle_other": "{{count}} Produkte",
+    "priceListsLink": "Preislisten",
+    "newProduct": "Neues Produkt",
+    "searchPlaceholder": "Produktname oder SKU suchen...",
+    "searchAria": "Produkte durchsuchen",
+    "categoryFilterAria": "Kategoriefilter",
+    "statusFilterAria": "Statusfilter",
+    "tagFilterAria": "Tag-Filter",
+    "allCategories": "Alle Kategorien",
+    "allStatuses": "Alle Status",
+    "allTags": "Alle Tags",
+    "minPricePlaceholder": "Min. Preis",
+    "minPriceAria": "Mindestpreis",
+    "maxPricePlaceholder": "Max. Preis",
+    "maxPriceAria": "Höchstpreis",
+    "inStockOnly": "Nur vorrätige",
+    "loadError": "Beim Laden der Produkte ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen",
+    "empty": {
+      "title": "Keine Produkte gefunden",
+      "description": "Kein Produkt entspricht Ihren Such- oder Filterkriterien."
+    },
+    "columns": {
+      "product": "Produkt",
+      "category": "Kategorie",
+      "unitPrice": "Stückpreis",
+      "taxRate": "MwSt. %",
+      "unit": "Einheit",
+      "stock": "Bestand",
+      "status": "Status",
+      "tags": "Tags",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "delete": "Löschen"
+    },
+    "deleteModal": {
+      "title": "Produkt löschen",
+      "description": "Diese Aktion kann nicht rückgängig gemacht werden. Das Produkt wird dauerhaft gelöscht.",
+      "cancel": "Abbrechen",
+      "confirm": "Löschen",
+      "confirmText": "Möchten Sie das Produkt <bold>{{name}}</bold> wirklich löschen?"
+    }
+  },
+  "status": {
+    "active": "Aktiv",
+    "inactive": "Inaktiv"
+  },
+  "form": {
+    "titleCreate": "Neues Produkt",
+    "titleEdit": "Produkt bearbeiten",
+    "cancel": "Abbrechen",
+    "submitCreate": "Erstellen",
+    "submitEdit": "Speichern",
+    "nameLabel": "Produktname",
+    "skuLabel": "SKU",
+    "skuHint": "Kann leer bleiben; falls angegeben, muss sie eindeutig sein.",
+    "descriptionLabel": "Beschreibung",
+    "categoryLabel": "Kategorie",
+    "categoryPlaceholder": "Vorhandene Kategorie wählen oder neue eingeben",
+    "categoryHint": "Sie können aus der Liste wählen oder frei eine neue Kategorie eingeben.",
+    "unitPriceLabel": "Stückpreis",
+    "currencyLabel": "Währung",
+    "currency": {
+      "try": "TRY — Türkische Lira",
+      "usd": "USD — US-Dollar",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — Britisches Pfund"
+    },
+    "taxRateLabel": "MwSt. %",
+    "unitLabel": "Einheit",
+    "stockQuantityLabel": "Lagerbestand",
+    "stockQuantityHint": "Leer lassen, wenn der Bestand für dieses Produkt nicht verfolgt wird.",
+    "activeLabel": "Aktiv",
+    "validation": {
+      "nameRequired": "Produktname ist erforderlich.",
+      "unitPriceRequired": "Stückpreis ist erforderlich.",
+      "unitPriceInvalid": "Der Stückpreis muss eine gültige, nicht negative Zahl sein.",
+      "taxRateRange": "Der MwSt.-Satz muss zwischen 0 und 100 liegen.",
+      "stockQuantityInvalid": "Der Lagerbestand muss eine nicht negative ganze Zahl sein."
+    }
+  },
+  "customFields": {
+    "sectionTitle": "Benutzerdefinierte Felder",
+    "selectPlaceholder": "Auswählen…",
+    "noOptions": "Keine Optionen definiert."
+  },
+  "tagSelect": {
+    "label": "Tags",
+    "placeholder": "Tags auswählen...",
+    "loading": "Wird geladen…",
+    "empty": "Keine Tags gefunden",
+    "removeAria": "Tag {{name}} entfernen"
+  },
+  "toast": {
+    "created": "Produkt erstellt.",
+    "updated": "Produkt aktualisiert.",
+    "deleted": "Produkt gelöscht."
+  }
+}

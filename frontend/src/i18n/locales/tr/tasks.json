@@ -1,0 +1,115 @@
+{
+  "breadcrumb": { "home": "Anasayfa", "current": "Görevler" },
+  "page": {
+    "title": "Görevler",
+    "countLabel_one": "{{count}} görev",
+    "countLabel_other": "{{count}} görev",
+    "newTask": "Yeni Görev",
+    "viewGroupAria": "Görünüm",
+    "viewList": "Liste",
+    "viewCalendar": "Takvim"
+  },
+  "filters": {
+    "searchPlaceholder": "Görev başlığı ara...",
+    "searchAria": "Görev ara",
+    "statusAria": "Durum filtresi",
+    "priorityAria": "Öncelik filtresi",
+    "assignedAria": "Atanan filtresi",
+    "taskableAria": "İlgili kayıt türü filtresi",
+    "fromAria": "Başlangıç tarihi (vade)",
+    "toAria": "Bitiş tarihi (vade)",
+    "overdueOnly": "Sadece gecikmişler",
+    "allStatuses": "Tüm durumlar",
+    "allPriorities": "Tüm öncelikler",
+    "allAssignees": "Tüm atananlar",
+    "allTaskableTypes": "Tüm kayıt türleri"
+  },
+  "list": {
+    "loadError": "Görevler yüklenirken bir hata oluştu.",
+    "retry": "Tekrar dene",
+    "emptyTitle": "Görev bulunamadı",
+    "emptyDescription": "Arama veya filtre kriterlerinizle eşleşen görev yok."
+  },
+  "table": {
+    "completedAria": "Tamamlandı",
+    "task": "Görev",
+    "priority": "Öncelik",
+    "status": "Durum",
+    "dueDate": "Vade",
+    "assignee": "Atanan",
+    "relatedRecord": "İlgili Kayıt",
+    "actions": "İşlemler"
+  },
+  "row": {
+    "completeAria": "{{title}} tamamlandı",
+    "completeDisabledTitle": "Bu görevin sahibi değilsiniz, tamamlayamazsınız.",
+    "edit": "Düzenle",
+    "editDisabledTitle": "Bu görevin sahibi değilsiniz, düzenleyemezsiniz.",
+    "assign": "Ata",
+    "delete": "Sil"
+  },
+  "calendar": {
+    "prevMonth": "Önceki ay",
+    "nextMonth": "Sonraki ay",
+    "today": "Bugün",
+    "noDueDateNote": "Vadesi olmayan görevler takvimde gösterilmez.",
+    "overflowMore": "+{{count}} daha",
+    "weekday": { "mon": "Pzt", "tue": "Sal", "wed": "Çar", "thu": "Per", "fri": "Cum", "sat": "Cmt", "sun": "Paz" }
+  },
+  "dayModal": {
+    "taskCount_one": "{{count}} görev",
+    "taskCount_other": "{{count}} görev",
+    "empty": "Bu gün için görev yok.",
+    "addTask": "Görev Ekle"
+  },
+  "deleteModal": {
+    "title": "Görevi sil",
+    "description": "Bu işlem geri alınamaz. Görev kalıcı olarak silinecek.",
+    "confirmBody": "<bold>{{title}}</bold> adlı görevi silmek istediğinize emin misiniz?",
+    "confirm": "Sil"
+  },
+  "form": {
+    "createTitle": "Yeni Görev",
+    "editTitle": "Görevi Düzenle",
+    "titleLabel": "Başlık",
+    "descriptionLabel": "Açıklama",
+    "dueDateLabel": "Vade",
+    "reminderLabel": "Hatırlatıcı",
+    "reminderHintNoDueDate": "Önce vade tarihi seçin.",
+    "priorityLabel": "Öncelik",
+    "statusLabel": "Durum",
+    "statusHint": "Tamamlama listedeki hızlı işaretleme ile yapılır.",
+    "assigneeLabel": "Atanan",
+    "create": "Oluştur",
+    "titleRequired": "Başlık zorunludur.",
+    "reminderAfterDue": "Hatırlatıcı, vade tarihinden sonra olamaz."
+  },
+  "common": { "unassigned": "Atanmamış" },
+  "assignModal": { "title": "Görevi Ata", "submit": "Ata" },
+  "relatedPicker": {
+    "typeLabel": "İlgili Kayıt Türü",
+    "noneOption": "İlgili kayıt yok",
+    "searchLabel": "Kayıt Ara",
+    "searchPlaceholder": "Kayıt ara...",
+    "selectTypeFirst": "Önce tür seçin",
+    "clearSelection": "Seçimi temizle",
+    "loading": "Yükleniyor…",
+    "noResults": "Sonuç bulunamadı"
+  },
+  "relatedType": {
+    "deal": "Fırsat",
+    "lead": "Müşteri Adayı",
+    "contact": "Kişi",
+    "company": "Firma",
+    "ticket": "Talep"
+  },
+  "toast": {
+    "created": "Görev oluşturuldu.",
+    "updated": "Görev güncellendi.",
+    "deleted": "Görev silindi.",
+    "completed": "Görev tamamlandı.",
+    "uncompleted": "Görev tamamlanmamış olarak işaretlendi.",
+    "assigned": "Görev ataması güncellendi."
+  },
+  "reminders": { "dueLabel": "Vade: {{date}}", "goToTask": "Göreve git" }
+}

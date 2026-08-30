@@ -1,0 +1,207 @@
+{
+  "breadcrumb": {
+    "home": "Startseite",
+    "quotes": "Angebote"
+  },
+  "fields": {
+    "title": "Titel",
+    "deal": "Geschäft",
+    "company": "Unternehmen",
+    "contact": "Kontakt",
+    "validUntil": "Gültig Bis",
+    "notes": "Notizen",
+    "terms": "Bedingungen",
+    "creator": "Erstellt von",
+    "createdAt": "Erstellt am",
+    "sentAt": "Gesendet am",
+    "acceptedAt": "Akzeptiert am",
+    "rejectedAt": "Abgelehnt am"
+  },
+  "actions": {
+    "detail": "Details",
+    "edit": "Bearbeiten",
+    "pdf": "PDF",
+    "pdfDownload": "PDF herunterladen",
+    "revise": "Revidieren",
+    "createRevision": "Revision erstellen",
+    "delete": "Löschen",
+    "send": "Senden",
+    "changeStatus": "Status ändern",
+    "openNewTab": "In neuem Tab öffnen"
+  },
+  "retry": "Erneut versuchen",
+  "list": {
+    "title": "Angebote",
+    "subtitle_one": "{{count}} Angebot (gefiltert)",
+    "subtitle_other": "{{count}} Angebote (gefiltert)",
+    "createButton": "Neues Angebot",
+    "searchPlaceholder": "Angebotsnummer, Titel suchen...",
+    "searchAria": "Angebote durchsuchen",
+    "statusAria": "Statusfilter",
+    "companyAria": "Unternehmensfilter",
+    "dealAria": "Geschäftsfilter",
+    "expiredOnly": "Nur abgelaufene",
+    "fromDateAria": "Startdatum",
+    "toDateAria": "Enddatum",
+    "allStatuses": "Alle Status",
+    "allCompanies": "Alle Unternehmen",
+    "allDeals": "Alle Verkaufschancen",
+    "loadError": "Beim Laden der Angebote ist ein Fehler aufgetreten.",
+    "emptyTitle": "Kein Angebot gefunden",
+    "emptyDescription": "Kein Angebot entspricht Ihren Such- oder Filterkriterien.",
+    "columns": {
+      "quoteNumber": "Angebotsnr.",
+      "title": "Titel",
+      "companyContact": "Unternehmen / Kontakt",
+      "deal": "Geschäft",
+      "status": "Status",
+      "total": "Gesamt",
+      "validUntil": "Gültigkeit",
+      "items": "Positionen",
+      "actions": "Aktionen"
+    }
+  },
+  "deleteModal": {
+    "title": "Angebot löschen",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Das Angebot wird dauerhaft gelöscht.",
+    "confirmText": "Sind Sie sicher, dass Sie <bold>{{number}} — {{title}}</bold> löschen möchten?"
+  },
+  "statusModal": {
+    "title": "Angebotsstatus ändern",
+    "newStatusLabel": "Neuer Status",
+    "reasonLabel": "Begründung (optional)"
+  },
+  "form": {
+    "titleCreate": "Neues Angebot",
+    "cardTitleEdit": "{{number}} — Bearbeiten",
+    "loadError": "Beim Laden des Angebots ist ein Fehler aufgetreten.",
+    "lockedFieldHint": "Kann nach dem Senden nicht mehr geändert werden.",
+    "contactNone": "Kein Kontakt",
+    "priceListLabel": "Preisliste",
+    "priceListDefaultOption": "(Standardpreisliste)",
+    "priceListDefaultSuffix": "{{name}} (Standard)",
+    "itemsTitle": "Positionen",
+    "itemsLockedHint": "Schreibgeschützt, da dies den Betrag beeinflusst — Änderungen erfordern eine Revision.",
+    "discountTitle": "Rabatt",
+    "discountLockedHint": "Kann nach dem Senden nicht mehr geändert werden.",
+    "discountTypeLabel": "Rabatttyp",
+    "discountAmountOption": "Fester Betrag",
+    "discountPercentOption": "Prozentsatz",
+    "discountValueLabel": "Rabattwert",
+    "totalsTitle": "Summen",
+    "validation": {
+      "titleRequired": "Angebotstitel ist erforderlich."
+    },
+    "lockedBanner": {
+      "statusText": "Dieses Angebot hat den Status „{{status}}“. <bold>Kann nicht geändert werden:</bold> Positionen, Rabatt, Unternehmen, Kontakt. <bold>Kann bearbeitet werden:</bold> Titel, Geschäft, Gültigkeitsdatum, Notizen, Bedingungen — dies sind nur Präsentations-/Verwaltungsinformationen, die den Angebotsbetrag nicht beeinflussen, und werden mit dem normalen „Speichern“ gespeichert.",
+      "revisableHint": "Wenn Sie die Positionen oder den Rabatt ändern müssen, erstellen Sie eine neue Revision.",
+      "notRevisableHint": "Da dieses Angebot akzeptiert wurde, kann keine Revision erstellt werden (eine akzeptierte Verpflichtung kann nicht rückgängig gemacht werden) — eröffnen Sie ein unabhängiges neues Angebot, wenn eine den Betrag betreffende Änderung erforderlich ist."
+    },
+    "priceListChangeModal": {
+      "title": "Preisliste geändert",
+      "description": "Möchten Sie auch die Preise der vorhandenen produktbasierten Positionen gemäß der neuen Preisliste aktualisieren? Freie (produktlose) Positionen sind von diesem Vorgang nicht betroffen. Wenn Sie nicht aktualisieren, behalten vorhandene Positionen ihre alten Preise — nur ab jetzt hinzugefügte Produkte verwenden die neue Liste.",
+      "keepPrices": "Nein, aktuelle Preise beibehalten",
+      "updatePrices": "Ja, aktualisieren",
+      "note": "Diese Aktion kann nicht rückgängig gemacht werden; wenn Sie das Formular jedoch ohne zu speichern verlassen, wird keine Änderung übernommen.",
+      "pricesUpdated": "Die Preise der produktbasierten Positionen wurden gemäß der neuen Liste aktualisiert."
+    }
+  },
+  "itemsEditor": {
+    "emptyMessage": "Noch keine Positionen hinzugefügt.",
+    "emptyHint": "Beginnen Sie, indem Sie unten nach einem Produkt suchen oder eine freie Position hinzufügen.",
+    "columns": {
+      "order": "Reihenfolge",
+      "item": "Position",
+      "quantity": "Menge",
+      "unitPrice": "Einzelpreis",
+      "discountPercent": "Rabatt %",
+      "taxRate": "MwSt. %",
+      "lineTotal": "Zeilensumme",
+      "actions": "Aktionen"
+    },
+    "moveUp": "Nach oben verschieben",
+    "moveDown": "Nach unten verschieben",
+    "nameLabel": "Positionsname",
+    "namePlaceholder": "Positionsname",
+    "descriptionLabel": "Positionsbeschreibung",
+    "descriptionPlaceholder": "Beschreibung (optional)",
+    "quantityLabel": "Menge",
+    "unitPriceLabel": "Einzelpreis",
+    "discountPercentLabel": "Rabattprozentsatz der Position",
+    "taxRateLabel": "MwSt.-Satz",
+    "removeItem": "Position entfernen",
+    "addProductLabel": "Produkt hinzufügen",
+    "addProductPlaceholder": "Produkt suchen und hinzufügen...",
+    "addFreeItem": "Freie Position hinzufügen"
+  },
+  "totals": {
+    "calculating": "Wird berechnet…",
+    "subtotal": "Zwischensumme (ohne MwSt.)",
+    "discountRow": "Rabatt ({{label}})",
+    "discountPercent": "{{value}} Rabatt",
+    "discountFixed": "Fester Rabattbetrag",
+    "taxTotal": "MwSt.-Summe",
+    "taxBreakdownTitle": "MwSt.-Bemessungsgrundlage-Übersicht",
+    "taxBreakdownColumns": {
+      "rate": "Satz",
+      "net": "Netto",
+      "discountShare": "Rabattanteil",
+      "base": "Grundlage",
+      "tax": "MwSt."
+    },
+    "grandTotal": "Gesamtsumme"
+  },
+  "detail": {
+    "revisionNoteWithParent": "Dies ist die {{revision}}. Revision von <link>{{quoteNumber}}</link>.",
+    "revisionNoteNoParent": "Dies ist die {{revision}}. Revision des übergeordneten Angebots.",
+    "siblingsLabel": "Andere Revisionen dieses Angebots:",
+    "revisionBadge": "Revision {{revision}}",
+    "loadError": "Beim Laden des Angebots ist ein Fehler aufgetreten.",
+    "expiredSuffix": " (abgelaufen)",
+    "itemsCount_one": "{{count}} Position",
+    "itemsCount_other": "{{count}} Positionen",
+    "itemsTable": {
+      "columns": {
+        "position": "#",
+        "item": "Position",
+        "quantity": "Menge",
+        "unitPrice": "Einzelpreis",
+        "discountPercent": "Rabatt %",
+        "taxRate": "MwSt. %",
+        "lineTotal": "Zeilensumme"
+      },
+      "empty": "Dieses Angebot hat noch keine Positionen."
+    },
+    "notesTermsTitle": "Notizen und Bedingungen",
+    "pdfPreviewTitle": "PDF-Vorschau",
+    "pdfPreview": {
+      "iframeTitle": "Angebots-PDF-Vorschau",
+      "error": "Angebots-PDF konnte nicht geladen werden: {{message}}",
+      "errorHint": "Sie können das PDF direkt über den obigen Link „In neuem Tab öffnen“ öffnen."
+    }
+  },
+  "companyCombobox": {
+    "label": "Unternehmen",
+    "placeholder": "Unternehmen suchen...",
+    "clearAria": "Unternehmensauswahl löschen",
+    "clearOption": "Kein Unternehmen / löschen",
+    "loading": "Wird geladen…",
+    "empty": "Keine Ergebnisse gefunden"
+  },
+  "dealCombobox": {
+    "label": "Geschäft",
+    "placeholder": "Geschäft suchen...",
+    "clearAria": "Geschäftsauswahl löschen",
+    "clearOption": "Kein Geschäft / löschen",
+    "loading": "Wird geladen…",
+    "empty": "Keine Ergebnisse gefunden"
+  },
+  "toast": {
+    "created": "Angebot erstellt.",
+    "updated": "Angebot aktualisiert.",
+    "deleted": "Angebot gelöscht.",
+    "sent": "Angebot gesendet.",
+    "statusChanged": "Angebotsstatus aktualisiert.",
+    "revised": "Revision erstellt: {{number}}"
+  }
+}

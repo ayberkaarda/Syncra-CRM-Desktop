@@ -1,0 +1,115 @@
+{
+  "breadcrumb": { "home": "Accueil", "current": "Tâches" },
+  "page": {
+    "title": "Tâches",
+    "countLabel_one": "{{count}} tâche",
+    "countLabel_other": "{{count}} tâches",
+    "newTask": "Nouvelle tâche",
+    "viewGroupAria": "Affichage",
+    "viewList": "Liste",
+    "viewCalendar": "Calendrier"
+  },
+  "filters": {
+    "searchPlaceholder": "Rechercher un titre de tâche...",
+    "searchAria": "Rechercher une tâche",
+    "statusAria": "Filtre de statut",
+    "priorityAria": "Filtre de priorité",
+    "assignedAria": "Filtre par responsable",
+    "taskableAria": "Filtre par type d'enregistrement",
+    "fromAria": "Date de début (échéance)",
+    "toAria": "Date de fin (échéance)",
+    "overdueOnly": "En retard uniquement",
+    "allStatuses": "Tous les statuts",
+    "allPriorities": "Toutes les priorités",
+    "allAssignees": "Tous les responsables",
+    "allTaskableTypes": "Tous les types d'enregistrement"
+  },
+  "list": {
+    "loadError": "Une erreur est survenue lors du chargement des tâches.",
+    "retry": "Réessayer",
+    "emptyTitle": "Aucune tâche trouvée",
+    "emptyDescription": "Aucune tâche ne correspond à vos critères de recherche ou de filtre."
+  },
+  "table": {
+    "completedAria": "Terminée",
+    "task": "Tâche",
+    "priority": "Priorité",
+    "status": "Statut",
+    "dueDate": "Échéance",
+    "assignee": "Responsable",
+    "relatedRecord": "Enregistrement lié",
+    "actions": "Actions"
+  },
+  "row": {
+    "completeAria": "{{title}} terminée",
+    "completeDisabledTitle": "Vous n'êtes pas propriétaire de cette tâche, vous ne pouvez pas la terminer.",
+    "edit": "Modifier",
+    "editDisabledTitle": "Vous n'êtes pas propriétaire de cette tâche, vous ne pouvez pas la modifier.",
+    "assign": "Assigner",
+    "delete": "Supprimer"
+  },
+  "calendar": {
+    "prevMonth": "Mois précédent",
+    "nextMonth": "Mois suivant",
+    "today": "Aujourd'hui",
+    "noDueDateNote": "Les tâches sans date d'échéance ne sont pas affichées dans le calendrier.",
+    "overflowMore": "+{{count}} de plus",
+    "weekday": { "mon": "Lun", "tue": "Mar", "wed": "Mer", "thu": "Jeu", "fri": "Ven", "sat": "Sam", "sun": "Dim" }
+  },
+  "dayModal": {
+    "taskCount_one": "{{count}} tâche",
+    "taskCount_other": "{{count}} tâches",
+    "empty": "Aucune tâche pour ce jour.",
+    "addTask": "Ajouter une tâche"
+  },
+  "deleteModal": {
+    "title": "Supprimer la tâche",
+    "description": "Cette action est irréversible. La tâche sera définitivement supprimée.",
+    "confirmBody": "Voulez-vous vraiment supprimer la tâche <bold>{{title}}</bold> ?",
+    "confirm": "Supprimer"
+  },
+  "form": {
+    "createTitle": "Nouvelle tâche",
+    "editTitle": "Modifier la tâche",
+    "titleLabel": "Titre",
+    "descriptionLabel": "Description",
+    "dueDateLabel": "Échéance",
+    "reminderLabel": "Rappel",
+    "reminderHintNoDueDate": "Sélectionnez d'abord une date d'échéance.",
+    "priorityLabel": "Priorité",
+    "statusLabel": "Statut",
+    "statusHint": "La finalisation se fait via la case à cocher rapide dans la liste.",
+    "assigneeLabel": "Responsable",
+    "create": "Créer",
+    "titleRequired": "Le titre est obligatoire.",
+    "reminderAfterDue": "Le rappel ne peut pas être postérieur à la date d'échéance."
+  },
+  "common": { "unassigned": "Non assignée" },
+  "assignModal": { "title": "Assigner la tâche", "submit": "Assigner" },
+  "relatedPicker": {
+    "typeLabel": "Type d'enregistrement lié",
+    "noneOption": "Aucun enregistrement lié",
+    "searchLabel": "Rechercher un enregistrement",
+    "searchPlaceholder": "Rechercher un enregistrement...",
+    "selectTypeFirst": "Sélectionnez d'abord un type",
+    "clearSelection": "Effacer la sélection",
+    "loading": "Chargement…",
+    "noResults": "Aucun résultat trouvé"
+  },
+  "relatedType": {
+    "deal": "Opportunité",
+    "lead": "Prospect",
+    "contact": "Contact",
+    "company": "Entreprise",
+    "ticket": "Ticket"
+  },
+  "toast": {
+    "created": "Tâche créée.",
+    "updated": "Tâche mise à jour.",
+    "deleted": "Tâche supprimée.",
+    "completed": "Tâche terminée.",
+    "uncompleted": "Tâche marquée comme non terminée.",
+    "assigned": "Affectation de la tâche mise à jour."
+  },
+  "reminders": { "dueLabel": "Échéance : {{date}}", "goToTask": "Aller à la tâche" }
+}

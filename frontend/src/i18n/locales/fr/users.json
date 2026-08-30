@@ -1,0 +1,109 @@
+{
+  "breadcrumb": {
+    "home": "Accueil",
+    "users": "Utilisateurs"
+  },
+  "list": {
+    "title": "Utilisateurs",
+    "subtitle_one": "{{count}} utilisateur",
+    "subtitle_other": "{{count}} utilisateurs",
+    "createButton": "Nouvel Utilisateur",
+    "searchPlaceholder": "Rechercher par nom ou e-mail...",
+    "searchAria": "Rechercher un utilisateur",
+    "roleFilterAria": "Filtre de rôle",
+    "statusFilterAria": "Filtre de statut",
+    "allRoles": "Tous les rôles",
+    "allStatuses": "Tous",
+    "loadError": "Une erreur s'est produite lors du chargement des utilisateurs.",
+    "emptyTitle": "Aucun utilisateur trouvé",
+    "emptyDescription": "Aucun utilisateur ne correspond à vos critères de recherche ou de filtre.",
+    "columns": {
+      "user": "Utilisateur",
+      "role": "Rôle",
+      "department": "Service",
+      "status": "Statut",
+      "lastLogin": "Dernière connexion",
+      "actions": "Actions"
+    },
+    "neverLoggedIn": "Jamais connecté",
+    "actions": {
+      "edit": "Modifier",
+      "resetPassword": "Réinitialiser le mot de passe",
+      "activate": "Activer",
+      "deactivate": "Désactiver",
+      "delete": "Supprimer"
+    }
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "deleteModal": {
+    "title": "Supprimer l'utilisateur",
+    "description": "Cette action est irréversible. L'utilisateur sera définitivement supprimé.",
+    "confirmText": "Voulez-vous vraiment supprimer <bold>{{name}}</bold> ({{email}}) ?"
+  },
+  "deactivateModal": {
+    "title": "Désactiver l'utilisateur",
+    "description": "Cette action est irréversible — la session de l'utilisateur se termine immédiatement et il ne pourra plus se connecter tant qu'il n'est pas réactivé.",
+    "confirmText": "Voulez-vous vraiment désactiver <bold>{{name}}</bold> ?"
+  },
+  "form": {
+    "titleCreate": "Nouvel Utilisateur",
+    "titleEdit": "Modifier l'utilisateur",
+    "nameLabel": "Nom complet",
+    "emailLabel": "E-mail",
+    "roleLabel": "Rôle",
+    "rolePlaceholder": "Sélectionnez un rôle",
+    "departmentLabel": "Service",
+    "temporaryPasswordLabel": "Mot de passe temporaire",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe",
+    "generatePasswordTitle": "Générer un mot de passe fort aléatoire",
+    "copyPasswordTitle": "Copier dans le presse-papiers",
+    "copyPasswordAria": "Copier le mot de passe dans le presse-papiers",
+    "strengthLabel": "Force : {{strength}}",
+    "createNotice": "Une fois créé, l'utilisateur se connecte avec le mot de passe temporaire et doit le changer dès la première connexion.",
+    "errors": {
+      "nameRequired": "Le nom complet est obligatoire.",
+      "emailRequired": "L'e-mail est obligatoire.",
+      "roleRequired": "Un rôle doit être sélectionné.",
+      "passwordPolicy": "Le mot de passe doit satisfaire toutes les règles de la politique."
+    },
+    "toast": {
+      "passwordCopied": "Mot de passe copié dans le presse-papiers.",
+      "passwordCopyFailed": "Impossible de copier dans le presse-papiers. Sélectionnez et copiez le mot de passe manuellement."
+    }
+  },
+  "resetPasswordModal": {
+    "title": "Réinitialiser le mot de passe",
+    "description": "Définissez un nouveau mot de passe temporaire pour {{name}} ({{email}}).",
+    "newPasswordLabel": "Nouveau mot de passe",
+    "submit": "Réinitialiser le mot de passe",
+    "errors": {
+      "passwordPolicy": "Le mot de passe doit satisfaire toutes les règles de la politique."
+    }
+  },
+  "passwordStrength": {
+    "veryWeak": "Très faible",
+    "weak": "Faible",
+    "medium": "Moyen",
+    "good": "Bon",
+    "strong": "Fort"
+  },
+  "passwordRules": {
+    "length": "Au moins {{count}} caractères",
+    "upper": "Au moins une majuscule",
+    "lower": "Au moins une minuscule",
+    "digit": "Au moins un chiffre",
+    "special": "Au moins un caractère spécial"
+  },
+  "toast": {
+    "created": "Utilisateur créé.",
+    "updated": "Utilisateur mis à jour.",
+    "deleted": "Utilisateur supprimé.",
+    "activated": "Utilisateur activé.",
+    "deactivated": "Utilisateur désactivé.",
+    "passwordReset": "Mot de passe réinitialisé."
+  }
+}

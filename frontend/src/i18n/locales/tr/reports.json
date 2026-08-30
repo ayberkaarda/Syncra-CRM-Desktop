@@ -1,0 +1,102 @@
+{
+  "breadcrumb": { "home": "Anasayfa", "reports": "Raporlar" },
+  "page": {
+    "title": "Raporlar",
+    "subtitle": "Satış performansını, kullanıcı ve kaynak dağılımını inceleyin"
+  },
+  "tabs": {
+    "salesPerformance": "Satış Performansı",
+    "userPerformance": "Kullanıcı Performansı",
+    "sourceAnalysis": "Kaynak Analizi",
+    "conversion": "Dönüşüm"
+  },
+  "dateRange": {
+    "presets": {
+      "today": "Bugün",
+      "last7": "Son 7 gün",
+      "last30": "Son 30 gün",
+      "last90": "Son 90 gün"
+    },
+    "menuAria": "Tarih aralığı",
+    "fromLabel": "Başlangıç",
+    "toLabel": "Bitiş"
+  },
+  "export": {
+    "button": "Dışa Aktar",
+    "menuAria": "Dışa aktarma biçimi",
+    "csv": "CSV",
+    "excel": "Excel"
+  },
+  "groupBy": { "day": "Gün", "week": "Hafta", "month": "Ay" },
+  "noRecords": "Kayıt bulunamadı.",
+  "salesPerformance": {
+    "userFilterAria": "Kullanıcı filtresi",
+    "allUsers": "Tüm kullanıcılar",
+    "emptyTitle": "Bu aralıkta satış verisi yok",
+    "emptyDescription": "Seçili filtrelerle eşleşen bir kayıt bulunamadı.",
+    "tooltipWonLost": "{{won}} kazanılan · {{lost}} kaybedilen",
+    "columns": {
+      "period": "Dönem",
+      "revenue": "Gelir",
+      "won": "Kazanılan",
+      "lost": "Kaybedilen",
+      "deals": "Toplam Fırsat"
+    },
+    "totalsRow": "Toplam"
+  },
+  "userPerformance": {
+    "unknownUser": "Bilinmeyen kullanıcı",
+    "emptyTitle": "Bu aralıkta kullanıcı performans verisi yok",
+    "emptyDescription": "Seçili tarih aralığında atanmış bir fırsat bulunamadı.",
+    "tooltipWonConversion": "{{won}} kazanılan · %{{rate}} dönüşüm",
+    "columns": {
+      "user": "Kullanıcı",
+      "revenue": "Gelir",
+      "won": "Kazanılan",
+      "lost": "Kaybedilen",
+      "openDeals": "Açık Fırsat",
+      "openDealsValue": "Açık Fırsat Tutarı",
+      "conversion": "Dönüşüm",
+      "avgDeal": "Ort. Fırsat",
+      "activities": "Aktivite"
+    }
+  },
+  "sourceAnalysis": {
+    "unknownSource": "Bilinmiyor",
+    "emptyTitle": "Bu aralıkta kaynak verisi yok",
+    "emptyDescription": "Seçili tarih aralığında kaynağı işaretlenmiş bir aday bulunamadı.",
+    "tooltipLeadsConversion": "{{leads}} aday · %{{rate}} dönüşüm",
+    "columns": {
+      "source": "Kaynak",
+      "leads": "Aday",
+      "converted": "Dönüşen",
+      "conversion": "Dönüşüm",
+      "revenue": "Gelir"
+    }
+  },
+  "conversion": {
+    "totalLeads": "Toplam Aday",
+    "converted": "Dönüşen",
+    "conversionRate": "Dönüşüm Oranı",
+    "avgConversionTime": "Ort. Dönüşüm Süresi",
+    "avgConversionTimeValue": "{{days}} gün",
+    "emptyTitle": "Bu aralıkta dönüşüm verisi yok",
+    "emptyDescription": "Seçili tarih aralığında oluşturulmuş bir aday bulunamadı.",
+    "tooltipShare": "%{{value}} pay",
+    "columns": {
+      "status": "Durum",
+      "count": "Aday Sayısı"
+    }
+  },
+  "rateInfo": {
+    "open": "Açık fırsatlar {{date}} tarihli güncel kurla {{currency}}'ye çevrildi.",
+    "closedFrozen": "Kapanmış fırsatlar kapanış günü kuruyla donduruldu (rakam kararlıdır).",
+    "closedConverted": "Kapanmış fırsatlar kapanış günü kuruyla donduruldu; gösterim için {{date}} tarihli güncel kurla {{currency}}'ye çevrildi (rakam güncel kura göre değişebilir).",
+    "stale_one": "Kullanılan kur {{count}} gün önce yayımlanmış olabilir; güncel olmayabilir.",
+    "stale_other": "Kullanılan kur {{count}} gün önce yayımlanmış olabilir; güncel olmayabilir.",
+    "unconvertedOpen_one": "{{count}} para birimi için güncel kur bulunamadığından o tutarlar çevrilemedi; toplamlara 0 olarak yansıdı.",
+    "unconvertedOpen_other": "{{count}} para birimi için güncel kur bulunamadığından o tutarlar çevrilemedi; toplamlara 0 olarak yansıdı.",
+    "unconvertedClosed_one": "{{count}} kapanmış fırsatın donmuş tutarı yok; gelire dahil edilmedi.",
+    "unconvertedClosed_other": "{{count}} kapanmış fırsatın donmuş tutarı yok; gelire dahil edilmedi."
+  }
+}

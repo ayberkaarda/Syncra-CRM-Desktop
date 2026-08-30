@@ -1,0 +1,34 @@
+{
+  "breadcrumb": { "home": "Anasayfa", "notifications": "Bildirimler" },
+  "page": {
+    "title": "Bildirimler",
+    "subtitle_one": "{{count}} bildirim",
+    "subtitle_other": "{{count}} bildirim",
+    "markAllRead": "Tümünü okundu işaretle",
+    "tabs": { "all": "Tümü", "unread": "Okunmamış", "read": "Okunmuş" },
+    "emptyTitle": "Bildirim yok",
+    "emptyUnread": "Okunmamış bildiriminiz yok.",
+    "emptyAll": "Henüz bir bildirim almadınız.",
+    "newBadge": "Yeni",
+    "deleteAria": "Bildirimi sil"
+  },
+  "bell": {
+    "ariaLabel": "Bildirimler",
+    "ariaLabelUnread": "Bildirimler ({{count}} okunmamış)",
+    "dialogAria": "Bildirimler",
+    "title": "Bildirimler",
+    "markAllRead": "Tümünü okundu işaretle",
+    "viewAll": "Tüm bildirimleri gör"
+  },
+  "list": {
+    "emptyTitle": "Bildirim yok",
+    "emptyDescription": "Yeni bir gelişme olduğunda burada görünecek."
+  },
+  "relativeTime": {
+    "justNow": "az önce"
+  },
+  "toast": {
+    "markAllReadSuccess": "Tüm bildirimler okundu olarak işaretlendi.",
+    "deleteSuccess": "Bildirim silindi."
+  }
+}

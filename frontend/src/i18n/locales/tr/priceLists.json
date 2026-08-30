@@ -1,0 +1,119 @@
+{
+  "breadcrumb": {
+    "products": "Ürünler",
+    "priceLists": "Fiyat Listeleri"
+  },
+  "status": {
+    "active": "Aktif",
+    "inactive": "Pasif"
+  },
+  "unlimited": "Süresiz",
+  "defaultBadge": "Varsayılan",
+  "retry": "Tekrar dene",
+  "actions": {
+    "edit": "Düzenle",
+    "delete": "Sil"
+  },
+  "list": {
+    "title": "Fiyat Listeleri",
+    "subtitle_one": "{{count}} liste",
+    "subtitle_other": "{{count}} liste",
+    "createButton": "Yeni Liste",
+    "searchPlaceholder": "Liste adı veya kodu ara...",
+    "searchAria": "Fiyat listesi ara",
+    "statusAria": "Durum filtresi",
+    "defaultAria": "Varsayılan filtresi",
+    "allStatuses": "Tüm durumlar",
+    "allDefault": "Tümü",
+    "onlyDefault": "Yalnızca varsayılan",
+    "notDefault": "Varsayılan olmayan",
+    "loadError": "Fiyat listeleri yüklenirken bir hata oluştu.",
+    "emptyTitle": "Fiyat listesi bulunamadı",
+    "emptyDescription": "Arama veya filtre kriterlerinizle eşleşen fiyat listesi yok.",
+    "columns": {
+      "list": "Liste",
+      "itemCount": "Ürün Sayısı",
+      "validity": "Geçerlilik",
+      "default": "Varsayılan",
+      "status": "Durum",
+      "actions": "İşlemler"
+    },
+    "manageAction": "Fiyatları Yönet",
+    "deleteDisabledAction": "Varsayılan liste silinemez"
+  },
+  "deleteModal": {
+    "title": "Fiyat listesini sil",
+    "descriptionDefault": "Varsayılan fiyat listesi silinemez. Önce başka bir listeyi varsayılan yapın ya da bu listeyi devre dışı bırakın.",
+    "descriptionNormal": "Bu işlem geri alınamaz. Fiyat listesi ve içindeki tüm ürün fiyatları kalıcı olarak silinecek.",
+    "confirmText": "<bold>{{name}}</bold> adlı listeyi silmek istediğinize emin misiniz?"
+  },
+  "form": {
+    "titleCreate": "Yeni Fiyat Listesi",
+    "titleEdit": "Fiyat Listesini Düzenle",
+    "nameLabel": "Liste Adı",
+    "codeLabel": "Kod",
+    "codeHint": "Benzersiz olmalıdır. Otomatik BÜYÜK HARF + alt çizgi ile normalize edilir.",
+    "descriptionLabel": "Açıklama",
+    "currencyLabel": "Para Birimi",
+    "currency": {
+      "try": "TRY — Türk Lirası",
+      "usd": "USD — Amerikan Doları",
+      "eur": "EUR — Euro",
+      "gbp": "GBP — İngiliz Sterlini"
+    },
+    "validFromLabel": "Geçerlilik Başlangıcı",
+    "validUntilLabel": "Geçerlilik Bitişi",
+    "defaultCheckbox": "Varsayılan liste",
+    "defaultWarningWithCurrent": "Mevcut varsayılan liste (\"{{name}}\") değişecek — bu liste onun yerine varsayılan olarak işaretlenecek.",
+    "defaultWarningNoCurrent": "Bu liste varsayılan fiyat listesi olarak işaretlenecek.",
+    "activeCheckbox": "Aktif",
+    "validation": {
+      "nameRequired": "Liste adı zorunludur.",
+      "codeRequired": "Liste kodu zorunludur.",
+      "validUntilBeforeFrom": "Bitiş tarihi başlangıç tarihinden önce olamaz."
+    }
+  },
+  "detail": {
+    "validityLabel": "Geçerlilik",
+    "loadError": "Fiyat listesi yüklenirken bir hata oluştu.",
+    "addProductPriceLabel": "Liste Fiyatı",
+    "addOrUpdateAction": "Ekle / Güncelle",
+    "addProductRequired": "Bir ürün seçin.",
+    "addPriceInvalid": "Geçerli, negatif olmayan bir fiyat girin.",
+    "addHint": "Zaten listede olan bir ürün seçilirse mevcut fiyatı bu değerle güncellenir.",
+    "emptyTitle": "Bu listede henüz ürün fiyatı yok",
+    "emptyDescription": "Katalog fiyatları geçerli — yukarıdan bir ürün ekleyerek bu liste için özel bir fiyat tanımlayabilirsiniz.",
+    "columns": {
+      "product": "Ürün",
+      "catalogPrice": "Katalog Fiyatı",
+      "listPrice": "Liste Fiyatı",
+      "diff": "Fark",
+      "actions": "İşlemler"
+    },
+    "noDiff": "Fark yok",
+    "priceInputAria": "{{name}} liste fiyatı",
+    "productFallback": "Ürün",
+    "editPrice": "Fiyatı düzenle",
+    "removeAction": "Kaldır",
+    "removeModal": {
+      "title": "Ürünü listeden kaldır",
+      "confirmText": "<bold>{{name}}</bold> ürününü bu fiyat listesinden kaldırmak istediğinize emin misiniz?",
+      "warning": "Kaldırıldıktan sonra bu ürün için katalog fiyatı geçerli olacak."
+    },
+    "readOnlyHint": "Fiyatları düzenlemek için yetkiniz yok, yalnızca görüntüleyebilirsiniz."
+  },
+  "productCombobox": {
+    "label": "Ürün",
+    "placeholder": "Ürün adı veya SKU ara...",
+    "clearAria": "Ürün seçimini temizle",
+    "loading": "Yükleniyor…",
+    "empty": "Sonuç bulunamadı"
+  },
+  "toast": {
+    "created": "Fiyat listesi oluşturuldu.",
+    "updated": "Fiyat listesi güncellendi.",
+    "deleted": "Fiyat listesi silindi.",
+    "priceSaved": "Ürün fiyatı kaydedildi.",
+    "priceRemoved": "Ürün fiyat listesinden kaldırıldı. Bu ürün için artık katalog fiyatı geçerli olacak."
+  }
+}

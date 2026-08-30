@@ -1,0 +1,6 @@
+{
+  "convertedTooltip": "Original amount: {{amount}} (rate as of {{date}})",
+  "unavailable": "No current rate for {{currency}}; showing the amount in its own currency.",
+  "stale_one": "The rate used may be {{count}} day old and not current.",
+  "stale_other": "The rate used may be {{count}} days old and not current."
+}

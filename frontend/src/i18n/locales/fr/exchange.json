@@ -1,0 +1,6 @@
+{
+  "convertedTooltip": "Montant d'origine : {{amount}} (taux du {{date}})",
+  "unavailable": "Aucun taux actuel pour {{currency}} ; le montant est affiché dans sa devise d'origine.",
+  "stale_one": "Le taux utilisé date peut-être de {{count}} jour et n'est peut-être plus à jour.",
+  "stale_other": "Le taux utilisé date peut-être de {{count}} jours et n'est peut-être plus à jour."
+}
