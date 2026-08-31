@@ -139,22 +139,14 @@ impl Harness {
 pub fn list_query(entity: Entity) -> syncra_sync::NamedQuery {
     use syncra_sync::NamedQuery as Q;
     match entity {
-        Entity::Company => Q::CompanyList,
-        Entity::Contact => Q::ContactList {
-            company_client_id: None,
-        },
-        Entity::Deal => Q::DealsList {
-            status: None,
-            owner_client_id: None,
-        },
-        Entity::Task => Q::TaskList {
-            status: None,
-            assigned_to_client_id: None,
-        },
-        Entity::Quote => Q::QuoteList { status: None },
-        Entity::Notification => Q::NotificationList { unread_only: false },
+        Entity::Company => Q::companies(),
+        Entity::Contact => Q::contacts(),
+        Entity::Deal => Q::deals(),
+        Entity::Task => Q::tasks(),
+        Entity::Quote => Q::quotes(),
+        Entity::Notification => Q::notifications(None),
         Entity::PipelineStage => Q::PipelineStages,
-        Entity::User => Q::UserList,
+        Entity::User => Q::users(),
         other => panic!("no list query for {other}"),
     }
 }

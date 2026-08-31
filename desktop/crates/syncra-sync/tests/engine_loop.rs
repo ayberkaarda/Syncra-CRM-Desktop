@@ -164,7 +164,7 @@ async fn download_archive_rewinds_the_cursors_and_widens_the_window() {
 
     let names: Vec<String> = h
         .engine
-        .query(NamedQuery::CompanyList, QueryParams::default())
+        .query(NamedQuery::companies(), QueryParams::default())
         .unwrap()
         .iter()
         .map(|r| r.get_str("name").unwrap_or_default().to_string())

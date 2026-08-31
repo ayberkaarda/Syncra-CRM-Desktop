@@ -3,10 +3,18 @@ name: Desktop Release
 # DRAFT — SYNCDESKTOP.md F7 ("Paketleme ve CI").
 #
 # Never executed (push forbidden for lanes in this repo, docs/ENGINEERING-RULES.md §1 / SYNCDESKTOP.md
-# §0.2). Syntax was only validated locally with a YAML parser — see the F(W2-c) phase
-# report. Also depends on desktop/ (Tauri app, package.json, src-tauri/tauri.conf.json)
-# which does not exist in this worktree yet (lands in F3); this is a forward-looking
-# draft to be smoke-tested once F3 lands.
+# §0.2). Syntax is validated locally with a YAML parser and `bash -n` on every `run:`
+# block — see the F3-E phase report. `desktop/` (Tauri app, package.json,
+# src-tauri/tauri.conf.json) now exists (landed F2/W2-b/F3-A) and every path this workflow
+# references was re-checked against it in F3-E — see `docs/DESKTOP-ARCHITECTURE.md` EK 2.
+# Still forward-looking, though: two real blockers remain before this workflow can produce
+# a working release, both called out at their step below —
+#   1. `plugins.updater` is not yet configured in `desktop/src-tauri/tauri.conf.json`
+#      (E.5.3 — real pubkey/endpoints land in F7 proper, not this pass).
+#   2. The CSP (and therefore `VITE_API_URL`/`VITE_REVERB_*`) this job builds with must come
+#      from a REAL production `frontend/.env`, not the localhost example — F7 needs to wire
+#      that in as a repo/environment secret or variable before a tag push produces a
+#      publishable artifact.
 #
 # Bundle targets (MSI+NSIS on Windows, DMG on macOS, AppImage+deb on Linux) are NOT
 # chosen by this workflow — they come from `desktop/src-tauri/tauri.conf.json`'s
@@ -44,9 +52,11 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
-      # Same Windows preconditions as desktop-ci.yml's desktop-rust job — see that
-      # file for the full rationale (vendored OpenSSL needs Strawberry's Perl ahead
-      # of Git's on PATH; MAX_PATH needs a short CARGO_TARGET_DIR).
+      # Same Windows preconditions as desktop-ci.yml's desktop-rust job — see that file for
+      # the full rationale. Re-diagnosed in F3-A: the vendored-OpenSSL Perl issue is PATH
+      # order (Git's bundled Perl lacks ExtUtils::MakeMaker/Locale::Maketext::Simple and
+      # resolves before a full Perl install), not a missing installation; MAX_PATH needs a
+      # short CARGO_TARGET_DIR.
       - name: Prefer Strawberry Perl over Git's Perl (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -89,22 +99,51 @@ jobs:
         with:
           toolchain: stable
 
-      # Precondition 3: cold vendored-OpenSSL compile ~7m45s locally (F2 measurement);
-      # cache keys on job/OS/rustc/Cargo.lock automatically.
+      # Precondition 3: cold vendored-OpenSSL compile 7m53s locally (F3-A measurement, whole
+      # `desktop/` workspace after `.cargo/config.toml` removal); cache keys on
+      # job/OS/rustc/Cargo.lock automatically. `desktop/` is the workspace root (members
+      # crates/syncra-sync + src-tauri, `desktop/Cargo.toml`) — its default `desktop/target`
+      # is the single shared build output both crates compile into.
       - name: Cache cargo registry and build output
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: desktop/src-tauri -> target
+          workspaces: desktop -> target
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          cache-dependency-path: |
+            desktop/package-lock.json
+            frontend/package-lock.json
 
-      - name: Install frontend dependencies
+      # F3-E: this step's original name ("Install frontend dependencies") was misleading —
+      # it installs the desktop SHELL's own `node_modules` (its `package.json`, with
+      # `@tauri-apps/*`, kept deliberately separate from `frontend/package.json` per KARAR
+      # A1). The shared `frontend/src` tree that `desktop/vite.desktop.config.ts` aliases
+      # `@` to has its own bare imports (axios, i18next, ...) that only resolve out of
+      # `frontend/node_modules` (confirmed: `axios` exists there, not under
+      # `desktop/node_modules`) — hence the separate step below for that install.
+      - name: Install desktop shell dependencies
         working-directory: desktop
         run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # F3-E precondition (blocker #2 from the top-of-file note): `desktop/scripts/tauri.mjs`
+      # builds the packaged app's CSP from `../frontend/.env` (E.5.2 ACIK 1, closed). That
+      # file is gitignored and does not exist in CI. Seeding it from `.env.example` here
+      # keeps this workflow syntactically/mechanically exercisable, but it means the CSP
+      # `connect-src`/`img-src` hosts in ANY release built by this workflow as it stands
+      # today are `localhost` — NOT a real backend. Before this workflow can cut a real
+      # publishable release, F7 must replace this step with a real production
+      # `frontend/.env` (repo/environment secret or generated from vars), matching the same
+      # `VITE_API_URL`/`VITE_REVERB_*` contract KARAR D-3/D-2 already define.
+      - name: Seed frontend/.env for CSP generation (placeholder — see F7 note above)
+        working-directory: frontend
+        run: cp .env.example .env
 
       # tauri-action builds the app, creates/updates a (draft) GitHub Release tagged
       # with the pushed `desktop-v*` tag, uploads the platform bundle(s), and — because
@@ -120,6 +159,22 @@ jobs:
       #                                         via `tauri signer generate`
       #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD - passphrase for the above
       #   GITHUB_TOKEN                       - provided automatically by Actions
+      #
+      # F3-E PRECONDITION (blocker #1 from the top-of-file note, `docs/DESKTOP-ARCHITECTURE.md`
+      # E.5.3/EK 2): `desktop/src-tauri/tauri.conf.json` has NO `plugins.updater` block yet.
+      # `tauri-plugin-updater`'s Config requires `pubkey: String` with no default, and the
+      # plugin is registered unconditionally except under `#[cfg(not(debug_assertions))]`
+      # (`desktop/src-tauri/src/lib.rs`) — i.e. it IS compiled into a release build (unlike
+      # `desktop-ci.yml`'s `--debug` build, which is unaffected). Today, a bundle produced by
+      # this job installs and then PANICS in `.setup()` on first launch. This job must not be
+      # run for a real release until F7 lands a real pubkey + updater endpoint config; a fake
+      # placeholder pubkey was deliberately NOT committed anywhere in this pass.
+      #
+      # `-f custom-protocol` mirrors the same feature flag `desktop-ci.yml`'s
+      # `desktop-tauri-build` job now passes explicitly (E.5.3 Duzeltme 3): the crate's
+      # `default = []` leaves `custom-protocol` off on purpose so `cargo check`/`clippy` don't
+      # need `desktop/dist` to exist, so an actual package build has to opt back in to get its
+      # frontend embedded instead of pointed at `devUrl`.
       - name: tauri build + publish release
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
@@ -128,6 +183,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
+          args: -f custom-protocol
           tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           releaseName: "Syncra Desktop ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           releaseBody: 'See assets below to download and install this version. Auto-generated by desktop-release.yml.'

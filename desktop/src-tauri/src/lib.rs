@@ -11,6 +11,7 @@
 //!   is landing `frontend/src/platform`; W1 §E.3 keeps this turn off those files).
 
 mod commands;
+mod events;
 mod state;
 
 use tauri::{Manager, WindowEvent};
@@ -97,6 +98,10 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             let state = tauri::async_runtime::block_on(AppState::init(&handle))?;
+            // Must start before the state is moved into the app: `TablesChanged` is what
+            // keeps the UI's query cache honest, and an event emitted before the bridge
+            // exists is simply lost (the channel only replays to live subscribers).
+            events::forward_engine_events(handle.clone(), &state.engine);
             app.manage(state);
 
             // D-8: closing the main window minimizes to tray by default (the tray icon

@@ -287,7 +287,7 @@ async fn a_resend_keeps_the_idempotency_key_and_duplicate_settles_it() {
 
     let rows = h
         .engine
-        .query(NamedQuery::CompanyList, QueryParams::default())
+        .query(NamedQuery::companies(), QueryParams::default())
         .unwrap();
     assert_eq!(rows[0].get_str("sync_state"), Some("synced"));
     assert_eq!(rows[0].get_i64("server_id"), Some(4242));
@@ -333,7 +333,7 @@ async fn notification_read_all_is_user_scoped_and_carries_no_row_id() {
     let unread = h
         .engine
         .query(
-            NamedQuery::NotificationList { unread_only: true },
+            NamedQuery::notifications(Some(syncra_sync::ReadFilter::Unread)),
             QueryParams::default(),
         )
         .unwrap();
@@ -412,7 +412,7 @@ async fn read_all_settles_the_rows_it_marked() {
     let rows = h
         .engine
         .query(
-            NamedQuery::NotificationList { unread_only: false },
+            NamedQuery::notifications(None),
             QueryParams::default(),
         )
         .unwrap();
@@ -423,7 +423,7 @@ async fn read_all_settles_the_rows_it_marked() {
     let rows = h
         .engine
         .query(
-            NamedQuery::NotificationList { unread_only: false },
+            NamedQuery::notifications(None),
             QueryParams::default(),
         )
         .unwrap();

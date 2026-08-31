@@ -1170,3 +1170,44 @@ Kabuğun kendi `node_modules`'ı olduğu için React diskte iki kopya. Dedupe ol
 3. **D-6 yapılmadı.** `check-i18n-bootstrap.mjs`'in `main.desktop.tsx`'i kapsaması `frontend/scripts/**` yazmayı gerektiriyordu. Desktop girişindeki açılış kapısı bugün elle doğru ama **hiçbir otomatik kapı korumuyor**.
 4. **Gerçek login akışı denenmedi** — `:8000`'de başka bir servis var (`/api/me` → 404). Backend ayağa kalkınca device token akışı uçtan uca denenmeli.
 5. `desktop/src-tauri/target` (996 MB, workspace öncesinden ölü) diskte duruyor — silme onayı bekliyor.
+
+---
+
+# EK 3 — F3-C KARARLARI (veri katmanı bağlandı)
+
+124/124 metot bağlı, `NOT_IMPLEMENTED` sıfır. Sınıflandırma: **50 yerel okuma** (`query`), **44 yerel yazma** (`mutate`), **30 online-only** (`http`). `NamedQuery` 16 → 30 varyant; 27 kullanılıyor, 3'ü gerekçeli rezerve. Crate 83 → **103 test**.
+
+Bütünlük `desktop/scripts/check-data-wiring.mjs` ile kilitli. Kontrolün gerçek olduğu bağımsız negatif testle doğrulandı: `users.list` `http` → `query` yapıldığında üç ayrı hata verdi (gövde yerel okuma yapmıyor · gövde `platform.http` çağırıyor · §8 ihlali) ve geri yüklenince OK döndü. Manifest beyanını **fonksiyon gövdesiyle** karşılaştırıyor, yalnız etiket okumuyor.
+
+## Onaylanan kararlar
+
+| # | Karar | Gerekçe |
+|---|---|---|
+| **A20** | `is_overdue` (deal/task) **yerelde hesaplanır** | Tip dosyası "sunucu hesaplar" diyor ama offline'da sunucu değeri yok; `false` dönmek **her gecikmiş kaydı gizlerdi**. Kural belirsiz değil: geçmiş tarih + bitmemiş. Sessizce yanlış veri, açıkça türetilmiş veriden kötüdür. |
+| **A21** | §8 dışı `http` yönlendirmeleri onaylandı | Üçü de sözleşmeden türetilmiş, icat değil: `leads.checkDuplicates` (sunucu algoritması, yerelde çalıştırılamaz) · `chat.{recordConversation,addMembers,removeMember,leaveConversation}` (crate'in `ACTION_WHITELIST`'i dışında ⇒ sözleşme gereği zaten `ONLINE_ONLY`) · `products`/`priceLists`/`savedViews` yazmaları (RO entity, `mutate()` zaten reddediyor). |
+| **A22** | `can.*` izinleri permissive (`true`) | Satır bazlı izinler senkron kapsamında değil; `false` masaüstünü offline salt-okunur yapardı. KARAR A14'ün üçüncü katmanı (push reddi) veri bütünlüğünü koruyor. **Bedeli F4'e taşınıyor:** kullanıcı yetkisi olmayan bir aksiyonu deneyebilir ve hata **push anında** görünür — Conflict Inbox bunu "reddedildi" olarak anlaşılır biçimde göstermek zorunda. |
+| **A23** | SLA türetilmiş alanları `null`/`0` döner | `sla_remaining_seconds`/`sla_total_seconds`/`sla_target_hours` aynada yok ve `docs/SLA-DESIGN.md` sunucuyu tek otorite yapıyor. **Yanlış sayan bir sayaç yerine hiç sayaç** doğru tercih. |
+| **A24** | `uploadAttachment` şimdilik doğrudan ağa gider | §8 onu "kuyruğa alma" sınıfında sayıyor ama kuyruk `files::attach_from_paths` (F5-5) henüz yok ve webview'daki `File` handle'ının Rust'a verilecek yolu yok. Offline'da **gürültülü hata veriyor**, sessizce kuyruğa girmiş gibi görünmüyor — sahte başarıdan iyidir. F5-5'te kuyruğa bağlanacak. |
+
+## BACKEND'E DEVREDİLEN İKİ GERÇEK BOŞLUK (F1 takibi)
+
+1. **Bildirim metni.** `NotificationResource` `title`/`body`'yi `data.title_key` + **Laravel PHP çeviri kataloğundan** üretiyor; masaüstünde o katalog yok (frontend i18n namespace'leri ayrı). Eski satırlar düz `title` taşıdığı için doğru basılıyor, **yeni satırlarda ham anahtar görünecek**. Çözüm sunucu tarafında: pull payload'ına render edilmiş `title`/`body` eklenmeli. İstemcide uydurulmadı.
+2. **SLA türetilmiş alanları** (A23) pull satırına eklensin ya da formül `docs/SLA-DESIGN.md`'de istemciye açılsın.
+
+## DOĞRULANMASI GEREKEN VARSAYIM
+
+`tag_ids` + `tags` **çift anahtar**: payload hem REST alanını hem ayna kolonunu taşıyor. Laravel'in FormRequest'i fazladan `tags` anahtarını varsayılan olarak yok sayar — **ama bu test edilmemiş bir varsayım**; yanlışsa push 422 döner. F1 takibinde bir test ile kilitlenmeli.
+
+## YOL BOYUNDA YAKALANAN LATENT HATA
+
+`EngineEvent::TablesChanged(Vec<Entity>)` ve `ConflictAdded(Uuid)` internally-tagged **newtype** varyantlardı; serde bunları **çalışma anında** serileştiremez. Olay emisyonu bu turda eklendiği için hata ilk `TablesChanged`'de patlayacaktı. Tüm varyantlar struct varyanta çevrildi + JSON round-trip testi yazıldı. F2'nin 83 testi bunu yakalayamamıştı çünkü hiçbir test olayı serileştirmiyordu.
+
+## KÜÇÜK BOŞLUKLAR (kayda geçti, F4'te kapanacak)
+
+`Conversation.last_message_preview` = `null` · `Message.tick` daima `'sent'` (ayna `delivered` imleci taşımıyor; `TickState` monoton olduğu için en düşük değer güvenli) · `Company.primary_contact` liste sayfasında `null`, detayda gerçek · `tickets.stats.at_risk_count` ve `notes_count` = `0` · `mapUser`'da `role`/`last_login_at`/`must_change_password` §4.1 projeksiyonu dışında olduğu için yok.
+
+## HÂLÂ AÇIK
+
+- **KARAR A11 uygulanmadı:** `bridge/realtime.ts` + Rust `handle_realtime` yok. Desktop şu an web gibi doğrudan Echo'ya abone; realtime olayı motoru tetiklemiyor, mini-pull yapılmıyor.
+- **Gerçek login/uçtan uca akış denenmedi** — backend `:8000`'de ayakta değil.
+- `boardApi` `DataSource` dışında; `deals_board`/`pipeline_stages` varyantları rezerve bekliyor. Board'un adaptöre alınması `frontend/**` dokunuşu gerektiriyor — F4 kararı.

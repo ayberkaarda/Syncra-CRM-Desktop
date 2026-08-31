@@ -43,15 +43,13 @@ async fn web_rows_get_the_deterministic_uuid5_identity() {
     let expected_company = derive_client_id(Entity::Company, 44).to_string();
     let expected_contact = derive_client_id(Entity::Contact, 7).to_string();
 
-    let companies = h.engine.query(NamedQuery::CompanyList, QueryParams::default()).unwrap();
+    let companies = h.engine.query(NamedQuery::companies(), QueryParams::default()).unwrap();
     assert_eq!(companies[0].get_str("client_id"), Some(expected_company.as_str()));
 
     let contacts = h
         .engine
         .query(
-            NamedQuery::ContactList {
-                company_client_id: None,
-            },
+            NamedQuery::contacts(),
             QueryParams::default(),
         )
         .unwrap();
@@ -67,7 +65,14 @@ async fn web_rows_get_the_deterministic_uuid5_identity() {
         .engine
         .query(
             NamedQuery::ContactList {
-                company_client_id: Some(expected_company),
+                q: None,
+                company_id: Some(44),
+                owner_id: None,
+                is_primary: None,
+                city: None,
+                tag_id: None,
+                from: None,
+                to: None,
             },
             QueryParams::default(),
         )
@@ -104,7 +109,7 @@ async fn notification_client_id_is_the_server_uuid() {
     let rows = h
         .engine
         .query(
-            NamedQuery::NotificationList { unread_only: true },
+            NamedQuery::notifications(Some(syncra_sync::ReadFilter::Unread)),
             QueryParams::default(),
         )
         .unwrap();
@@ -220,7 +225,7 @@ async fn soft_deleted_rows_become_local_tombstones() {
     h.engine.bootstrap(|_| {}).await.expect("bootstrap");
     assert_eq!(
         h.engine
-            .query(NamedQuery::CompanyList, QueryParams::default())
+            .query(NamedQuery::companies(), QueryParams::default())
             .unwrap()
             .len(),
         1
@@ -244,7 +249,7 @@ async fn soft_deleted_rows_become_local_tombstones() {
 
     assert_eq!(
         h.engine
-            .query(NamedQuery::CompanyList, QueryParams::default())
+            .query(NamedQuery::companies(), QueryParams::default())
             .unwrap()
             .len(),
         0,

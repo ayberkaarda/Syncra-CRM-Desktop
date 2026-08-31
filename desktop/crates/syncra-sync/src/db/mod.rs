@@ -306,6 +306,237 @@ mod tests {
         assert_eq!(fold("Şirket"), "şirket");
     }
 
+    /// Executes every whitelisted query against a real (empty) database.
+    ///
+    /// `build()` only proves the SQL is *shaped* right. This proves SQLite accepts it — which
+    /// is the only way to catch a mistyped column, a `json_each` build without JSON1, or an
+    /// aggregate whose `GROUP BY` does not line up. An empty result set is fine; a prepare
+    /// error is not.
+    #[test]
+    fn every_named_query_is_valid_sql() {
+        use crate::db::query::{CountScope, NamedQuery, QueryParams, ReadFilter};
+
+        let (_dir, conn) = temp_db();
+        let queries = vec![
+            NamedQuery::RowsByServerIds {
+                entity: Entity::Deal,
+                ids: vec![1, -2],
+            },
+            NamedQuery::RowsByClientIds {
+                entity: Entity::Company,
+                client_ids: vec!["x".into()],
+            },
+            NamedQuery::DealsBoard {
+                stage_client_ids: vec!["s".into()],
+            },
+            NamedQuery::DealsList {
+                q: Some("a".into()),
+                status: Some("open".into()),
+                stage_id: Some(1),
+                owner_id: Some(2),
+                company_id: Some(3),
+                contact_id: Some(4),
+                tag_id: Some(5),
+                amount_min: Some(1.0),
+                amount_max: Some(9.0),
+                from: Some("2026-01-01".into()),
+                to: Some("2026-12-31".into()),
+            },
+            NamedQuery::CompanyList {
+                q: Some("a".into()),
+                industry: Some("it".into()),
+                owner_id: Some(1),
+                city: Some("Ankara".into()),
+                country: Some("TR".into()),
+                tag_id: Some(2),
+                from: Some("2026-01-01".into()),
+                to: Some("2026-12-31".into()),
+            },
+            NamedQuery::ContactList {
+                q: Some("a".into()),
+                company_id: Some(1),
+                owner_id: Some(2),
+                is_primary: Some(true),
+                city: Some("Izmir".into()),
+                tag_id: Some(3),
+                from: None,
+                to: None,
+            },
+            NamedQuery::LeadList {
+                q: Some("a".into()),
+                status: Some("new".into()),
+                source: Some("website".into()),
+                owner_id: Some(1),
+                score_min: Some(10),
+                score_max: Some(90),
+                tag_id: Some(2),
+                from: None,
+                to: None,
+            },
+            NamedQuery::TaskList {
+                q: Some("a".into()),
+                status: Some("pending".into()),
+                priority: Some("high".into()),
+                assigned_to: Some(1),
+                created_by: Some(2),
+                taskable_type: Some("deal".into()),
+                taskable_id: Some(3),
+                overdue: Some(true),
+                from: None,
+                to: None,
+            },
+            NamedQuery::ActivityList {
+                q: Some("a".into()),
+                kind: Some("call".into()),
+                user_id: Some(1),
+                activityable_type: Some("deal".into()),
+                activityable_id: Some(2),
+                from: None,
+                to: None,
+            },
+            NamedQuery::TicketList {
+                q: Some("a".into()),
+                status: Some("open".into()),
+                priority: Some("urgent".into()),
+                assigned_to: Some(1),
+                company_id: Some(2),
+                contact_id: Some(3),
+                category: Some("bug".into()),
+                tag_id: Some(4),
+                sla_breached: Some(true),
+                from: None,
+                to: None,
+            },
+            NamedQuery::TicketStats,
+            NamedQuery::QuoteList {
+                q: Some("a".into()),
+                status: Some("draft".into()),
+                deal_id: Some(1),
+                company_id: Some(2),
+                contact_id: Some(3),
+                expired: Some(true),
+                from: None,
+                to: None,
+            },
+            NamedQuery::QuoteRevisionFamily {
+                root_number: "TKF-2026-0001".into(),
+            },
+            NamedQuery::ConversationList {
+                kind: Some("dm".into()),
+                q: Some("a".into()),
+            },
+            NamedQuery::ConversationMessages {
+                conversation_id: 1,
+                before_server_id: Some(2),
+            },
+            NamedQuery::ConversationMembership {
+                user_id: Some(1),
+                conversation_id: Some(2),
+            },
+            NamedQuery::NotificationList {
+                read: Some(ReadFilter::Read),
+            },
+            NamedQuery::PipelineStages,
+            NamedQuery::ProductList {
+                q: Some("a".into()),
+                category: Some("hw".into()),
+                is_active: Some(true),
+                tag_id: Some(1),
+                price_min: Some(1.0),
+                price_max: Some(2.0),
+                in_stock: Some(true),
+            },
+            NamedQuery::ProductCategories,
+            NamedQuery::PriceListList {
+                q: Some("a".into()),
+                is_active: Some(true),
+                is_default: Some(false),
+            },
+            NamedQuery::PriceListItemList {
+                price_list_id: Some(1),
+                product_id: Some(2),
+            },
+            NamedQuery::ExchangeRateList,
+            NamedQuery::SavedViewList {
+                module: Some("deals".into()),
+            },
+            NamedQuery::SettingList,
+            NamedQuery::TagList { q: Some("a".into()) },
+            NamedQuery::CustomFieldList {
+                entity_type: Some("deals".into()),
+            },
+            NamedQuery::UserList {
+                q: Some("a".into()),
+                is_active: Some(true),
+            },
+            NamedQuery::RelatedCounts {
+                scope: CountScope::CompanyDeals,
+                parent_ids: vec![1, 2],
+            },
+            NamedQuery::PendingRows {
+                entity: Entity::Task,
+            },
+        ];
+
+        for query in &queries {
+            for count_only in [false, true] {
+                let query_params = QueryParams {
+                    count_only,
+                    ..Default::default()
+                };
+                let (sql, binds) = query.build(&query_params).expect("build");
+                let mut stmt = conn
+                    .prepare(&sql)
+                    .unwrap_or_else(|e| panic!("{query:?} did not prepare: {e}\n{sql}"));
+                let bound: Vec<&dyn rusqlite::ToSql> =
+                    binds.iter().map(|v| v as &dyn rusqlite::ToSql).collect();
+                let mut rows = stmt
+                    .query(bound.as_slice())
+                    .unwrap_or_else(|e| panic!("{query:?} did not run: {e}\n{sql}"));
+                while rows.next().expect("row").is_some() {}
+            }
+        }
+    }
+
+    /// The embedded `tags` document is filterable without a `taggables` table (protocol §1.4).
+    #[test]
+    fn the_tag_filter_matches_the_embedded_document() {
+        use crate::db::query::{NamedQuery, QueryParams};
+
+        let (_dir, conn) = temp_db();
+        for (client_id, name, tags) in [
+            ("11111111-1111-1111-1111-111111111111", "Tagged", "[7,9]"),
+            ("22222222-2222-2222-2222-222222222222", "Untagged", "[3]"),
+        ] {
+            conn.execute(
+                "INSERT INTO companies(client_id, name, tags) VALUES (?1, ?2, ?3)",
+                rusqlite::params![client_id, name, tags],
+            )
+            .unwrap();
+        }
+
+        let query = NamedQuery::CompanyList {
+            q: None,
+            industry: None,
+            owner_id: None,
+            city: None,
+            country: None,
+            tag_id: Some(9),
+            from: None,
+            to: None,
+        };
+        let (sql, binds) = query.build(&QueryParams::default()).unwrap();
+        let mut stmt = conn.prepare(&sql).unwrap();
+        let bound: Vec<&dyn rusqlite::ToSql> =
+            binds.iter().map(|v| v as &dyn rusqlite::ToSql).collect();
+        let names: Vec<String> = stmt
+            .query_map(bound.as_slice(), |r| r.get::<_, String>("name"))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(names, vec!["Tagged".to_string()]);
+    }
+
     #[test]
     fn json_round_trips_through_sql() {
         let (_dir, conn) = temp_db();

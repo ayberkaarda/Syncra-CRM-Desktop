@@ -277,7 +277,7 @@ impl SyncEngine {
         self.pull_until_drained(&manifest, &entities, window_days, Some(&progress))
             .await?;
         self.refresh_status()?;
-        self.emit(EngineEvent::TablesChanged(entities));
+        self.emit(EngineEvent::TablesChanged { entities });
         Ok(())
     }
 
@@ -307,7 +307,7 @@ impl SyncEngine {
             Ok(report) => {
                 self.mark_synced_now();
                 if !report.tables_changed.is_empty() {
-                    self.emit(EngineEvent::TablesChanged(report.tables_changed.clone()));
+                    self.emit(EngineEvent::TablesChanged { entities: report.tables_changed.clone() });
                 }
                 self.refresh_status()?;
                 Ok(report)
@@ -388,7 +388,7 @@ impl SyncEngine {
                         }
                     }
                     for id in new_conflicts {
-                        self.emit(EngineEvent::ConflictAdded(id));
+                        self.emit(EngineEvent::ConflictAdded { id });
                     }
                 }
                 Err(err) => {
@@ -482,7 +482,7 @@ impl SyncEngine {
         self.pull_until_drained(&manifest, &entities, window, None)
             .await?;
         self.refresh_status()?;
-        self.emit(EngineEvent::TablesChanged(entities));
+        self.emit(EngineEvent::TablesChanged { entities });
         Ok(())
     }
 
@@ -507,7 +507,7 @@ impl SyncEngine {
         if let Ok(outcome) = self.pull_until_drained(&manifest, &wanted, 0, None).await {
             let _ = self.refresh_status();
             if !outcome.tables_changed.is_empty() {
-                self.emit(EngineEvent::TablesChanged(outcome.tables_changed));
+                self.emit(EngineEvent::TablesChanged { entities: outcome.tables_changed });
             }
         }
     }
@@ -631,7 +631,7 @@ impl SyncEngine {
         drop(conn);
 
         self.refresh_status()?;
-        self.emit(EngineEvent::TablesChanged(vec![mutation.entity]));
+        self.emit(EngineEvent::TablesChanged { entities: vec![mutation.entity] });
 
         Ok(mutation
             .client_id
@@ -759,7 +759,7 @@ impl SyncEngine {
 
         drop(conn);
         self.refresh_status()?;
-        self.emit(EngineEvent::TablesChanged(vec![entity]));
+        self.emit(EngineEvent::TablesChanged { entities: vec![entity] });
         Ok(())
     }
 
@@ -928,7 +928,7 @@ impl SyncEngine {
             status.syncing = syncing;
         }
         let snapshot = self.status();
-        self.emit(EngineEvent::StatusChanged(snapshot));
+        self.emit(EngineEvent::StatusChanged { status: snapshot });
     }
 
     fn mark_synced_now(&self) {
@@ -958,9 +958,9 @@ impl SyncEngine {
         };
 
         if stats.db_usage_percent >= retention::WARN_PERCENT {
-            self.emit(EngineEvent::StorageWarning(stats));
+            self.emit(EngineEvent::StorageWarning { stats });
         }
-        self.emit(EngineEvent::StatusChanged(snapshot));
+        self.emit(EngineEvent::StatusChanged { status: snapshot });
         Ok(())
     }
 

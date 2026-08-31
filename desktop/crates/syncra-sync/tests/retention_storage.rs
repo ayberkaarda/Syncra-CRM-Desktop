@@ -38,7 +38,7 @@ async fn retention_never_removes_a_row_with_pending_work() {
 
     let edited = Uuid::parse_str(
         h.engine
-            .query(NamedQuery::CompanyList, QueryParams::default())
+            .query(NamedQuery::companies(), QueryParams::default())
             .unwrap()
             .iter()
             .find(|r| r.get_str("name") == Some("Edited"))
@@ -129,7 +129,7 @@ async fn the_outbox_ceiling_blocks_writes_and_not_reads() {
     // Reads keep working.
     let rows = h
         .engine
-        .query(NamedQuery::CompanyList, QueryParams::default())
+        .query(NamedQuery::companies(), QueryParams::default())
         .unwrap();
     assert!(!rows.is_empty());
 }

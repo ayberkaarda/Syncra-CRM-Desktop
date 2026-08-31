@@ -129,7 +129,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Show what landed locally.
     let companies = engine.query(
-        NamedQuery::CompanyList,
+        NamedQuery::companies(),
         QueryParams {
             limit: Some(10),
             ..Default::default()

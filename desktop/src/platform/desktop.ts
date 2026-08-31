@@ -1,16 +1,14 @@
 // Desktop platform adapter — `SYNCDESKTOP.md` §7.1, `docs/DESKTOP-ARCHITECTURE.md` §3.5.
 //
-// SCOPE OF THIS TURN (F3-A): bring the shell up. `kind`, `http` (bearer), `connectivity`
-// (engine-authoritative), `realtime`, `notify`, `capabilities` and `onlineOnly` are real.
-// `data` is an explicit, LOUD scaffold: the 124 `DataSource` methods (§E.5.1) each need a
-// `NamedQuery` whitelist entry plus a row -> DTO mapping, which is F3-B. Until then every one
-// of them throws `NOT_IMPLEMENTED` rather than resolving to `undefined` — a silent `undefined`
-// would surface as a blank list three layers away from the cause.
+// `data` is now the real thing: all 124 `DataSource` methods are bound, and the binding table
+// is `platform/data/manifest.ts`. Reads run against the local mirror through the `NamedQuery`
+// whitelist, writes go to the outbox through `mutate()`, and the `SYNCDESKTOP.md` §8
+// online-only actions go to `http` — never to `mutate()` (KARAR A15), because an outbox entry
+// for "send this quote" is a lie the user finds out about later.
 //
 // This module lives under `desktop/` and NOT under `frontend/src/platform/` on purpose
 // (KARAR A2): it imports `@tauri-apps/api`, which must never become a `frontend/package.json`
 // dependency or leak into the web bundle.
-import { api, configureHttp } from '@/lib/axios'
 import {
   configureRealtimeAuth,
   connectEcho,
@@ -18,18 +16,22 @@ import {
   getConnectionState,
   getEcho,
 } from '@/lib/echo'
+import { api } from '@/lib/axios'
 import { toast } from '@/components/ui'
 import type {
   AppNotification,
   Capability,
   ConnState,
-  DataSource,
   OnlineOnlyError,
   Platform,
   RealtimeChannel,
 } from '@/platform/types'
 
-import { CommandError, invokeCommand } from '../bridge/invoke'
+import { invokeCommand } from '../bridge/invoke'
+import { desktopData } from './data'
+import { http } from './http'
+
+export { setDeviceToken } from './http'
 
 // ------------------------------------------------------------------------------------------------
 // Engine status
@@ -49,9 +51,9 @@ interface SyncStatus {
  * How often `connectivity.subscribe` re-reads the engine's status.
  *
  * `sync::status` is documented as a "cheap, synchronous snapshot — safe to poll"
- * (`src-tauri/src/commands/sync.rs`). Polling is a placeholder: the real feed is
- * `EngineEvent::StatusChanged` through `bridge/events.ts` (§3.6), which is F3-B. This turn has
- * no event bridge, and a shell whose connectivity never updates would be worse than a slow one.
+ * (`src-tauri/src/commands/sync.rs`). The authoritative feed is `EngineEvent::StatusChanged`
+ * through `bridge/events.ts`, which the entry point subscribes to; this poll is the backstop
+ * for the window between process start and that subscription landing.
  */
 const STATUS_POLL_MS = 5000
 
@@ -77,39 +79,17 @@ async function readStatus(): Promise<SyncStatus> {
   return lastStatus
 }
 
-// ------------------------------------------------------------------------------------------------
-// HTTP — bearer, never cookies
-// ------------------------------------------------------------------------------------------------
-
-/**
- * The device token, held in memory only. The durable copy lives in the OS keychain on the Rust
- * side (K9); the webview never persists it.
- *
- * F3-B populates this from `invoke('restore')` / `invoke('login')`. Until then the shell has no
- * session and the router lands on `/login` — which is exactly the state F3-A has to render.
- */
-let deviceToken: string | undefined
-
-/** Called by the auth bridge once a session exists (F3-B). Pass `undefined` on logout. */
-export function setDeviceToken(token: string | undefined): void {
-  deviceToken = token
+/** Adopt a status the engine pushed, so the poll and the event feed agree. */
+export function applyEngineStatus(status: unknown): void {
+  if (status && typeof status === 'object' && 'online' in status) {
+    lastStatus = status as SyncStatus
+  }
 }
 
-// TUZAK 2 / KARAR A12 (`docs/DESKTOP-ARCHITECTURE.md` §6.4): the webview's origin on Windows is
-// `http://tauri.localhost`. Were that origin ever treated as stateful by Sanctum, every bearer
-// POST would come back 419 and `lib/axios.ts`'s single CSRF retry would make it look like a
-// random one-off failure. Second line of defence, here: `transport: 'bearer'` turns
-// `withCredentials`/`withXSRFToken` OFF, so no cookie is ever sent and that path cannot be
-// entered at all.
-configureHttp({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000',
-  transport: 'bearer',
-  getBearerToken: () => deviceToken,
-})
-
-// Reverb over a bearer token. `/api/broadcasting/auth` (note the `/api` prefix) is the stateless
-// route F1 registers; the web app's cookie-authenticated `/broadcasting/auth` is a DIFFERENT
-// route with a different middleware stack (§6.4 TUZAK 1) and would reject a bearer request.
+// Reverb over a bearer token. `/api/broadcasting/auth` (note the `/api` prefix) is the
+// stateless route F1 registers; the web app's cookie-authenticated `/broadcasting/auth` is a
+// DIFFERENT route with a different middleware stack (§6.4 TUZAK 1) and would reject a bearer
+// request.
 configureRealtimeAuth({
   key: import.meta.env.VITE_REVERB_APP_KEY,
   wsHost: import.meta.env.VITE_REVERB_HOST,
@@ -124,87 +104,6 @@ configureRealtimeAuth({
     },
   }),
 })
-
-// `Parameters<typeof api.get>[1]` rather than `AxiosRequestConfig`: `axios` is a
-// `frontend/package.json` dependency and is not resolvable from `desktop/`, and the platform
-// contract deliberately types `config` as `unknown` so axios never enters it (§3.3).
-type HttpConfig = Parameters<typeof api.get>[1]
-
-const http: Platform['http'] = {
-  get: async (url, config) => (await api.get(url, config as HttpConfig)).data,
-  post: async (url, body, config) => (await api.post(url, body, config as HttpConfig)).data,
-  put: async (url, body, config) => (await api.put(url, body, config as HttpConfig)).data,
-  patch: async (url, body, config) => (await api.patch(url, body, config as HttpConfig)).data,
-  delete: async (url, config) => (await api.delete(url, config as HttpConfig)).data,
-}
-
-// ------------------------------------------------------------------------------------------------
-// DataSource scaffold — F3-B replaces this wholesale
-// ------------------------------------------------------------------------------------------------
-
-/**
- * The 16 `DataSource` domains (`frontend/src/platform/types.ts`). Listed explicitly rather than
- * derived from a value, and `satisfies`-checked against the contract, so a domain added there
- * becomes a compile error here instead of a runtime "undefined is not a function".
- */
-const DATA_DOMAINS = [
-  'deals',
-  'contacts',
-  'companies',
-  'leads',
-  'tasks',
-  'tickets',
-  'quotes',
-  'activities',
-  'chat',
-  'notifications',
-  'search',
-  'products',
-  'priceLists',
-  'exchange',
-  'savedViews',
-  'users',
-] as const satisfies readonly (keyof DataSource)[]
-
-/**
- * `"<domain>.<method>"` entries already mapped onto a `data::*` command.
- *
- * EMPTY ON PURPOSE this turn — nothing is wired yet. Each entry needs (a) a `NamedQuery`
- * whitelist member on the Rust side and (b) a local-row -> feature-DTO mapping. Neither exists,
- * and a half-mapped method returning a differently-shaped object is strictly worse than one that
- * refuses to run. F3-B fills this in one method at a time.
- */
-const IMPLEMENTED = new Map<string, (...args: never[]) => unknown>()
-
-function notImplemented(domain: string, method: string) {
-  return () => {
-    throw new CommandError({
-      code: 'NOT_IMPLEMENTED',
-      message:
-        `platform.data.${domain}.${method}() is not wired to a data:: command yet ` +
-        '(F3-B: NamedQuery whitelist + row mapping).',
-    })
-  }
-}
-
-function domainScaffold(domain: string): unknown {
-  return new Proxy(
-    {},
-    {
-      get(_target, property) {
-        // Property probes (`then` when something awaits the object, `Symbol.toPrimitive` on
-        // string coercion, React devtools) must not be answered with a throwing function, or an
-        // accidental `await platform.data.deals` would explode instead of resolving.
-        if (typeof property !== 'string') return undefined
-        return IMPLEMENTED.get(`${domain}.${property}`) ?? notImplemented(domain, property)
-      },
-    },
-  )
-}
-
-const data = Object.fromEntries(
-  DATA_DOMAINS.map((domain) => [domain, domainScaffold(domain)]),
-) as unknown as DataSource
 
 // ------------------------------------------------------------------------------------------------
 // Connectivity, realtime, notifications
@@ -245,10 +144,10 @@ function wrapChannel(name: string): RealtimeChannel {
   return wrapped
 }
 
-// Echo runs unchanged, only re-authorised (bearer). KARAR A11 — routing realtime events through
-// `handle_realtime` so the ENGINE, not the UI cache, stays the single source of truth — needs
-// `bridge/realtime.ts` plus a `handle_realtime` command, both F3-B. Until then the desktop
-// subscribes exactly the way the web does.
+// Echo runs unchanged, only re-authorised (bearer). KARAR A11 — routing realtime events
+// through `handle_realtime` so the ENGINE, not the UI cache, stays the single source of truth
+// — needs `bridge/realtime.ts` plus a `handle_realtime` command, and is a separate turn by
+// decision. Until then the desktop subscribes exactly the way the web does.
 const realtime: Platform['realtime'] = {
   connect: () => void connectEcho(),
   disconnect: disconnectEcho,
@@ -291,7 +190,7 @@ const capabilities = new Set<Capability>([
 export const desktopPlatform: Platform = {
   kind: 'desktop',
   http,
-  data,
+  data: desktopData,
   connectivity,
   realtime,
   notify,
@@ -300,9 +199,9 @@ export const desktopPlatform: Platform = {
 }
 
 /**
- * One eager status read at startup, so `connectivity.isOnline()` reflects the engine rather than
- * its optimistic default within milliseconds of boot. Failure is non-fatal on purpose: the shell
- * must open even when the engine cannot answer.
+ * One eager status read at startup, so `connectivity.isOnline()` reflects the engine rather
+ * than its optimistic default within milliseconds of boot. Failure is non-fatal on purpose:
+ * the shell must open even when the engine cannot answer.
  */
 export function primeDesktopPlatform(): void {
   void readStatus().catch(() => undefined)

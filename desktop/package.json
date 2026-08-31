@@ -7,6 +7,7 @@
   "scripts": {
     "dev:desktop": "vite --config vite.desktop.config.ts",
     "build:desktop": "tsc -b && vite build --config vite.desktop.config.ts",
+    "check:data": "node scripts/check-data-wiring.mjs",
     "tauri": "node scripts/tauri.mjs",
     "dev": "node scripts/tauri.mjs dev"
   },

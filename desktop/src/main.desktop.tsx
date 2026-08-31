@@ -17,12 +17,24 @@ import { createRoot } from 'react-dom/client'
 import '@/index.css'
 import { i18nReady } from '@/i18n'
 import { PlatformProvider, setPlatform } from '@/platform'
-import { desktopPlatform, primeDesktopPlatform } from './platform/desktop'
+import { queryClient } from '@/lib/queryClient'
+import { applyEngineStatus, desktopPlatform, primeDesktopPlatform } from './platform/desktop'
+import { subscribeToEngineEvents } from './bridge/events'
 import App from '@/App'
 
 // Before the first render, and before anything can call `getPlatform()` from a React tree.
 setPlatform(desktopPlatform)
 primeDesktopPlatform()
+
+// The engine's event stream drives the query cache: `tables_changed` -> `invalidateQueries`
+// through the hand-written entity -> key table in `bridge/events.ts` (KARAR A5 / D-5). It is
+// started BEFORE the first render because an event emitted while nothing is listening is
+// simply lost — the broadcast channel only replays to live subscribers. `queryClient` is the
+// same module singleton `App` hands to `QueryClientProvider`, so invalidations land on the
+// cache the tree is actually reading.
+void subscribeToEngineEvents(queryClient, {
+  onStatusChanged: applyEngineStatus,
+})
 
 // OPENING GATE — mirrors `frontend/src/main.tsx:19-25` deliberately and must keep mirroring it
 // (KARAR A7). `tr` is eager, `en/de/fr` are lazy chunks; rendering before the selected locale's

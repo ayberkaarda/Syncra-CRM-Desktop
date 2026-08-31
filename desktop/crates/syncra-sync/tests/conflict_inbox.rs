@@ -29,10 +29,7 @@ async fn seeded_deal(h: &Harness) -> Uuid {
     let rows = h
         .engine
         .query(
-            NamedQuery::DealsList {
-                status: None,
-                owner_client_id: None,
-            },
+            NamedQuery::deals(),
             QueryParams::default(),
         )
         .unwrap();
