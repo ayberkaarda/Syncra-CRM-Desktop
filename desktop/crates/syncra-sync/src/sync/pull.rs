@@ -30,11 +30,15 @@ pub struct PullOutcome {
 /// `window_days` is only meaningful while a cursor is 0: `SYNCDESKTOP.md` §4.4 applies the
 /// retention window to bootstrap and no filter at all to deltas, and K12 is what keeps a
 /// first sync from dragging the entire history onto the disk.
+///
+/// `None` therefore means "this is a delta" and the field is left out of the body entirely —
+/// the server rejects `window_days: 0` with a 422 (`min:1`), which is what made every delta
+/// pull fail against the real backend (AUTH-1 U3).
 pub fn build_request(
     conn: &Connection,
     entities: &[Entity],
     limit: u32,
-    window_days: u32,
+    window_days: Option<u32>,
 ) -> Result<PullRequest> {
     let mut cursors = BTreeMap::new();
     for entity in entities {

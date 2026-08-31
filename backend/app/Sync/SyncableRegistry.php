@@ -207,6 +207,147 @@ final class SyncableRegistry
     }
 
     /**
+     * Tombstone tables whose `sync_deletions` rows carry an `owner_key` and
+     * are filtered by it on pull (RISK-2 O3 / TM-F2).
+     *
+     * TODAY THIS IS EXACTLY ONE TABLE, and the other three are absent on
+     * purpose - each for a different reason, none of them "not worth it":
+     *
+     *   - `notifications` — the row IS owned. `SyncScope::applyRowScope()`
+     *     restricts the ROWS to `notifiable_type = <caller morph> AND
+     *     notifiable_id = <caller id>`, and until now the tombstones ignored
+     *     that entirely, so every device learned every user's deleted
+     *     notification uuids. `owner_key` records that same pair
+     *     (`notifiable_type:notifiable_id`) at delete time, and
+     *     `SyncPullService::deletionsFor()` requires it to match. IN.
+     *
+     *   - `tags` — org-wide vocabulary with `permission => null` in self::RW:
+     *     every authenticated user pulls every tag row. A tombstone can only
+     *     ever reveal something the row itself already revealed to the same
+     *     caller, so there is nothing to scope. OUT.
+     *
+     *   - `price_list_items` — gated at the TABLE level by `products.view`
+     *     (self::RO). A caller without that permission never receives the
+     *     `price_list_items` key at all, deletions included; a caller with it
+     *     already pulls every row of the table. There is no per-row owner
+     *     below that gate to filter on. OUT.
+     *
+     *   - `conversation_user` — already scoped, and its owner is a PAIR, not
+     *     a user. The `row_key` is the logical key `conversation_id:user_id`,
+     *     and `deletionsFor()` uses BOTH halves: `%:<my id>` catches "I was
+     *     removed from a conversation" (after which no membership row exists
+     *     to look me up by) and `<conversation I am in>:%` catches "somebody
+     *     else left a conversation I am still in" - which a single-user
+     *     `owner_key` could not express without writing one tombstone per
+     *     remaining member. Adding the column here would duplicate half the
+     *     key and break the second case. OUT.
+     *
+     * The tombstone is also written by a trigger for `conversation_user`
+     * (`...100009_create_conversation_user_sync_triggers`), which cannot call
+     * PHP - another reason the scoping for that table has to live in the key
+     * rather than in a column an observer would have to fill.
+     *
+     * @return array<int, string>
+     */
+    public static function ownerScopedTombstoneTables(): array
+    {
+        return ['notifications'];
+    }
+
+    /**
+     * Tables whose ROWS must never be cut by the bootstrap `window_days`
+     * filter (SYNCDESKTOP §4.4 contract gap, FIX-BE U10 + RISK-2 K2).
+     *
+     * THE RULE: reference/lookup data is exempt; time-ordered event data is
+     * not. `exchange_rates` is the ONE reference table that stays windowed,
+     * and it is not an exception to the rule - §4.1 writes its own tighter
+     * bound into the table list ("exchange_rates (son 7 gün)"), already
+     * enforced as a ROW SCOPE in `SyncScope::applyRowScope()`. An FX rate is
+     * genuinely a dated series: yesterday's row is not a lookup entry that
+     * happens to be old, it is a different fact.
+     *
+     * WHY (RISK-2 K2): the window is a VOLUME tool for time-ordered records -
+     * "do not download five years of deals onto a laptop". Applied to a lookup
+     * table it is a category error: `updated_at` on a product, a pipeline
+     * stage or a user says when somebody last EDITED the definition, not
+     * whether it is still in use. FIX-BE measured the damage on a 30-day
+     * window: `products` shipped 0 of 20 rows and `users` 7 of 10, so a
+     * bootstrapped client rendered every quote line with a blank product and
+     * every assignment as "Atanan: —" while the owner ids were sitting right
+     * there in the rows it did receive.
+     *
+     * This is NOT a contract change. §4.1 already lists these tables on their
+     * own row - `pipeline_stages, custom_fields, products, price_lists,
+     * price_list_items, exchange_rates (son 7 gün), saved_views,
+     * settings(public)`, plus `users` and `tags` on rows of their own - SEPARATE
+     * from the time-ordered entity group (`companies ... quotes, quote_items`),
+     * and it attached a window note to exactly one of them. The code was the
+     * thing that had drifted.
+     *
+     * `users` deliberately gets the exemption rather than a U9-style
+     * relational closure: the table is a bounded org roster (10 rows on the
+     * dev database, hundreds at enterprise scale), the exemption already
+     * returns 10/10, and a closure machine for a table that small is waste.
+     *
+     * VOLUME: the only enterprise-scale growth candidate here is
+     * `price_list_items` (lists x products). Its answer is not the window -
+     * a price the client cannot see is a wrong quote - but the 5 MB
+     * `has_more` pagination that §4.4 already mandates and
+     * `SyncPullService::pull()` already applies to every table alike. Locked
+     * by `SyncPullTest::test_a_read_only_table_pages_through_has_more_...`.
+     *
+     * Derived from self::RO rather than hard-listed so a new reference table
+     * is exempt by construction and cannot silently reintroduce U10.
+     *
+     * `SyncPullService::rowsFor()` is the only caller.
+     *
+     * @return array<int, string>
+     */
+    public static function windowExemptTables(): array
+    {
+        return array_merge(
+            // §4.1 groups `tags, taggables, custom_field_values` on their own
+            // row: a tag is a label from the org's fixed vocabulary, not a
+            // transactional record. Whether it was last touched yesterday or a
+            // year ago says nothing about whether it is still in use -
+            // `taggables` (embedded as `tags: [ids]` on every owner row) is
+            // the only thing that answers that, and it is never windowed. A
+            // stale-looking `tags` row still referenced by an in-window record
+            // is exactly the U10 bug: the mirror table came back empty while
+            // owner rows kept pointing at ids nothing had shipped.
+            ['tags'],
+            array_values(array_diff(array_keys(self::RO), ['exchange_rates'])),
+        );
+    }
+
+    /**
+     * RW tables with a nullable FK into `companies`, keyed by their column
+     * name (SYNCDESKTOP §4.4 contract gap, FIX-BE U9).
+     *
+     * Used ONLY to build the depth-1 relational closure in
+     * `SyncPullService::applyCompanyClosure()`: on a bootstrap pull, a
+     * `contacts`/`deals`/`tickets`/`quotes` row that falls inside the window
+     * can point at a `companies` row that does not (it was created long ago
+     * and nobody has touched it since) — the window filter has no concept of
+     * "still referenced", so that company would simply never ship and the
+     * client renders the relation as empty. `leads.converted_company_id` is
+     * the same shape post-conversion. Closure is depth 1 only: a closure-added
+     * company's OWN foreign keys (there are none today) are never chased.
+     *
+     * @return array<string, string>
+     */
+    public static function companyReferenceColumns(): array
+    {
+        return [
+            'contacts' => 'company_id',
+            'deals' => 'company_id',
+            'tickets' => 'company_id',
+            'quotes' => 'company_id',
+            'leads' => 'converted_company_id',
+        ];
+    }
+
+    /**
      * Every pull table with its mode/permission metadata, in manifest order.
      *
      * @return array<string, array<string, mixed>>

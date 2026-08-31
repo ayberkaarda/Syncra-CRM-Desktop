@@ -112,16 +112,16 @@ yeniden ele alınacak.
 | T4 | Tampering | Yanlış/eksik `.env` ile üretilen CSP | Build zinciri | CSP `frontend/.env`'den build-time üretilir (`desktop/scripts/tauri.mjs:46-97`), frontend bundle ile aynı kaynak/aynı öncelik; `https://crm.example.com` ile doğrulanmış (ARCHITECTURE EK 2) | `VITE_API_URL` yok/bozuksa sessiz `http://localhost:8000` fallback'i (`tauri.mjs:67`) — bkz. TM-F6 | AÇIK (BİLGİ) |
 | R1 | Repudiation | İçeriden: "o işlemi ben yapmadım / masaüstünden yapılmadı" | Audit | Cihaz login'i `session_logs`'a `channel='desktop'` + cihaz adı + IP yazar (`DeviceTokenService.php` `logDeviceLogin`, test `DeviceTokenTest.php:79`); her applied mutasyon `activity_log`'a `causer` = token sahibi, `properties.channel='desktop'`, `batch_id` damgalar (`app/Sync/SyncActivityContext.php:10`, `SyncPushService.php:113-142`) | Audit satırı yazılamazsa login yine başarılı (bilinçli takas, `DeviceTokenService.php` yorum) — web listener'larıyla aynı | KAPALI |
 | I1 | Info disclosure | İçeriden: izinsiz modülün verisini pull'lamak | Pull ucu | Modül `.view` yoksa tablo manifest'te ve pull'da **hiç yok** (`SyncScope.php:45-59`, `GlobalSearchService` ilkesi); satır kapsamlı 4 tablo: notifications sahibe, conversations/messages üyeliğe, saved_views sahibi+paylaşım, settings yalnız `is_public` (`SyncScope.php:70-91` — "stolen laptop should not carry" yorumu) | `sync_deletions` istisnası → I2 | KAPALI |
-| I2 | Info disclosure | İçeriden: **başkasının silinmiş bildirim uuid'lerini görmek** | Pull `deletions` dizisi | YOK — `deletionsFor()` yalnız `conversation_user` için kapsam uygular (`SyncPullService.php:304-347`, kapsam 330-334); `notifications` tombstone'ları tabloya erişimi olan (izin `notifications.view`, `SyncableRegistry.php:118-121`) **her kullanıcıya** döner; şema sahip kolonu taşımaz (`migrations/2026_09_01_100002_...:26-36`), satır silindiği için sahibi geriye dönük çözülemez | Sızan şey yalnız **varlık** (uuid + sync_version) — içerik, tip, atıf yok. Yine de kapsam ilkesinin (I1) deliğidir | AÇIK → TM-F2 |
+| I2 | Info disclosure | İçeriden: **başkasının silinmiş bildirim uuid'lerini görmek** | Pull `deletions` dizisi | YOK — `deletionsFor()` yalnız `conversation_user` için kapsam uygular (`SyncPullService.php:304-347`, kapsam 330-334); `notifications` tombstone'ları tabloya erişimi olan (izin `notifications.view`, `SyncableRegistry.php:118-121`) **her kullanıcıya** döner; şema sahip kolonu taşımaz (`migrations/2026_09_01_100002_...:26-36`), satır silindiği için sahibi geriye dönük çözülemez | Sızan şey yalnız **varlık** (uuid + sync_version) — içerik, tip, atıf yok. Yine de kapsam ilkesinin (I1) deliğidir. **2026-08-31: KAPANDI** — `sync_deletions.owner_key` eklendi (`SyncDeletionObserver.php:51`) ve `SyncPullService.php:542` sahibin **eşleşmesini** şart koşuyor; soldaki "YOK" değerlendirmesi kapanıştan öncedir | ✅ KAPALI (TM-F2) |
 | I3 | Info disclosure | Fiziksel erişim: disk imajından CRM verisi | `syncra.db`, WAL | Şifreli dosya; başlıkta `SQLite format 3` yok — **canlı doğrulandı** (§3/3) ve regresyon testi düz metin satır sızıntısını da tarar (`tests/encryption.rs:17-48`) | WAL/SHM de SQLCipher kapsamında (aynı dosya ailesi); `wipe()` DELETE tabanlıdır ama boşalan sayfalar da şifrelidir | KAPALI |
 | I4 | Info disclosure | Fiziksel erişim: diskte düz token/anahtar dosyası | `$APPDATA`, `$LOCALAPPDATA` | Dizin dökümü (§3/4): yalnız `syncra.db(-wal/-shm)`; token/anahtar dosyası yok; sırlar Credential Manager'da | Log dosyası keyring **girdi adlarını** yazıyor (değerlerini değil) → TM-F3'ün parçası | KAPALI |
-| I5 | Info disclosure | Webview XSS: bellek içi token'ı sızdırmak | `desktop/src/platform/http.ts` | Token webview'da **yalnız bellekte** tutulacak şekilde tasarlı (`http.ts:9-23`), kalıcı kopya keychain'de; CSP `connect-src` yalnız kendi API/Reverb origin'i (`tauri.conf.json:28`) → sızdırma kanalı dar; kalite çizgisi `dangerouslySetInnerHTML` yasağı (PHASE-AUDIT F5 kararı) | Bugün `setDeviceToken()` hiçbir yerden çağrılmıyor (auth köprüsü bağlanmadı) — yüzey fiilen boş; F4'te dolacak → TM-F7 | AÇIK (BİLGİ, izlenecek) |
+| I5 | Info disclosure | Webview XSS: bellek içi token'ı sızdırmak | `desktop/src/platform/http.ts` | Token webview'da **yalnız bellekte** tutulacak şekilde tasarlı (`http.ts:9-23`), kalıcı kopya keychain'de; CSP `connect-src` yalnız kendi API/Reverb origin'i (`tauri.conf.json:28`) → sızdırma kanalı dar; kalite çizgisi `dangerouslySetInnerHTML` yasağı (PHASE-AUDIT F5 kararı) | **2026-08-31: yüzey artık canlı.** `setDeviceToken()` `platform/auth.ts:191` üzerinden besleniyor (WIRE-1); ayrıca aynı turda webview'daki `localStorage` oturum kopyası **kaldırıldı** ve eski kurulumların yazdığı `purgeLegacySessionCache()` ile siliniyor — yani XSS'in ulaşabileceği kalıcı kopya yok, token yalnız bellekte. TM-F7 buna göre yeniden değerlendirilmeli | AÇIK (BİLGİ, izlenecek — yüzey doldu) |
 | I6 | Info disclosure | `sync_idempotency.result_json` içinde sunucu satırları | Sunucu DB | Kullanıcı bazlı anahtar; `logs:prune` 7 günde budar (`app/Console/Commands/PruneLogs.php:184-190`); tabloya API yüzeyi yok | — | KAPALI (BİLGİ) |
 | D1 | DoS | İçeriden: sync uçlarını döngüye sokmak | Sync API | `throttle:30,1,sync` (manifest+pull), `throttle:20,1,sync-push` (`routes/api.php:127-135`); push batch ≤200 mutasyon ≤2 MB, pull yanıtı 5 MB kesme (şartname §4.4, `SyncPushTest`/`SyncPullTest` matrisi) | `sync_counter` küresel mutex'i (K-B) altında saldırgan yazma dalgası diğer yazarları kilit beklemesine sokabilir; P4a retry + throttle bunu sınırlar — ölçülmüş bir sorun değil | KAPALI |
 | D2 | DoS | Kendi kendine: lokal disk şişmesi | Lokal DB | K8 tavanları + `retention_maintenance()` + `WriteBlocked` (crate, `SYNCDESKTOP.md` §5.6; `SyncRetentionTest.php` sunucu tarafı) | — | KAPALI |
 | E1 | Elevation | İçeriden: `can.*` istemci bayraklarını `true` yapıp yetkisiz yazma | Lokal veri katmanı | Bayraklar **zaten** permissive `true` (KARAR A22, `desktop/src/platform/data/mappers.ts:30-33,190,330,388,406,496`) çünkü otorite istemci değil: push'ta sunucu Policy'leri reddeder (A14 3. katman, `MutationApplier.php` Gate çağrıları). İstemci tarafı izin **hiçbir zaman güvenlik kontrolü değildir** | Bedel güvenlik değil UX: red, push anında görünür; Conflict Inbox'un bunu anlaşılır göstermesi F4 yükümlülüğü (EK 3 A22) | KAPALI (tasarım gereği) |
 | E2 | Elevation | İçeriden/webview: Tauri capability'leri üzerinden OS'e taşma | IPC / plugin yüzeyi | Dar capability seti (`capabilities/default.json:7-29`): `shell` yalnız `allow-open` + URL kısıtı (22-24), `fs` yalnız iki kök scope (26-28) — üstelik hiçbir `fs:allow-*` işlem izni verilmemiş (scope tek başına işlem açmaz, şartnameden bile dar); `clipboard-manager:allow-read-text` **verilmemiş** (K10; açıklama satır 4); `core:window` yalnız set-focus/show/hide (8-10) | Runtime clipboard izni mekanizması F5-6'da tasarlanacak — o tasarım bu tabloyu günceller | KAPALI (bugünkü hâliyle) |
-| E3 | Elevation | Token yaşam döngüsü: deaktive/silinen kullanıcının token'ı çalışmaya devam eder mi | Sunucu | Anında iptal: `toggleActive` / `delete` / **`resetPassword`** içinde `tokens()->delete()` (`app/Services/Users/UserService.php:203,230,251` — reset-password, protokolün D7 düzeltmesi); şifre değişiminde SPA'dan → tümü, masaüstünden → kendisi hariç tümü (`app/Services/Auth/AuthService.php:281-283`, TransientToken tuzağı çözülmüş); testler `DeviceTokenTest.php:203,225`, `DevicePasswordChangeTest.php` | İstemci tarafı temizlik eksik → §3/2, TM-F1 | KAPALI (sunucu) / AÇIK (istemci) |
+| E3 | Elevation | Token yaşam döngüsü: deaktive/silinen kullanıcının token'ı çalışmaya devam eder mi | Sunucu | Anında iptal: `toggleActive` / `delete` / **`resetPassword`** içinde `tokens()->delete()` (`app/Services/Users/UserService.php:203,230,251` — reset-password, protokolün D7 düzeltmesi); şifre değişiminde SPA'dan → tümü, masaüstünden → kendisi hariç tümü (`app/Services/Auth/AuthService.php:281-283`, TransientToken tuzağı çözülmüş); testler `DeviceTokenTest.php:203,225`, `DevicePasswordChangeTest.php` | **2026-08-31: istemci yarısı da kapandı** — deaktivasyon 403 `USER_DEACTIVATED` ile ayrı sinyal olarak geliyor ve `sync/mod.rs:1072` o sinyalde lokal DB + keychain'i wipe ediyor (KARAR A25, §3/2-A25) | ✅ KAPALI (sunucu + istemci) |
 | — | (tümü) | Tray, global hotkey, deep link yönlendirme, drag-drop, clipboard yakalama, screenshot | F5 yüzeyleri | Kod yok. Mevcut ilgili kalıntılar: deep-link/global-shortcut/clipboard plugin'leri **kayıtlı ama bağlantısız** (`lib.rs:64-78`; deep link handler'ı yok — `lib.rs:34-43` yorumu; `tauri.conf.json`'da `plugins.deep-link` şema kaydı da yok → `syncra://` OS'e kayıtlı değil); ana pencerede `dragDropEnabled: true` (`tauri.conf.json:24`) ama dinleyici yok | Her madde F5'in kendi mini-raporunda analiz edilip bu tabloya işlenecek | DEĞERLENDİRİLEMEZ-F5 |
 
 ---
@@ -141,8 +141,10 @@ yeniden ele alınacak.
    `DeviceTokenTest.php:263` (K-A gereği bu tek test bilinçli `actingAs()` kullanır ve
    yorumunda gerekçesi yazılıdır; diğer sync testlerinde `actingAs()` yasak, `InteractsWithDeviceTokens` helper'ı kullanılır).
 
-2. **Deaktive/silinen kullanıcı → 401 → lokal DB + keychain tamamen wipe (test).**
-   **KISMEN — sunucu yarısı KAPALI, istemci yarısı AÇIK (TM-F1).**
+2. **Deaktive/silinen kullanıcı → lokal DB + keychain wipe (test).**
+   **KAPALI (2026-08-31, KARAR A25).** Aşağıdaki "karar gerekiyor" metni, kararın
+   verilmesinden ve uygulanmasından **önce** yazılmıştır ve tarihsel gerekçe olarak
+   bırakılmıştır — bugünkü davranış için §3/2-A25 notuna bakın.
    *Sunucu:* iptal anında ve üç akışta da var (§2/E3, `UserService.php:203,230,251`);
    sonraki bearer istek 401 alır (test `DeviceTokenTest.php:203`).
    *İstemci:* 401'de `handle_auth_lost()` keychain'den **token'ı siler**, oturumu düşürür —
@@ -155,6 +157,17 @@ yeniden ele alınacak.
    bugün **verilemez**. Karar gerekiyor (bkz. TM-F1); 401'in "deaktive" mi "şifre değişti"
    mi olduğunu istemci ayırt edemediği için naif "her 401'de wipe", şifre değiştiren
    kullanıcının gönderilmemiş outbox'unu da yok eder — çelişkinin sebebi budur.
+
+   **§3/2-A25 — çözüm (2026-08-31).** Çelişki, 401'i yorumlamaya çalışarak değil,
+   **ayrı bir sinyal** kullanılarak kapatıldı. Sunucu deaktive hesabı için 401 değil
+   **403 + `code: USER_DEACTIVATED`** döndürür (`AuthService.php:355`); istemci yalnız bu
+   kesin sinyalde tam wipe yapar (`sync/mod.rs:1072` — `status == 403 && code ==
+   USER_DEACTIVATED`), çıplak 401'de outbox'ı korur. Böylece §9/2 ("hesap kapandı →
+   cihazdaki kopya da gitsin") ve §5.5 ("şifre değiştiren kullanıcının bekleyen işi
+   yok olmasın") **aynı anda** sağlanır. Kilitleyen testler `tests/wire_contract.rs`:
+   `a_deactivated_account_wipes_the_local_database` (pozitif),
+   `a_plain_403_does_not_wipe_anything` ve `a_bare_401_still_keeps_the_outbox`
+   (negatif kontroller — dar kapsamın kazara genişlemesini yakalar).
 
 3. **DB dosyası düz `sqlite3` ile açılamıyor (test: header `SQLite format 3` yok).**
    **SAĞLANIYOR** — iki bağımsız kanıt:
@@ -213,8 +226,14 @@ yeniden ele alınacak.
    güncelleme yolu mevcut değil; doğrulama, gerçek minisign anahtarı üretildiğinde (F7 1.
    madde) yapılacak. "İmzasız manifest reddi" testi F7 kabul kriterine devredildi (§6).
 
-9. **`tracing` PII filtresi (email/phone masked).** **SAĞLANMIYOR — ve F5'i bekleyemez
-   (TM-F3).** Log plugin'i F3'ten beri canlı (`lib.rs:78`, `Builder::new().build()` —
+9. **`tracing` PII filtresi (email/phone masked).** **KAPALI (2026-08-31).**
+   `desktop/src-tauri/src/logging.rs` TM-F3'ün **iki adımını da** uyguluyor:
+   `level_for_build()` release derlemesini `Info`'ya kısar (keyring'in DEBUG gürültüsü
+   dahil her şey susar), `masking_format()`/`mask_pii()` e-posta ve E.164 telefonu sabit
+   `[email]`/`[phone]` yer tutucularıyla değiştirir. İkisi de **aynı** fern dispatch'ine
+   bağlı, yani hiçbir sink filtrelenmemiş akışa erişemez. 4 test + 1 negatif kontrol.
+   Uzunluğu koruyan maske bilinçli olarak reddedildi (uzunluk da bilgidir).
+   Aşağıdaki metin kapanıştan **önce** yazılmıştır, tarihsel gerekçedir: Log plugin'i F3'ten beri canlı (`lib.rs:78`, `Builder::new().build()` —
    filtre/seviye yapılandırması **yok**) ve gerçek makinede `$LOCALAPPDATA\com.syncra.desktop\logs\Syncra.log`
    dosyasına DEBUG seviyesinde yazıyor (canlı kanıt: keyring DEBUG satırları). Bugünkü
    gözlemlenen içerikte PII/sır yok (`syncra-sync` kaynağında payload/email/token loglayan
@@ -319,9 +338,9 @@ gündeme gelirse test kırmızısı tasarım kararını zorlar.
 
 | # | Şiddet | Bulgu | Kanıt | Önerilen düzeltme | Faz | Statü |
 |---|---|---|---|---|---|---|
-| TM-F1 | **ORTA** | §9/2'nin istemci yarısı sağlanmıyor: 401 sonrası lokal DB cihazda kalıyor (yalnız token siliniyor); şartname kendi içinde çelişik (§5.5 "outbox korunur" ↔ §9/2 "tamamen wipe") | `sync/mod.rs:1001-1011`; wipe yalnız farklı-user login (`:187`) ve logout (`:238-251`) | Kullanıcı kararı: (a) §5.5 davranışı + şifreli-beklet kabul edilip §9/2 metni revize edilir, ya da (b) sunucu 401 gövdesine `reason: deactivated|deleted` ayrımı eklenir ve istemci yalnız o durumda tam wipe yapar (outbox kaybı bilinçli). Karar olmadan F6 kapanmaz | F6 | 🔴 AÇIK — karar bekliyor |
-| TM-F2 | **DÜŞÜK** | `notifications` tombstone'ları sahibe kapsamlanmıyor; başka kullanıcının silinmiş bildirim uuid'leri pull'da görünüyor | `SyncPullService.php:304-347` (kapsam yalnız conversation_user), şema `...100002:26-36` | `sync_deletions.owner_key VARCHAR(64) NULL` + observer yazımı + `deletionsFor()` filtresi + kilitleyen pull testi | F6 | 🔴 AÇIK |
-| TM-F3 | **DÜŞÜK** | `tracing`/log filtresi yok; log plugin'i varsayılan (DEBUG dahil) seviyede F3'ten beri diske yazıyor; PII maskesi yazılmamış | `lib.rs:78`; canlı `Syncra.log` (keyring DEBUG satırları; bugün sır/PII gözlenmedi) | İki adım: (1) F6'da seviye filtresi (`Builder::level(Info)` + hedef bazlı susturma — keyring DEBUG dahil), (2) email/telefon maskeleme katmanı; clipboard (F5-6) bu filtre kanıtlanmadan açılamaz | F6 (1) + F5 öncesi (2) | 🔴 AÇIK |
+| ~~TM-F1~~ | **KAPANDI 2026-08-31** | §9/2'nin istemci yarısı sağlanmıyor: 401 sonrası lokal DB cihazda kalıyor (yalnız token siliniyor); şartname kendi içinde çelişik (§5.5 "outbox korunur" ↔ §9/2 "tamamen wipe") | `sync/mod.rs:1001-1011`; wipe yalnız farklı-user login (`:187`) ve logout (`:238-251`) | Kullanıcı kararı: (a) §5.5 davranışı + şifreli-beklet kabul edilip §9/2 metni revize edilir, ya da (b) sunucu 401 gövdesine `reason: deactivated\|deleted` ayrımı eklenir ve istemci yalnız o durumda tam wipe yapar (outbox kaybı bilinçli). **Karar verildi ve uygulandı: (b)'nin daha keskin bir biçimi.** 401'e `reason` eklemek yerine sunucu deaktivasyon için **403 `USER_DEACTIVATED`** döndürüyor (`AuthService.php:355`); istemci yalnız o sinyalde wipe ediyor (`sync/mod.rs:1072`), çıplak 401'de outbox korunuyor. §3/2-A25 ve KARAR A25. | F6 | ✅ KAPALI — 3 test (1 pozitif, 2 negatif kontrol) |
+| ~~TM-F2~~ | **KAPANDI 2026-08-31** | `notifications` tombstone'ları sahibe kapsamlanmıyor; başka kullanıcının silinmiş bildirim uuid'leri pull'da görünüyor | `SyncPullService.php:304-347` (kapsam yalnız conversation_user), şema `...100002:26-36` | **Uygulandı:** migration `2026_09_01_100010_add_owner_key_to_sync_deletions_table`, `SyncDeletionObserver.php:51` sahip yazımı, `SyncPullService.php:542` filtresi. Filtre `owner_key`'in **eşleşmesini** şart koşuyor ("başkasınınki değil" değil) — sahipsiz eski satırlar da sızmaz. | F6 | ✅ KAPALI — hedefli pull testleri |
+| ~~TM-F3~~ | **KAPANDI 2026-08-31** | `tracing`/log filtresi yok; log plugin'i varsayılan (DEBUG dahil) seviyede F3'ten beri diske yazıyor; PII maskesi yazılmamış | `lib.rs:78`; canlı `Syncra.log` (keyring DEBUG satırları; bugün sır/PII gözlenmedi) | İki adım: (1) F6'da seviye filtresi (`Builder::level(Info)` + hedef bazlı susturma — keyring DEBUG dahil), (2) email/telefon maskeleme katmanı; **Her iki adım da `logging.rs`'te:** (1) `level_for_build()` → release'de `Info`; (2) `mask_pii()` → `[email]`/`[phone]`. Aynı dispatch'e bağlı. **F5-6 clipboard'ın ön koşulu böylece sağlandı.** | F6 (1) + F5 öncesi (2) | ✅ KAPALI — 4 test + negatif kontrol |
 | TM-F4 | **DÜŞÜK** | `device_fingerprint` istemci beyanı: kendi hesabı için cihaz-başına-tek-token kuralı atlatılabilir → token bolluğu (çapraz hesap etkisi YOK) | `DeviceTokenRequest.php:38`, `DeviceTokenService.php:110-116`, test `DeviceTokenTest.php:119` | Kullanıcı başına desktop token tavanı (ör. 10; aşımda en eskisi düşer) — şartnamede yok, onay gerektirir | F6 adayı (onaylıysa) | ⬜ KAYITLI |
 | TM-F5 | **BİLGİ** | DB anahtarı 2×UUIDv4'ten türetiliyor → gerçek entropi 244 bit (UUID başına 6 bit sürüm/varyant sabiti), yorum "256 bits" diyor | `keystore.rs:110-123` | Kriptografik olarak fazlasıyla yeterli; yorum düzeltilsin ya da `getrandom` ile 32 ham bayt üretilsin | F6 (yorum) | ⬜ KAYITLI |
 | TM-F6 | **BİLGİ** | CSP/API host fallback'i sessiz `http://localhost:8000` — eksik `.env` ile paketlenen build sessiz kırılır; lokal port dinleyen prosese kimlik bilgisi POST'u uç senaryosu | `tauri.mjs:58-67`, `http.ts:32` | `build` alt komutunda `VITE_API_URL` yoksa fallback yerine **hata ver** (`dev`'de fallback kalabilir) | F7 (paketleme) | ⬜ KAYITLI |
@@ -345,9 +364,14 @@ Ayrıca kayıt: §4.5 (FK cascade) bulgu değil **kilitlenmiş risk** statüsün
 | 6. Clipboard sızıntısı | ⬜ F5-6 | Ön koşul TM-F3/2 (maskeleme); F5-6 mini-raporu |
 | 7. CSP/capabilities dar | ✅ KAPALI | Kapandı (bugünkü yüzey için); F5'te her yeni izin bu dokümana satır ekler |
 | 8. Updater imza | ⬜ F7 | `plugins.updater` + minisign anahtarı + imzasız manifest red testi F7 kabul kriteri |
-| 9. tracing PII filtresi | 🔴 AÇIK | **F6** seviye filtresi (TM-F3/1); maskeleme en geç F5 öncesi |
+| 9. tracing PII filtresi | ✅ KAPALI | `logging.rs` — seviye filtresi + maskeleme, 4 test + negatif kontrol (2026-08-31) |
 | 10. Bu doküman | ✅ VAR | Canlı tutulur: F4 (TM-F7), F5'in 8 maddesi, F7 (TM-F6/F8, updater) sonrası zorunlu güncelleme |
 
-**F6'nın bu dokümandan doğan iş listesi:** TM-F1 kararı ve uygulaması · TM-F2 (`owner_key`)
-· TM-F3/1 (log seviye filtresi) · TM-F5 yorum düzeltmesi · şartname D2 metin revizyonu.
+**F6'nın bu dokümandan doğan iş listesi — 2026-08-31 itibarıyla:** ~~TM-F1 kararı ve
+uygulaması~~ ✅ · ~~TM-F2 (`owner_key`)~~ ✅ · ~~TM-F3/1 (log seviye filtresi)~~ ✅ (TM-F3/2
+maskeleme de kapandı) · **kalan:** TM-F5 yorum düzeltmesi · şartname D2 metin revizyonu.
+
+> **Bu üçü F6 gelmeden, başka fazların yan ürünü olarak kapandı.** F6 şeridine dikkat:
+> aşağıdaki tabloda ✅ görünen bir maddeyi **yeniden uygulamaya kalkma** — önce
+> `docs/DESKTOP-OPEN-ITEMS.md`'ye bak, kapanma kanıtı (dosya:satır + test adı) orada.
 TM-F4 ve TM-F6 kullanıcı onayına bağlı önerilerdir (§0.5 gereği kendiliğinden uygulanmaz).

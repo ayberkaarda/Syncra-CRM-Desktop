@@ -106,6 +106,23 @@ if (CONFIG_AWARE.has(args[0])) {
   // Merged onto `src-tauri/tauri.conf.json`; only `app.security.csp` is replaced.
   finalArgs.push('--config', outFile)
   console.log(`[tauri] CSP from ../frontend/.env -> ${outFile}`)
+
+  // Open item O27. `src-tauri/src/state.rs` reads the API base through
+  // `option_env!("SYNCRA_API_URL")` and otherwise falls back to a hard-coded
+  // `http://localhost:8000/api/`. Until now nothing set that variable, so the CSP (built
+  // above from `VITE_API_URL`) and the host the engine actually talks to were two
+  // independent truths: a build could ship a CSP for one origin and requests to another,
+  // and no test would go red because the mismatch lives in the build input, not the code.
+  // Deriving both from one value makes them wrong together and visibly, instead of
+  // silently apart. An explicit SYNCRA_API_URL in the real process env still wins, which
+  // is how CI and one-off builds override the host.
+  if (!process.env.SYNCRA_API_URL) {
+    const origin = toOrigin(env.VITE_API_URL ?? '', 'http://localhost:8000')
+    process.env.SYNCRA_API_URL = `${origin}/api/`
+    console.log(`[tauri] SYNCRA_API_URL -> ${process.env.SYNCRA_API_URL}`)
+  } else {
+    console.log(`[tauri] SYNCRA_API_URL (from process env) -> ${process.env.SYNCRA_API_URL}`)
+  }
 }
 
 const cli = require('@tauri-apps/cli')

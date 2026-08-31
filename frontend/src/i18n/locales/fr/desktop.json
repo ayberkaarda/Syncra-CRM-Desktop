@@ -5,6 +5,7 @@
     "PROTOCOL_ERROR": "Une erreur du protocole de synchronisation est survenue. Une mise à jour de l'application peut être nécessaire.",
     "DB_ERROR": "Une erreur de la base de données locale est survenue.",
     "HTTP_ERROR": "Une erreur est survenue lors de la connexion au serveur.",
+    "SERVER_ERROR": "Un problème est survenu sur le serveur. Cela ne concerne pas votre connexion internet ; l'application réessaiera automatiquement sous peu.",
     "WRITE_BLOCKED": "Limite de stockage local atteinte. Libérez de l'espace disque ou synchronisez.",
     "VALIDATION_ERROR": "Les données saisies sont invalides.",
     "httpStatus": "Erreur serveur (HTTP {{status}}).",
@@ -16,6 +17,8 @@
     "ABILITY_REQUIRED": "Vous n'avez pas les droits nécessaires pour effectuer cette action.",
     "LOCKED_OUT": "Votre compte est temporairement verrouillé suite à trop de tentatives échouées.",
     "USER_INACTIVE": "Votre compte a été désactivé.",
+    "INVALID_CREDENTIALS": "Adresse e-mail ou mot de passe incorrect.",
+    "PENDING_MUTATIONS": "Vous avez des modifications qui n'ont pas encore été synchronisées. Synchronisez d'abord, ou déconnectez-vous quand même.",
     "unknown": "Une erreur inconnue est survenue."
   },
   "onlineOnly": {
@@ -64,6 +67,13 @@
     "paused": "Synchronisation en pause",
     "syncError": "Une erreur est survenue lors de la synchronisation."
   },
+  "logout": {
+    "title": "Se déconnecter",
+    "description": "Cet appareil contient des modifications qui n'ont pas encore été envoyées au serveur. Nous vous recommandons de synchroniser avant de vous déconnecter.",
+    "discardWarning_one": "Se déconnecter entraînera la perte de {{count}} modification non envoyée.",
+    "discardWarning_other": "Se déconnecter entraînera la perte de {{count}} modifications non envoyées.",
+    "force": "Se déconnecter quand même"
+  },
   "bootstrap": {
     "title": "Configuration initiale",
     "description": "Vos données sont en cours de téléchargement sur cet appareil. Cette opération peut prendre quelques minutes.",
@@ -92,6 +102,12 @@
       "localValue": "Valeur locale",
       "serverValue": "Valeur serveur"
     },
+    "rejected": {
+      "title": "Rejeté",
+      "description": "Le serveur n'a pas accepté cette modification. La raison est indiquée ci-dessus."
+    },
+    "retry": "Réessayer",
+    "discard": "Abandonner la modification",
     "resolveAll": "Tout résoudre",
     "resolveSelected": "Résoudre la sélection",
     "resolvedToast": "Conflit résolu.",
@@ -111,12 +127,15 @@
       "label": "Utilisation",
       "value": "{{used}} / {{total}} Mo utilisés"
     },
-    "downloadArchive": "Télécharger l'archive",
+    "downloadArchive": {
+      "button": "Télécharger l'archive",
+      "description": "Télécharge l'historique correspondant à la période de conservation sélectionnée sous forme de fichier d'archive."
+    },
     "clearLocal": {
       "button": "Effacer les données locales",
       "title": "Effacer les données locales",
       "description": "Cette action est IRRÉVERSIBLE. Toutes les données locales de cet appareil seront supprimées et retéléchargées depuis le serveur lors de la prochaine synchronisation.",
-      "confirmSuffix": "effacer les données locales ?"
+      "confirmSuffix": "Voulez-vous vraiment effacer les données locales ?"
     },
     "saveSuccess": "Paramètres de stockage enregistrés.",
     "saveError": "Une erreur est survenue lors de l'enregistrement des paramètres de stockage."
@@ -135,7 +154,7 @@
     "revokeConfirm": {
       "title": "Déconnecter l'appareil",
       "description": "Cet appareil sera déconnecté et ne pourra plus se synchroniser tant qu'il ne se sera pas reconnecté.",
-      "confirmSuffix": "déconnecter cet appareil ?"
+      "confirmSuffix": "sera déconnecté. Êtes-vous sûr(e) ?"
     },
     "empty": {
       "title": "Aucun appareil trouvé",
@@ -167,5 +186,90 @@
       "notificationTitle": "Syncra fonctionne en arrière-plan",
       "notificationBody": "L'application continue de fonctionner dans la barre système. Utilisez « Quitter » dans le menu pour la fermer complètement."
     }
+  },
+  "recordBadge": {
+    "pending": "En attente",
+    "conflict": "Conflit"
+  },
+  "entities": {
+    "company": "Entreprise",
+    "contact": "Contact",
+    "lead": "Prospect",
+    "deal": "Opportunité",
+    "task": "Tâche",
+    "activity": "Activité",
+    "ticket": "Ticket",
+    "quote": "Devis",
+    "conversation": "Conversation",
+    "message": "Message",
+    "conversation_user": "Adhésion à la conversation",
+    "notification": "Notification",
+    "tag": "Étiquette",
+    "pipeline_stage": "Étape",
+    "custom_field": "Champ personnalisé",
+    "product": "Produit",
+    "price_list": "Liste de prix",
+    "price_list_item": "Article de la liste de prix",
+    "exchange_rate": "Taux de change",
+    "saved_view": "Vue enregistrée",
+    "setting": "Paramètre",
+    "user": "Utilisateur"
+  },
+  "fields": {
+    "title": "Titre",
+    "description": "Description",
+    "amount": "Montant",
+    "currency": "Devise",
+    "probability": "Probabilité",
+    "expected_close_date": "Date de clôture prévue",
+    "company_id": "Entreprise",
+    "contact_id": "Contact",
+    "owner_id": "Propriétaire",
+    "tag_ids": "Étiquettes",
+    "tags": "Étiquettes",
+    "custom_fields": "Champs personnalisés",
+    "first_name": "Prénom",
+    "last_name": "Nom",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "company_name": "Nom de l'entreprise",
+    "position": "Poste",
+    "source": "Source",
+    "status": "Statut",
+    "score": "Score",
+    "notes": "Notes",
+    "mobile": "Mobile",
+    "is_primary": "Contact principal",
+    "address": "Adresse",
+    "city": "Ville",
+    "country": "Pays",
+    "name": "Nom",
+    "website": "Site web",
+    "industry": "Secteur",
+    "employee_count": "Effectif",
+    "annual_revenue": "Chiffre d'affaires annuel",
+    "due_at": "Échéance",
+    "reminder_at": "Rappel",
+    "priority": "Priorité",
+    "assigned_to": "Responsable",
+    "taskable_type": "Type d'enregistrement lié",
+    "taskable_id": "Enregistrement lié",
+    "completed_at": "Terminé le",
+    "type": "Type",
+    "subject": "Sujet",
+    "body": "Description",
+    "occurred_at": "Date de réalisation",
+    "duration_minutes": "Durée (minutes)",
+    "outcome": "Résultat",
+    "activityable_type": "Type d'enregistrement lié",
+    "activityable_id": "Enregistrement lié",
+    "category": "Catégorie",
+    "sla_due_at": "Échéance SLA",
+    "deal_id": "Opportunité",
+    "valid_until": "Valide Jusqu'au",
+    "discount_type": "Type de Remise",
+    "discount_value": "Valeur de la Remise",
+    "terms": "Conditions",
+    "is_muted": "En sourdine"
   }
 }

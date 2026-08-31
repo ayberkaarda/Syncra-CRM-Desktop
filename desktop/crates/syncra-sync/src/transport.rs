@@ -3,12 +3,15 @@
 //! The transport does one thing beyond serialisation: it separates "the server said no"
 //! from "the network is not there". A connect/timeout failure becomes
 //! [`SyncError::Offline`] so the sync loop can back off; a 401 becomes [`SyncError::Auth`]
-//! so the engine can raise `AuthLost` while keeping the outbox (`SYNCDESKTOP.md` §5.5).
+//! so the engine can raise `AuthLost` while keeping the outbox (`SYNCDESKTOP.md` §5.5). A
+//! `5xx` becomes [`SyncError::Server`] — the sync loop still treats it as transient and
+//! retries, but the UI no longer reports a live server's own `500` as "no internet
+//! connection" (O25).
 
-use crate::error::{Result, SyncError};
+use crate::error::{Result, ServerError, SyncError};
 use crate::protocol::{
-    ApiErrorBody, DeviceLoginRequest, DeviceLoginResponse, Manifest, PullRequest, PullResponse,
-    PushRequest, PushResponse,
+    codes, ApiErrorBody, DeviceLoginRequest, DeviceLoginResponse, Manifest, PullRequest,
+    PullResponse, PushRequest, PushResponse,
 };
 use crate::types::DeviceInfo;
 use reqwest::{Client, StatusCode};
@@ -69,22 +72,37 @@ impl Transport {
             return Ok(response.json::<DeviceLoginResponse>().await?);
         }
 
-        let err: ApiErrorBody = response.json().await.unwrap_or(ApiErrorBody {
-            code: None,
-            message: None,
-            retry_after: None,
-        });
-        match status {
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::LOCKED => {
-                Err(SyncError::Validation(
-                    err.code.unwrap_or_else(|| status.as_str().to_string()),
-                ))
-            }
-            _ => Err(SyncError::Protocol(format!(
-                "auth/device returned {status}: {:?}",
-                err.code
-            ))),
+        // Every refusal — 401 `INVALID_CREDENTIALS`, 403 `USER_INACTIVE`, 423 `LOCKED_OUT` with
+        // its `retry_after`, and the 422 that U1 produced — becomes one structured error. It
+        // used to be `SyncError::Validation(<code>)`, i.e. the code lived only in a message
+        // string and `retry_after` was dropped, and 422 fell through to `Protocol` (U11/U12).
+        Err(SyncError::Server(server_error(status, response).await))
+    }
+
+    /// `DELETE /api/me/devices/{token_id}` (`SYNCDESKTOP.md` §4.3).
+    ///
+    /// Not a sync endpoint, but [`crate::SyncEngine::logout`] needs it: deleting the keychain
+    /// entry only makes the client forget the token — the server row stayed usable, and a live
+    /// check after a desktop logout found the personal access token still alive with a fresh
+    /// `last_used_at` (AUTH-1 U6). `404` counts as success: the token is gone either way.
+    pub async fn revoke_device(&self, token: &str, token_id: i64) -> Result<()> {
+        let response = self
+            .client
+            .delete(self.url(&format!("me/devices/{token_id}"))?)
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(classify)?;
+
+        let status = response.status();
+        if status.is_success() || status == StatusCode::NOT_FOUND {
+            return Ok(());
         }
+        if status == StatusCode::UNAUTHORIZED {
+            // The token was already invalid; there is nothing left to revoke.
+            return Err(SyncError::Auth);
+        }
+        Err(SyncError::Server(server_error(status, response).await))
     }
 
     /// `GET /api/sync/manifest` (§4.1).
@@ -132,34 +150,62 @@ impl Transport {
     ) -> Result<T> {
         let status = response.status();
         if status == StatusCode::UNAUTHORIZED {
+            // A bare 401 stays `Auth`: KARAR A25 keeps the outbox for it. Only the explicit
+            // 403 below is allowed to mean "this account is gone".
             return Err(SyncError::Auth);
         }
-        if status == StatusCode::FORBIDDEN {
-            // `ability:desktop` / `EnsureDeviceToken` refusals (protocol §3.3, §3.4).
-            let body: ApiErrorBody = response.json().await.unwrap_or(ApiErrorBody {
-                code: None,
-                message: None,
-                retry_after: None,
-            });
-            return Err(SyncError::Protocol(format!(
-                "{what} forbidden: {}",
-                body.code.unwrap_or_else(|| "FORBIDDEN".into())
-            )));
-        }
         if status.is_server_error() {
-            // Transient: the sync loop backs off and retries.
-            return Err(SyncError::Offline);
+            // The server answered — it just answered badly. This used to collapse into
+            // `Offline`, which meant a real `500 SQLSTATE[...]` looked exactly like a dead
+            // network to the user and nobody looked at a server log (O25). It is still
+            // transient — `sync/mod.rs`'s loop backs off and retries a `Server` with
+            // `status >= 500` the same way it always retried `Offline` — but the caller now
+            // gets the truth.
+            return Err(SyncError::Server(server_error(status, response).await));
         }
         if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(SyncError::Protocol(format!(
-                "{what} returned {status}: {}",
-                truncate(&text, 512)
-            )));
+            // 403 carries the codes that decide behaviour: `USER_DEACTIVATED` (KARAR A25 —
+            // wipe), `ABILITY_REQUIRED`, `PASSWORD_CHANGE_REQUIRED`. Folding it into
+            // `SyncError::Protocol` — which is what happened before — made all three the same
+            // unactionable "protocol error" (AUTH-1 U16 / open item O1).
+            return Err(SyncError::Server(server_error(status, response).await));
         }
         let text = response.text().await?;
         serde_json::from_str::<T>(&text)
             .map_err(|e| SyncError::Protocol(format!("{what} body: {e}")))
+    }
+}
+
+/// Turn a non-2xx response into a [`ServerError`], whatever shape the body came in.
+///
+/// The code falls back to `VALIDATION_ERROR` for a 422 (Laravel sends a field map and no code
+/// there) and to `HTTP_<status>` otherwise, so `SyncError::code()` is never empty and the UI
+/// always has something to map through `desktop.errors.*`.
+async fn server_error(status: StatusCode, response: reqwest::Response) -> ServerError {
+    let text = response.text().await.unwrap_or_default();
+    let body = serde_json::from_str::<serde_json::Value>(&text)
+        .map(|value| ApiErrorBody::from_value(&value))
+        .unwrap_or_default();
+
+    let code = body.code.unwrap_or_else(|| {
+        if status == StatusCode::UNPROCESSABLE_ENTITY {
+            codes::VALIDATION_ERROR.to_string()
+        } else {
+            format!("HTTP_{}", status.as_u16())
+        }
+    });
+
+    ServerError {
+        status: status.as_u16(),
+        code,
+        message: body.message.or_else(|| {
+            if text.is_empty() {
+                None
+            } else {
+                Some(truncate(&text, 512))
+            }
+        }),
+        retry_after: body.retry_after,
     }
 }
 

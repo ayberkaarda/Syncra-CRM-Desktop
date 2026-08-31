@@ -5,6 +5,7 @@
     "PROTOCOL_ERROR": "Ein Fehler im Synchronisationsprotokoll ist aufgetreten. Möglicherweise müssen Sie die App aktualisieren.",
     "DB_ERROR": "Ein Fehler in der lokalen Datenbank ist aufgetreten.",
     "HTTP_ERROR": "Beim Verbinden mit dem Server ist ein Fehler aufgetreten.",
+    "SERVER_ERROR": "Auf dem Server ist ein Problem aufgetreten. Das liegt nicht an Ihrer Internetverbindung — die App versucht es in Kürze automatisch erneut.",
     "WRITE_BLOCKED": "Lokales Speicherlimit erreicht. Geben Sie Speicherplatz frei oder synchronisieren Sie.",
     "VALIDATION_ERROR": "Die eingegebenen Daten sind ungültig.",
     "httpStatus": "Serverfehler (HTTP {{status}}).",
@@ -16,6 +17,8 @@
     "ABILITY_REQUIRED": "Sie haben nicht die erforderliche Berechtigung für diese Aktion.",
     "LOCKED_OUT": "Ihr Konto ist wegen zu vieler fehlgeschlagener Versuche vorübergehend gesperrt.",
     "USER_INACTIVE": "Ihr Konto wurde deaktiviert.",
+    "INVALID_CREDENTIALS": "E-Mail-Adresse oder Passwort ist falsch.",
+    "PENDING_MUTATIONS": "Sie haben Änderungen, die noch nicht synchronisiert wurden. Synchronisieren Sie zuerst oder melden Sie sich trotzdem ab.",
     "unknown": "Ein unbekannter Fehler ist aufgetreten."
   },
   "onlineOnly": {
@@ -64,6 +67,13 @@
     "paused": "Synchronisierung pausiert",
     "syncError": "Bei der Synchronisierung ist ein Fehler aufgetreten."
   },
+  "logout": {
+    "title": "Abmelden",
+    "description": "Auf diesem Gerät gibt es Änderungen, die noch nicht an den Server gesendet wurden. Wir empfehlen, vor dem Abmelden zu synchronisieren.",
+    "discardWarning_one": "Beim Abmelden geht {{count}} nicht gesendete Änderung verloren.",
+    "discardWarning_other": "Beim Abmelden gehen {{count}} nicht gesendete Änderungen verloren.",
+    "force": "Trotzdem abmelden"
+  },
   "bootstrap": {
     "title": "Ersteinrichtung",
     "description": "Ihre Daten werden auf dieses Gerät heruntergeladen. Dies kann einige Minuten dauern.",
@@ -92,6 +102,12 @@
       "localValue": "Lokaler Wert",
       "serverValue": "Serverwert"
     },
+    "rejected": {
+      "title": "Abgelehnt",
+      "description": "Der Server hat diese Änderung nicht akzeptiert. Der Grund steht oben."
+    },
+    "retry": "Erneut versuchen",
+    "discard": "Änderung verwerfen",
     "resolveAll": "Alle lösen",
     "resolveSelected": "Ausgewählte lösen",
     "resolvedToast": "Konflikt gelöst.",
@@ -111,12 +127,15 @@
       "label": "Nutzung",
       "value": "{{used}} / {{total}} MB verwendet"
     },
-    "downloadArchive": "Archiv herunterladen",
+    "downloadArchive": {
+      "button": "Archiv herunterladen",
+      "description": "Lädt die Historie innerhalb des gewählten Aufbewahrungszeitraums als Archivdatei herunter."
+    },
     "clearLocal": {
       "button": "Lokale Daten löschen",
       "title": "Lokale Daten löschen",
       "description": "Diese Aktion kann NICHT RÜCKGÄNGIG gemacht werden. Alle lokalen Daten auf diesem Gerät werden gelöscht und beim nächsten Synchronisieren erneut vom Server heruntergeladen.",
-      "confirmSuffix": "die lokalen Daten löschen möchten?"
+      "confirmSuffix": "Möchten Sie die lokalen Daten wirklich löschen?"
     },
     "saveSuccess": "Speichereinstellungen gespeichert.",
     "saveError": "Beim Speichern der Speichereinstellungen ist ein Fehler aufgetreten."
@@ -135,7 +154,7 @@
     "revokeConfirm": {
       "title": "Gerät abmelden",
       "description": "Dieses Gerät wird abgemeldet und kann erst nach erneuter Anmeldung wieder synchronisieren.",
-      "confirmSuffix": "dieses Gerät abmelden möchten?"
+      "confirmSuffix": "wird abgemeldet. Sind Sie sicher?"
     },
     "empty": {
       "title": "Keine Geräte gefunden",
@@ -167,5 +186,90 @@
       "notificationTitle": "Syncra läuft im Hintergrund",
       "notificationBody": "Die App läuft weiterhin im Tray. Verwenden Sie „Beenden“ im Tray-Menü, um sie vollständig zu schließen."
     }
+  },
+  "recordBadge": {
+    "pending": "Ausstehend",
+    "conflict": "Konflikt"
+  },
+  "entities": {
+    "company": "Unternehmen",
+    "contact": "Kontakt",
+    "lead": "Interessent",
+    "deal": "Verkaufschance",
+    "task": "Aufgabe",
+    "activity": "Aktivität",
+    "ticket": "Ticket",
+    "quote": "Angebot",
+    "conversation": "Unterhaltung",
+    "message": "Nachricht",
+    "conversation_user": "Chat-Mitgliedschaft",
+    "notification": "Benachrichtigung",
+    "tag": "Tag",
+    "pipeline_stage": "Phase",
+    "custom_field": "Benutzerdefiniertes Feld",
+    "product": "Produkt",
+    "price_list": "Preisliste",
+    "price_list_item": "Preislistenposition",
+    "exchange_rate": "Wechselkurs",
+    "saved_view": "Gespeicherte Ansicht",
+    "setting": "Einstellung",
+    "user": "Benutzer"
+  },
+  "fields": {
+    "title": "Titel",
+    "description": "Beschreibung",
+    "amount": "Betrag",
+    "currency": "Währung",
+    "probability": "Wahrscheinlichkeit",
+    "expected_close_date": "Voraussichtliches Abschlussdatum",
+    "company_id": "Unternehmen",
+    "contact_id": "Kontakt",
+    "owner_id": "Inhaber",
+    "tag_ids": "Tags",
+    "tags": "Tags",
+    "custom_fields": "Benutzerdefinierte Felder",
+    "first_name": "Vorname",
+    "last_name": "Nachname",
+    "email": "E-Mail",
+    "phone": "Telefon",
+    "company_name": "Unternehmensname",
+    "position": "Position",
+    "source": "Quelle",
+    "status": "Status",
+    "score": "Score",
+    "notes": "Notizen",
+    "mobile": "Mobil",
+    "is_primary": "Primärer Kontakt",
+    "address": "Adresse",
+    "city": "Stadt",
+    "country": "Land",
+    "name": "Name",
+    "website": "Website",
+    "industry": "Branche",
+    "employee_count": "Mitarbeiterzahl",
+    "annual_revenue": "Jahresumsatz",
+    "due_at": "Fälligkeit",
+    "reminder_at": "Erinnerung",
+    "priority": "Priorität",
+    "assigned_to": "Zuständig",
+    "taskable_type": "Typ des verknüpften Datensatzes",
+    "taskable_id": "Verknüpfter Datensatz",
+    "completed_at": "Abgeschlossen am",
+    "type": "Typ",
+    "subject": "Betreff",
+    "body": "Beschreibung",
+    "occurred_at": "Zeitpunkt",
+    "duration_minutes": "Dauer (Minuten)",
+    "outcome": "Ergebnis",
+    "activityable_type": "Typ des verknüpften Datensatzes",
+    "activityable_id": "Verknüpfter Datensatz",
+    "category": "Kategorie",
+    "sla_due_at": "SLA-Frist",
+    "deal_id": "Verkaufschance",
+    "valid_until": "Gültig Bis",
+    "discount_type": "Rabatttyp",
+    "discount_value": "Rabattwert",
+    "terms": "Bedingungen",
+    "is_muted": "Stummgeschaltet"
   }
 }

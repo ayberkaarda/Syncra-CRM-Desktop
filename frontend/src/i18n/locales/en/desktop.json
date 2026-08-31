@@ -5,6 +5,7 @@
     "PROTOCOL_ERROR": "A sync protocol error occurred. You may need to update the app.",
     "DB_ERROR": "A local database error occurred.",
     "HTTP_ERROR": "An error occurred while connecting to the server.",
+    "SERVER_ERROR": "Something went wrong on the server. This isn't about your internet connection — the app will retry automatically shortly.",
     "WRITE_BLOCKED": "Local storage limit reached. Free up disk space or sync.",
     "VALIDATION_ERROR": "The data you entered is invalid.",
     "httpStatus": "Server error (HTTP {{status}}).",
@@ -16,6 +17,8 @@
     "ABILITY_REQUIRED": "You don't have permission to perform this action.",
     "LOCKED_OUT": "Your account is temporarily locked due to too many failed attempts.",
     "USER_INACTIVE": "Your account has been deactivated.",
+    "INVALID_CREDENTIALS": "Incorrect email or password.",
+    "PENDING_MUTATIONS": "You have changes that haven't synced yet. Sync first, or sign out anyway.",
     "unknown": "An unknown error occurred."
   },
   "onlineOnly": {
@@ -64,6 +67,13 @@
     "paused": "Sync paused",
     "syncError": "An error occurred while syncing."
   },
+  "logout": {
+    "title": "Sign Out",
+    "description": "This device has changes that haven't been sent to the server yet. We recommend syncing before you sign out.",
+    "discardWarning_one": "Signing out will discard {{count}} unsent change.",
+    "discardWarning_other": "Signing out will discard {{count}} unsent changes.",
+    "force": "Sign out anyway"
+  },
   "bootstrap": {
     "title": "Initial setup",
     "description": "Your data is being downloaded to this device. This may take a few minutes.",
@@ -92,6 +102,12 @@
       "localValue": "Local value",
       "serverValue": "Server value"
     },
+    "rejected": {
+      "title": "Rejected",
+      "description": "The server did not accept this change. The reason is shown above."
+    },
+    "retry": "Retry",
+    "discard": "Discard change",
     "resolveAll": "Resolve all",
     "resolveSelected": "Resolve selected",
     "resolvedToast": "Conflict resolved.",
@@ -111,12 +127,15 @@
       "label": "Usage",
       "value": "{{used}} / {{total}} MB used"
     },
-    "downloadArchive": "Download archive",
+    "downloadArchive": {
+      "button": "Download archive",
+      "description": "Downloads the history within the selected retention period as an archive file."
+    },
     "clearLocal": {
       "button": "Clear local data",
       "title": "Clear Local Data",
       "description": "This action CANNOT BE UNDONE. All local data on this device will be deleted and re-downloaded from the server on the next sync.",
-      "confirmSuffix": "clear the local data?"
+      "confirmSuffix": "Are you sure you want to clear the local data?"
     },
     "saveSuccess": "Storage settings saved.",
     "saveError": "An error occurred while saving storage settings."
@@ -135,7 +154,7 @@
     "revokeConfirm": {
       "title": "Sign Out Device",
       "description": "This device will be signed out and won't be able to sync until it signs in again.",
-      "confirmSuffix": "sign out this device?"
+      "confirmSuffix": "will be signed out. Are you sure?"
     },
     "empty": {
       "title": "No devices found",
@@ -167,5 +186,90 @@
       "notificationTitle": "Syncra is running in the background",
       "notificationBody": "The app keeps running in the tray. Use Quit from the tray menu to exit completely."
     }
+  },
+  "recordBadge": {
+    "pending": "Pending",
+    "conflict": "Conflict"
+  },
+  "entities": {
+    "company": "Company",
+    "contact": "Contact",
+    "lead": "Lead",
+    "deal": "Deal",
+    "task": "Task",
+    "activity": "Activity",
+    "ticket": "Ticket",
+    "quote": "Quote",
+    "conversation": "Conversation",
+    "message": "Message",
+    "conversation_user": "Conversation Membership",
+    "notification": "Notification",
+    "tag": "Tag",
+    "pipeline_stage": "Stage",
+    "custom_field": "Custom Field",
+    "product": "Product",
+    "price_list": "Price List",
+    "price_list_item": "Price List Item",
+    "exchange_rate": "Exchange Rate",
+    "saved_view": "Saved View",
+    "setting": "Setting",
+    "user": "User"
+  },
+  "fields": {
+    "title": "Title",
+    "description": "Description",
+    "amount": "Amount",
+    "currency": "Currency",
+    "probability": "Probability",
+    "expected_close_date": "Expected Close Date",
+    "company_id": "Company",
+    "contact_id": "Contact",
+    "owner_id": "Owner",
+    "tag_ids": "Tags",
+    "tags": "Tags",
+    "custom_fields": "Custom Fields",
+    "first_name": "First Name",
+    "last_name": "Last Name",
+    "email": "Email",
+    "phone": "Phone",
+    "company_name": "Company Name",
+    "position": "Position",
+    "source": "Source",
+    "status": "Status",
+    "score": "Score",
+    "notes": "Notes",
+    "mobile": "Mobile",
+    "is_primary": "Primary Contact",
+    "address": "Address",
+    "city": "City",
+    "country": "Country",
+    "name": "Name",
+    "website": "Website",
+    "industry": "Industry",
+    "employee_count": "Employee Count",
+    "annual_revenue": "Annual Revenue",
+    "due_at": "Due Date",
+    "reminder_at": "Reminder",
+    "priority": "Priority",
+    "assigned_to": "Assignee",
+    "taskable_type": "Related Record Type",
+    "taskable_id": "Related Record",
+    "completed_at": "Completed At",
+    "type": "Type",
+    "subject": "Subject",
+    "body": "Description",
+    "occurred_at": "Occurred At",
+    "duration_minutes": "Duration (minutes)",
+    "outcome": "Outcome",
+    "activityable_type": "Related Record Type",
+    "activityable_id": "Related Record",
+    "category": "Category",
+    "sla_due_at": "SLA Due",
+    "deal_id": "Deal",
+    "valid_until": "Valid Until",
+    "discount_type": "Discount Type",
+    "discount_value": "Discount Value",
+    "terms": "Terms",
+    "is_muted": "Muted"
   }
 }

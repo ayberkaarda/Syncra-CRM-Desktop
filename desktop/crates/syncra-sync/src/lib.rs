@@ -75,7 +75,7 @@ pub mod types;
 
 pub use config::{DesktopSettings, ServerPolicy, SyncConfig, PROTOCOL_VERSION};
 pub use db::query::{CountScope, NamedQuery, QueryParams, ReadFilter, SortDir, SortField};
-pub use error::SyncError;
+pub use error::{ServerError, SyncError};
 pub use events::EngineEvent;
 pub use keystore::{KeyStore, KeyStoreHandle, MemoryKeyStore, SystemKeyStore};
 pub use sync::SyncEngine;

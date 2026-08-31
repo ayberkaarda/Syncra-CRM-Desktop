@@ -45,8 +45,16 @@ pub struct DeviceLoginResponse {
     pub abilities: Vec<String>,
 }
 
-/// Error body shared by the auth endpoints: `{"code": "...", "retry_after": 120}`.
-#[derive(Debug, Clone, Deserialize)]
+/// Error body of every endpoint the desktop speaks to.
+///
+/// **The real server nests it.** `DeviceTokenService`, `EnsureDeviceToken`,
+/// `EnsureUserIsActive` and the sync controllers all answer
+/// `{"errors": {"message": "...", "code": "LOCKED_OUT", "retry_after": 120}}` — the code is one
+/// level down, not at the root. Deriving `Deserialize` on the flat shape (what this type used
+/// to be) therefore parsed every real refusal into `code: None`, which is the root cause of
+/// U11/U12 in the AUTH-1 wire audit. [`ApiErrorBody::from_value`] accepts the nested shape, the
+/// flat shape, and Laravel's `422` field-error map.
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct ApiErrorBody {
     #[serde(default)]
     /// Server error code, e.g. `FIELD_CONFLICT` or `ONLINE_ONLY`.
@@ -57,6 +65,61 @@ pub struct ApiErrorBody {
     #[serde(default)]
     /// Seconds until the lockout expires.
     pub retry_after: Option<u64>,
+}
+
+impl ApiErrorBody {
+    /// Read `code` / `message` / `retry_after` out of whatever shape the server used.
+    ///
+    /// Lookup order per key: `errors.<key>` first (the shape every Laravel handler in this
+    /// backend produces), then the root (the shape a bare middleware or a test fixture may
+    /// use). A `422` carries no `code` at all — `errors` is a `field -> [messages]` map there —
+    /// so the field messages are folded into `message` and the caller supplies the code.
+    pub fn from_value(value: &serde_json::Value) -> ApiErrorBody {
+        let errors = value.get("errors");
+        let pick = |key: &str| -> Option<&serde_json::Value> {
+            errors
+                .and_then(|e| e.get(key))
+                .filter(|v| !v.is_null())
+                .or_else(|| value.get(key).filter(|v| !v.is_null()))
+        };
+
+        let code = pick("code").and_then(|v| v.as_str()).map(str::to_owned);
+        let message = pick("message")
+            .and_then(|v| v.as_str())
+            .map(str::to_owned)
+            .or_else(|| validation_summary(errors));
+        let retry_after = pick("retry_after").and_then(|v| v.as_u64());
+
+        ApiErrorBody {
+            code,
+            message,
+            retry_after,
+        }
+    }
+}
+
+/// `{"errors": {"device_fingerprint": ["... must be 64 characters."]}}`
+/// -> `device_fingerprint: ... must be 64 characters.`
+///
+/// Without this a `422` reaches the log with an empty message, which is precisely what made U1
+/// take a live round-trip to diagnose.
+fn validation_summary(errors: Option<&serde_json::Value>) -> Option<String> {
+    let obj = errors?.as_object()?;
+    let mut parts = Vec::new();
+    for (field, messages) in obj {
+        let Some(list) = messages.as_array() else {
+            continue;
+        };
+        let joined: Vec<&str> = list.iter().filter_map(|m| m.as_str()).collect();
+        if !joined.is_empty() {
+            parts.push(format!("{field}: {}", joined.join(" ")));
+        }
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("; "))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -109,8 +172,15 @@ pub struct PullRequest {
     pub cursors: BTreeMap<String, i64>,
     /// Page size; `None` uses the default.
     pub limit: u32,
-    /// Retention window; only applied while a cursor is 0.
-    pub window_days: u32,
+    /// Retention window in days, **only sent on a bootstrap-shaped pull**.
+    ///
+    /// `SYNCDESKTOP.md` §4.4 applies the window while a cursor is 0 and no filter at all to a
+    /// delta, and the server validates it as `sometimes|nullable|integer|min:1|max:365`. The
+    /// field used to be a plain `u32`, so a delta round serialised `window_days: 0` and the
+    /// server answered `422` to **every** pull (AUTH-1 U3). `None` means "not part of this
+    /// request" and is skipped entirely, which is what a delta must send.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_days: Option<u32>,
 }
 
 /// One `sync_deletions` tombstone (§2.7).
@@ -297,6 +367,18 @@ pub mod codes {
     /// The token lacks the `desktop` ability.
     pub const ABILITY_REQUIRED: &str = "ABILITY_REQUIRED";
 
+    /// The account was deactivated or deleted. `SYNCDESKTOP.md` §9/2 + KARAR A25: this is the
+    /// **only** signal that wipes the local database — a bare 401 keeps the outbox.
+    pub const USER_DEACTIVATED: &str = "USER_DEACTIVATED";
+    /// `POST /api/auth/device`: e-mail/password rejected (401).
+    pub const INVALID_CREDENTIALS: &str = "INVALID_CREDENTIALS";
+    /// `POST /api/auth/device`: the account exists but is not active (403).
+    pub const USER_INACTIVE: &str = "USER_INACTIVE";
+    /// `POST /api/auth/device`: the shared login lockout is in effect (423, `retry_after`).
+    pub const LOCKED_OUT: &str = "LOCKED_OUT";
+    /// The request body did not satisfy the server's validation rules (422).
+    pub const VALIDATION_ERROR: &str = "VALIDATION_ERROR";
+
     /// Pre-existing codes the sync path can also surface unchanged.
     pub const DEAL_VERSION_CONFLICT: &str = "DEAL_VERSION_CONFLICT";
     /// The quote is no longer editable.
@@ -316,6 +398,11 @@ pub mod codes {
         PUSH_BATCH_TOO_LARGE,
         INVALID_MUTATION,
         ABILITY_REQUIRED,
+        USER_DEACTIVATED,
+        INVALID_CREDENTIALS,
+        USER_INACTIVE,
+        LOCKED_OUT,
+        VALIDATION_ERROR,
         DEAL_VERSION_CONFLICT,
         QUOTE_LOCKED,
         INVALID_STATUS_TRANSITION,
@@ -384,6 +471,70 @@ mod tests {
         assert!(!is_whitelisted_action("quote", "revise"));
         assert!(is_whitelisted_action("deal", "move"));
         assert!(is_whitelisted_action("notification", "read_all"));
+    }
+
+    /// U3: the field the server validates as `min:1` must be **absent** from a delta pull, not
+    /// present as `0`. A live round-trip proved `window_days: 0` -> 422 and `30` -> 200.
+    #[test]
+    fn a_delta_pull_does_not_serialise_window_days_at_all() {
+        let delta = PullRequest {
+            cursors: BTreeMap::from([("companies".to_string(), 121)]),
+            limit: 500,
+            window_days: None,
+        };
+        let json = serde_json::to_value(&delta).unwrap();
+        assert!(
+            !json.as_object().unwrap().contains_key("window_days"),
+            "a delta pull must not carry window_days at all: {json}"
+        );
+
+        let bootstrap = PullRequest {
+            cursors: BTreeMap::from([("companies".to_string(), 0)]),
+            limit: 500,
+            window_days: Some(30),
+        };
+        assert_eq!(serde_json::to_value(&bootstrap).unwrap()["window_days"], 30);
+    }
+
+    /// U11: the server nests the code under `errors`. The flat derive saw `None`.
+    #[test]
+    fn the_nested_laravel_error_envelope_is_understood() {
+        let body = serde_json::json!({
+            "errors": { "message": "too many", "code": "LOCKED_OUT", "retry_after": 137 }
+        });
+        let parsed = ApiErrorBody::from_value(&body);
+        assert_eq!(parsed.code.as_deref(), Some("LOCKED_OUT"));
+        assert_eq!(parsed.retry_after, Some(137));
+        assert_eq!(parsed.message.as_deref(), Some("too many"));
+    }
+
+    /// A bare `{"code": ...}` (what a middleware or a test fixture may send) still works.
+    #[test]
+    fn the_flat_error_shape_is_still_understood() {
+        let body = serde_json::json!({ "code": "UNAUTHENTICATED" });
+        assert_eq!(
+            ApiErrorBody::from_value(&body).code.as_deref(),
+            Some("UNAUTHENTICATED")
+        );
+    }
+
+    /// U1's body: a 422 has no `code`, only a field map. The fields become the message.
+    #[test]
+    fn a_422_field_map_becomes_a_readable_message() {
+        let body = serde_json::json!({
+            "message": null,
+            "errors": { "device_fingerprint": ["The device fingerprint field must be 64 characters."] }
+        });
+        let parsed = ApiErrorBody::from_value(&body);
+        assert!(parsed.code.is_none());
+        assert!(
+            parsed
+                .message
+                .as_deref()
+                .unwrap()
+                .contains("device_fingerprint"),
+            "{parsed:?}"
+        );
     }
 
     #[test]

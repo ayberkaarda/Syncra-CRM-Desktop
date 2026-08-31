@@ -17,17 +17,34 @@ import type { PlatformError } from '@/platform/types'
 export class CommandError extends Error implements PlatformError {
   readonly code: string
   readonly fields?: Record<string, string[]>
+  /**
+   * Seconds until a lockout expires, off `CommandError.retry_after`
+   * (`src-tauri/src/commands/mod.rs`).
+   *
+   * Additive on the Rust side and optional here: only `423 LOCKED_OUT` carries it. Dropping it
+   * — which this class used to do — is what left `LoginPage`'s lockout countdown dead on the
+   * desktop, because the countdown reads a `retry-after` response header that nothing could
+   * populate (`platform/auth.ts`, `loginFailure`).
+   */
+  readonly retryAfter?: number
 
-  constructor(error: PlatformError) {
+  constructor(error: PlatformError & { retryAfter?: number }) {
     super(error.message)
     this.name = 'CommandError'
     this.code = error.code
     this.fields = error.fields
+    this.retryAfter = error.retryAfter
   }
 }
 
 function hasStringProp(value: object, key: string): boolean {
   return key in value && typeof (value as Record<string, unknown>)[key] === 'string'
+}
+
+/** `retry_after` off the raw rejection, when the command sent one. */
+function retryAfterOf(value: object): number | undefined {
+  const raw = (value as Record<string, unknown>).retry_after
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : undefined
 }
 
 /**
@@ -38,7 +55,7 @@ function hasStringProp(value: object, key: string): boolean {
  */
 export function toCommandError(raw: unknown): CommandError {
   if (typeof raw === 'object' && raw !== null && hasStringProp(raw, 'code') && hasStringProp(raw, 'message')) {
-    return new CommandError(raw as PlatformError)
+    return new CommandError({ ...(raw as PlatformError), retryAfter: retryAfterOf(raw) })
   }
   return new CommandError({
     code: 'UNKNOWN',

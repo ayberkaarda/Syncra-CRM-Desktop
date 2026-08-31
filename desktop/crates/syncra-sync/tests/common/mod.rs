@@ -106,8 +106,13 @@ impl Harness {
     }
 
     /// Mount a device-auth response and log in.
+    ///
+    /// The matching `DELETE /api/me/devices/{token_id}` is mounted too: `logout` revokes the
+    /// token on the server before wiping locally (§4.3), and a harness that left the route
+    /// unmounted would only ever exercise wiremock's 404 fallback.
     pub async fn login_as(&self, user_id: i64, email: &str) {
         mount_device_auth(&self.server, user_id, email).await;
+        mount_revoke_device(&self.server).await;
         self.engine
             .login(email, "secret", device_info())
             .await
@@ -260,6 +265,50 @@ pub async fn mount_device_auth(server: &MockServer, user_id: i64, email: &str) {
             "abilities": ["desktop"]
         })))
         .up_to_n_times(1)
+        .mount(server)
+        .await;
+}
+
+/// Mount `DELETE /api/me/devices/{id}` (204), the call `logout` makes to revoke the token.
+pub async fn mount_revoke_device(server: &MockServer) {
+    Mock::given(method("DELETE"))
+        .and(wiremock::matchers::path_regex(r"^/api/me/devices/\d+$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(server)
+        .await;
+}
+
+/// Every `DELETE /api/me/devices/*` path the server received, in order.
+pub async fn revoke_requests(server: &MockServer) -> Vec<String> {
+    server
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| r.method == wiremock::http::Method::DELETE)
+        .map(|r| r.url.path().to_string())
+        .collect()
+}
+
+/// Mount one of the sync endpoints with the **real** Laravel error envelope,
+/// `{"errors": {"code": ..., "retry_after": ...}}`.
+pub async fn mount_error(
+    server: &MockServer,
+    verb: &str,
+    endpoint: &str,
+    status: u16,
+    code: &str,
+    retry_after: Option<u64>,
+) {
+    let mut errors = serde_json::Map::new();
+    errors.insert("message".into(), json!("server said no"));
+    errors.insert("code".into(), json!(code));
+    if let Some(seconds) = retry_after {
+        errors.insert("retry_after".into(), json!(seconds));
+    }
+    Mock::given(method(verb))
+        .and(path(endpoint))
+        .respond_with(ResponseTemplate::new(status).set_body_json(json!({ "errors": errors })))
         .mount(server)
         .await;
 }

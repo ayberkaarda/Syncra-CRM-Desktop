@@ -101,7 +101,6 @@
     "stageReadonlyHint": "Les changements d'étape se font par glisser-déposer sur le tableau.",
     "stageHint": "Si non précisé, le serveur place l'opportunité dans la première étape active.",
     "statusLabel": "Statut",
-    "companyLabel": "Entreprise",
     "contactLabel": "Contact",
     "contactHint": "Si une entreprise est sélectionnée, la liste des contacts est filtrée sur cette entreprise.",
     "contactLoading": "Chargement…",

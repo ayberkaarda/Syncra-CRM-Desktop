@@ -60,7 +60,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04, macos-latest]
+        # Runner pinned, not `ubuntu-latest`: a silent image bump changes the glibc and
+        # WebKitGTK the workspace links against, and this job is the only Linux gate before
+        # `desktop-release.yml` produces the shipped artifact. 24.04 was chosen over 22.04
+        # after the first real CI run (2026-08-31): 22.04's webkit2gtk-4.1 is two generations
+        # behind the 2.52.3 the D-4 Linux measurement actually ran against, and the 22.04
+        # image is being retired. `desktop-release.yml` deliberately does NOT follow this
+        # bump — see the note there; raising the release runner raises the glibc floor for
+        # every user, which is a product decision, not a CI one.
+        os: [windows-latest, ubuntu-24.04, macos-latest]
     defaults:
       run:
         # F3-E: `desktop/` is the cargo workspace root (members: crates/syncra-sync,
@@ -123,7 +131,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo-dev \
@@ -160,7 +167,7 @@ jobs:
   # ---------------------------------------------------------------------------
   desktop-cargo-audit:
     name: cargo audit
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         # F3-E: `desktop/` is the workspace root; `cargo audit` reads the single
@@ -186,7 +193,7 @@ jobs:
   # ---------------------------------------------------------------------------
   desktop-frontend:
     name: frontend (typecheck, i18n, build)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -221,7 +228,7 @@ jobs:
   # ---------------------------------------------------------------------------
   desktop-backend:
     name: backend (php artisan test)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     # Measured F3-E: 1402 tests / ~280s locally. Generous margin over that for a colder CI
     # runner + composer install + service container startup, well under the 360min default.
     timeout-minutes: 15
@@ -246,6 +253,22 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      # Precondition 6: `backend/.env.example` points SESSION_DRIVER, QUEUE_CONNECTION and
+      # CACHE_STORE at redis, and the CI `.env` is copied from it verbatim. Without a Redis
+      # server 15 tests fail with "Connection refused [tcp://127.0.0.1:6379]": queue dispatch
+      # (LeadImportTest, NotificationTriggerTest), rate limiting (ExportThrottleTest) and
+      # SyncVersionMechanismTest. Pointing those drivers at `sync`/`array` instead would turn
+      # the job green while silently exercising a different execution model than production,
+      # so the server is provided rather than the drivers swapped.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     env:
       DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
@@ -253,6 +276,9 @@ jobs:
       DB_DATABASE: desktop_ci_backend_test
       DB_USERNAME: root
       DB_PASSWORD: root
+      REDIS_CLIENT: predis
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
@@ -284,7 +310,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04, macos-latest]
+        os: [windows-latest, ubuntu-24.04, macos-latest]
     defaults:
       run:
         working-directory: desktop
@@ -320,7 +346,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo-dev \

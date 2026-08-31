@@ -20,6 +20,15 @@ use syncra_sync::SyncEngine;
 /// Tauri event name every [`syncra_sync::EngineEvent`] is forwarded under.
 pub const ENGINE_EVENT: &str = "engine-event";
 
+/// Tauri event name carrying one [`syncra_sync::BootstrapProgress`].
+///
+/// Separate from [`ENGINE_EVENT`] because it is not an engine event: `bootstrap` takes a
+/// progress *callback*, which never enters the broadcast channel, and it is scoped to one
+/// in-flight `sync::bootstrap` command rather than to the process. The ordering argument that
+/// keeps every `EngineEvent` on one name does not apply — a progress tick has no causal
+/// relationship with a `tables_changed`.
+pub const BOOTSTRAP_PROGRESS: &str = "bootstrap-progress";
+
 /// Start forwarding engine events to the webview. Called once from `.setup()`.
 ///
 /// The task lives for the process. A `RecvError::Lagged` is logged and ignored rather than

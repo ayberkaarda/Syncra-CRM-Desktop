@@ -77,9 +77,13 @@ async fn bootstrap_fills_tables_and_sets_cursors() {
     let last = requests.last().expect("a second pull");
     assert_eq!(last["cursors"]["companies"], 121);
     assert_eq!(last["cursors"]["deals"], 184320);
-    assert_eq!(
-        last["window_days"], 0,
-        "a delta pull carries no retention window (§4.4)"
+    // U3: this assertion used to read `last["window_days"] == 0`, which is exactly the kind of
+    // mock-symmetric agreement that hid the bug — wiremock accepted the `0` the server
+    // validates as `min:1`, so the crate suite stayed green while every real delta pull got a
+    // 422. The field must be ABSENT, not zero (§4.4).
+    assert!(
+        last.as_object().unwrap().get("window_days").is_none(),
+        "a delta pull must not carry window_days at all (§4.4); got {last}"
     );
 }
 

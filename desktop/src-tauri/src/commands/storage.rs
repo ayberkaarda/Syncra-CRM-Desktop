@@ -10,8 +10,13 @@ use super::{CommandError, CommandResult};
 use crate::state::AppState;
 
 /// Current local storage accounting (`page_count * page_size`, outbox size, cache size).
+///
+/// Named `storage_stats`, not `stats`: `generate_handler!` registers a command under the
+/// FUNCTION name, so the module path never reaches the wire and a bare `stats` would say
+/// nothing about what it counts. `SYNCDESKTOP.md` §6.2 spells the contract name
+/// `storage_stats` (ledger O5), and `npm run check:commands` compares the three sides.
 #[tauri::command]
-pub fn stats(state: State<'_, AppState>) -> StorageStats {
+pub fn storage_stats(state: State<'_, AppState>) -> StorageStats {
     state.engine.storage_stats()
 }
 
@@ -44,9 +49,8 @@ pub fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
     let key = SystemKeyStore
         .get(&state.keychain_service, KEY_DB)
         .map_err(CommandError::from)?
-        .ok_or_else(|| CommandError {
-            code: "VALIDATION_ERROR".to_string(),
-            message: "no local database key in the keychain".to_string(),
+        .ok_or_else(|| {
+            CommandError::new("VALIDATION_ERROR", "no local database key in the keychain")
         })?;
 
     let conn = db::open(&state.db_path, &key).map_err(CommandError::from)?;
@@ -54,14 +58,15 @@ pub fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
     drop(conn);
 
     if state.cache_dir.exists() {
-        std::fs::remove_dir_all(&state.cache_dir).map_err(|e| CommandError {
-            code: "VALIDATION_ERROR".to_string(),
-            message: format!("cannot clear cache directory: {e}"),
+        std::fs::remove_dir_all(&state.cache_dir).map_err(|e| {
+            CommandError::new("VALIDATION_ERROR", format!("cannot clear cache directory: {e}"))
         })?;
     }
-    std::fs::create_dir_all(&state.cache_dir).map_err(|e| CommandError {
-        code: "VALIDATION_ERROR".to_string(),
-        message: format!("cannot recreate cache directory: {e}"),
+    std::fs::create_dir_all(&state.cache_dir).map_err(|e| {
+        CommandError::new(
+            "VALIDATION_ERROR",
+            format!("cannot recreate cache directory: {e}"),
+        )
     })?;
 
     Ok(())

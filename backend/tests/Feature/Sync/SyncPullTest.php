@@ -4,10 +4,16 @@ namespace Tests\Feature\Sync;
 
 use App\Models\Company;
 use App\Models\Contact;
+use App\Models\CustomField;
 use App\Models\Deal;
+use App\Models\ExchangeRate;
+use App\Models\PipelineStage;
 use App\Models\PriceList;
+use App\Models\PriceListItem;
 use App\Models\Product;
 use App\Models\Quote;
+use App\Models\SavedView;
+use App\Models\Setting;
 use App\Models\Tag;
 use App\Notifications\DealAssignedNotification;
 use App\Repositories\DealRepository;
@@ -18,6 +24,7 @@ use App\Sync\SyncCounter;
 use Database\Seeders\PipelineStageSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -255,6 +262,84 @@ class SyncPullTest extends TestCase
         );
     }
 
+    /**
+     * FIX-BE U9 — depth-1 relational closure. A company outside the window
+     * that an IN-window deal still points at must ship anyway, or the
+     * client's `deals` screen renders every one of them with `company: —`.
+     */
+    public function test_bootstrap_window_still_ships_a_company_referenced_by_an_in_window_deal(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $ancient = Company::factory()->create();
+        DB::table('companies')->where('id', $ancient->id)->update(['updated_at' => now()->subDays(90)]);
+
+        $deal = Deal::factory()->create(['company_id' => $ancient->id]);
+
+        $body = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['companies' => 0, 'deals' => 0],
+            'window_days' => 30,
+        ])->json('tables');
+
+        $this->assertContains(
+            $deal->id,
+            array_column($body['deals']['rows'], 'id'),
+            'Fırsat pencerede olmalı (bugün oluşturuldu).'
+        );
+        $this->assertContains(
+            $ancient->id,
+            array_column($body['companies']['rows'], 'id'),
+            'İlişkili firma pencere dışında olsa da gelmeli (U9 ilişkisel kapanış).'
+        );
+    }
+
+    /**
+     * FIX-BE U9 — a company nobody references stays excluded: closure is
+     * strictly depth-1 and demand-driven, not "ship the whole table".
+     */
+    public function test_bootstrap_window_still_excludes_an_unreferenced_ancient_company(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $ancient = Company::factory()->create();
+        DB::table('companies')->where('id', $ancient->id)->update(['updated_at' => now()->subDays(90)]);
+
+        $body = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['companies' => 0, 'deals' => 0, 'contacts' => 0],
+            'window_days' => 30,
+        ])->json('tables.companies');
+
+        $this->assertNotContains(
+            $ancient->id,
+            array_column($body['rows'], 'id'),
+            'Hiçbir satırın işaret etmediği eski firma pencere dışında kalmalı — kapanış talebe bağlıdır.'
+        );
+    }
+
+    /**
+     * FIX-BE U10 — `tags` is reference/lookup data (§4.1 groups it with
+     * `taggables`/`custom_field_values`, not the time-ordered entity list),
+     * so it must ship on a bootstrap pull even when every tag is old.
+     */
+    public function test_bootstrap_window_never_excludes_tags(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $tag = Tag::factory()->create();
+        DB::table('tags')->where('id', $tag->id)->update(['updated_at' => now()->subDays(200)]);
+
+        $body = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['tags' => 0],
+            'window_days' => 30,
+        ])->json('tables.tags');
+
+        $this->assertContains(
+            $tag->id,
+            array_column($body['rows'], 'id'),
+            'tags pencereden muaf olmalı (U10) — etiket kullanım dışı görünmesi silinmesi gerektiği anlamına gelmez.'
+        );
+    }
+
     public function test_the_users_projection_never_leaks_a_credential_column(): void
     {
         [, $token] = $this->deviceUser('Admin');
@@ -427,5 +512,328 @@ class SyncPullTest extends TestCase
 
         $this->assertArrayHasKey('tickets', $tables);
         $this->assertArrayNotHasKey('deals', $tables, 'İzinsiz tablo istenmiş olsa bile yanıtta yer almamalı.');
+    }
+
+    /**
+     * RISK-2 K2 - reference/lookup tables are exempt from the bootstrap
+     * `window_days` filter, ALL of them, not just `tags`.
+     *
+     * The window is a VOLUME tool for time-ordered records. On a lookup table
+     * `updated_at` records when somebody last edited the DEFINITION, which
+     * says nothing about whether the row is still in use, so filtering by it
+     * is a category error - FIX-BE measured `products` shipping 0/20 and
+     * `users` 7/10 on a 30-day window, which renders quote lines with a blank
+     * product and every assignment as "Atanan: -".
+     *
+     * Driven off `SyncableRegistry::windowExemptTables()` itself so a table
+     * added to the RO set is covered here the moment it exists.
+     */
+    public function test_the_bootstrap_window_never_excludes_a_reference_table(): void
+    {
+        [$user, $token] = $this->deviceUser('Admin');
+
+        $priceList = PriceList::factory()->create();
+
+        $rowIds = [
+            'tags' => Tag::factory()->create()->id,
+            'pipeline_stages' => PipelineStage::factory()->create()->id,
+            'custom_fields' => CustomField::factory()->create()->id,
+            'products' => Product::factory()->create()->id,
+            'price_lists' => $priceList->id,
+            'price_list_items' => PriceListItem::factory()->create(['price_list_id' => $priceList->id])->id,
+            'saved_views' => SavedView::factory()->create(['user_id' => $user->id])->id,
+            'settings' => Setting::factory()->create(['is_public' => true])->id,
+            'users' => $user->id,
+        ];
+
+        $this->assertSame(
+            array_keys($rowIds),
+            SyncableRegistry::windowExemptTables(),
+            'Muafiyet listesi degisti ama bu test guncellenmedi - yeni referans tablosu kanitsiz kalir.'
+        );
+
+        // Aged with a raw statement so no observer drags the row back into the
+        // window through a fresh timestamp.
+        foreach (array_keys($rowIds) as $table) {
+            DB::table($table)->update(['updated_at' => now()->subDays(200)]);
+        }
+
+        $body = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => array_fill_keys(array_keys($rowIds), 0),
+            'window_days' => 30,
+        ])->json('tables');
+
+        foreach ($rowIds as $table => $id) {
+            $this->assertContains(
+                $id,
+                array_column($body[$table]['rows'], 'id'),
+                "`{$table}` pencereden muaf olmali (K2) - 200 gundur duzenlenmemis bir kayit kullanimdan kalkmis demek degildir."
+            );
+        }
+    }
+
+    /**
+     * RISK-2 K2, the other half: `exchange_rates` is the ONE reference table
+     * that stays windowed, and that is not an exception to the rule. Section
+     * 4.1 writes its own tighter bound into the table list ("son 7 gun")
+     * because an FX rate really is a dated series - yesterday's row is a
+     * different fact, not a lookup entry that happens to be old.
+     */
+    public function test_the_bootstrap_window_still_applies_to_exchange_rates(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        // Inside the 7-day `rate_date` row scope, so only the window can cut it.
+        $rate = ExchangeRate::factory()->create(['rate_date' => now()->toDateString()]);
+        DB::table('exchange_rates')->where('id', $rate->id)->update(['updated_at' => now()->subDays(90)]);
+
+        $body = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['exchange_rates' => 0],
+            'window_days' => 30,
+        ])->json('tables.exchange_rates');
+
+        $this->assertNotContains(
+            $rate->id,
+            array_column($body['rows'], 'id'),
+            '`exchange_rates` muafiyetin DISINDADIR - zaman serisi verisidir, lookup degil.'
+        );
+
+        $this->assertNotContains('exchange_rates', SyncableRegistry::windowExemptTables());
+    }
+
+    /**
+     * RISK-2 K2, the volume answer. Exempting the reference tables means they
+     * now ship in FULL on a bootstrap, and the only enterprise-scale growth
+     * candidate among them is `price_list_items` (lists x products). Its
+     * answer is not the window - a price the client cannot see is a wrong
+     * quote - but the `has_more` pagination section 4.4 already mandates.
+     *
+     * So: a read-only table must page through a bootstrap window pull with a
+     * cursor that actually MOVES, every row exactly once, no repeats and no
+     * skips. Without this the exemption would trade an empty mirror for an
+     * unbounded one.
+     */
+    public function test_a_read_only_table_pages_through_has_more_on_a_bootstrap_pull(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $priceList = PriceList::factory()->create();
+
+        foreach (Product::factory()->count(12)->create() as $product) {
+            PriceListItem::factory()->create([
+                'price_list_id' => $priceList->id,
+                'product_id' => $product->id,
+            ]);
+        }
+
+        DB::table('price_list_items')->update(['updated_at' => now()->subDays(200)]);
+
+        $seen = [];
+        $cursor = 0;
+        $pages = 0;
+
+        for ($page = 0; $page < 10; $page++) {
+            $body = $this->withToken($token)->postJson('/api/sync/pull', [
+                'cursors' => ['price_list_items' => $cursor],
+                'limit' => 5,
+                'window_days' => 30,
+            ])->json('tables.price_list_items');
+
+            $pages++;
+
+            foreach ($body['rows'] as $row) {
+                $seen[] = (int) $row['id'];
+            }
+
+            $this->assertGreaterThanOrEqual($cursor, (int) $body['next_cursor']);
+            $cursor = (int) $body['next_cursor'];
+
+            if (! $body['has_more']) {
+                break;
+            }
+        }
+
+        $this->assertSame(3, $pages, 'RO tablo tek sayfada geldi ya da imlec ilerlemedi - `has_more` dongusu kirik.');
+        $this->assertCount(12, $seen, 'Sayfalama satir atladi ya da tekrarladi.');
+        $this->assertCount(12, array_unique($seen), 'Ayni satir iki kez dondu.');
+    }
+
+    /**
+     * RISK-2 O3 / TM-F2 - a tombstone must not name a row the caller was
+     * never allowed to see.
+     *
+     * `sync_deletions` carried no owner column and the row is gone by the time
+     * the tombstone is read, so the owner has to be captured at DELETE time
+     * (`owner_key`). Before that, every device received every user's deleted
+     * notification uuids: existence only, no content, but existence of another
+     * user's notification is still that user's data.
+     */
+    public function test_a_deleted_notification_tombstone_is_invisible_to_another_user(): void
+    {
+        [$owner, $ownerToken] = $this->deviceUser('Admin');
+        [, $strangerToken] = $this->deviceUser('Admin');
+
+        $deal = Deal::factory()->create(['owner_id' => $owner->id]);
+        $owner->notify(DealAssignedNotification::make($deal, null));
+
+        /** @var DatabaseNotification $notification */
+        $notification = $owner->notifications()->firstOrFail();
+        $uuid = (string) $notification->getKey();
+
+        $cursor = SyncCounter::current();
+        $notification->delete();
+
+        $this->assertDatabaseHas('sync_deletions', [
+            'table_name' => 'notifications',
+            'row_key' => $uuid,
+            'owner_key' => $owner->getMorphClass().':'.$owner->getKey(),
+        ]);
+
+        $ownerDeletions = $this->withToken($ownerToken)->postJson('/api/sync/pull', [
+            'cursors' => ['notifications' => $cursor],
+        ])->json('tables.notifications.deletions');
+
+        $this->assertSame(
+            [$uuid],
+            array_column($ownerDeletions, 'row_key'),
+            'Sahibi kendi sildigi bildirimin mezar tasini GORMELI, yoksa aynasi kuculemez.'
+        );
+
+        // MANDATORY between two tokens in ONE test: the application instance
+        // is reused across requests here (it is not in production, where every
+        // request boots its own), so Sanctum's already-resolved user would
+        // survive into the next call and this test would silently re-pull as
+        // the OWNER - reporting green for a leak it never exercised.
+        $this->app['auth']->forgetGuards();
+
+        $strangerDeletions = $this->withToken($strangerToken)->postJson('/api/sync/pull', [
+            'cursors' => ['notifications' => $cursor],
+        ])->json('tables.notifications.deletions');
+
+        $this->assertNotContains(
+            $uuid,
+            array_column($strangerDeletions, 'row_key'),
+            'Baska bir kullanicinin silinmis bildirim uuid degeri siziyor (O3/TM-F2).'
+        );
+        $this->assertSame([], $strangerDeletions);
+    }
+
+    /**
+     * RISK-2 O3 - the unscoped tombstone tables stay unscoped. `tags` is
+     * org-wide vocabulary (`permission => null`), so every authenticated
+     * caller pulls every tag row and a tag tombstone can reveal nothing its
+     * rows do not already show the same caller. Scoping it by accident would
+     * silently stop clients from ever dropping a deleted tag.
+     */
+    public function test_a_tag_tombstone_still_reaches_every_user(): void
+    {
+        [, $tokenA] = $this->deviceUser('Admin');
+        [, $tokenB] = $this->deviceUser('Admin');
+
+        $tag = Tag::factory()->create();
+        $cursor = SyncCounter::current();
+        $tag->delete();
+
+        foreach ([$tokenA, $tokenB] as $token) {
+            // See the O3 test above: without this the second iteration would
+            // still be authenticated as the first user.
+            $this->app['auth']->forgetGuards();
+
+            $deletions = $this->withToken($token)->postJson('/api/sync/pull', [
+                'cursors' => ['tags' => $cursor],
+            ])->json('tables.tags.deletions');
+
+            $this->assertSame([(string) $tag->id], array_column($deletions, 'row_key'));
+        }
+
+        $this->assertNull(
+            DB::table('sync_deletions')->where('table_name', 'tags')->value('owner_key'),
+            '`tags` sahibi olmayan bir tablodur - owner_key NULL kalmali.'
+        );
+    }
+
+    /**
+     * RISK-2 #3 - `window_days` is a BOOTSTRAP HINT, never an error.
+     *
+     * Section 4.4 says the filter applies only at `cursor = 0` ("delta'da
+     * filtre yok"), but the request rule said `min:1` unconditionally, so a
+     * client that kept the field in its delta payload got a 422 for a value
+     * the server was going to ignore. `0` and `null` now mean the same thing -
+     * "no window" - on BOTH kinds of pull.
+     */
+    public function test_window_days_zero_is_accepted_on_a_delta_pull_and_changes_nothing(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $company = Company::factory()->create();
+        DB::table('companies')->where('id', $company->id)->update(['updated_at' => now()->subDays(90)]);
+
+        $response = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['companies' => 1],
+            'window_days' => 0,
+        ]);
+
+        $response->assertOk();
+
+        $this->assertContains(
+            $company->id,
+            array_column($response->json('tables.companies.rows'), 'id'),
+            'Delta cekiminde `window_days` yok sayilir - 422 de uretmez, satir da kesmez.'
+        );
+    }
+
+    /**
+     * The same value on a BOOTSTRAP pull: `0` is "no window", not "zero days
+     * of history". Nobody can want an empty bootstrap, so it degrades to the
+     * no-filter branch instead of 422-ing or returning nothing.
+     */
+    public function test_window_days_zero_means_no_window_on_a_bootstrap_pull(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $ancient = Company::factory()->create();
+        DB::table('companies')->where('id', $ancient->id)->update(['updated_at' => now()->subDays(900)]);
+
+        $response = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['companies' => 0],
+            'window_days' => 0,
+        ]);
+
+        $response->assertOk();
+
+        $this->assertContains(
+            $ancient->id,
+            array_column($response->json('tables.companies.rows'), 'id'),
+            '`window_days: 0` filtresizlik demektir; `null` ile ayni yaniti vermeli.'
+        );
+    }
+
+    /**
+     * The ceiling stays a hard 422: 365 days is a disk budget (K8/K12,
+     * "Download archive" is the deliberate way to widen it), and silently
+     * clamping an over-wide ask would hide the client bug that produced it.
+     */
+    public function test_a_window_wider_than_the_ceiling_is_still_rejected(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        // This API wraps validation failures in its own envelope
+        // (`errors.code = VALIDATION_ERROR`, offending keys under
+        // `errors.fields`), so `assertJsonValidationErrors()` - which expects
+        // Laravel's default top-level `errors` bag keyed by field - does not
+        // apply here. Same shape SyncPushTest asserts on.
+        $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['companies' => 0],
+            'window_days' => 400,
+        ])->assertStatus(422)
+            ->assertJsonPath('errors.code', 'VALIDATION_ERROR')
+            ->assertJsonStructure(['errors' => ['fields' => ['window_days']]]);
+
+        $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['companies' => 0],
+            'window_days' => -1,
+        ])->assertStatus(422)
+            ->assertJsonPath('errors.code', 'VALIDATION_ERROR')
+            ->assertJsonStructure(['errors' => ['fields' => ['window_days']]]);
     }
 }

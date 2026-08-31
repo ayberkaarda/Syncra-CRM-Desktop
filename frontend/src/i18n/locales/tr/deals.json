@@ -101,7 +101,6 @@
     "stageReadonlyHint": "Aşama değişikliği pano üzerinden sürükle-bırak ile yapılır.",
     "stageHint": "Belirtilmezse sunucu en baştaki aktif aşamaya koyar.",
     "statusLabel": "Durum",
-    "companyLabel": "Firma",
     "contactLabel": "Kişi",
     "contactHint": "Firma seçilirse kişi listesi o firmaya göre filtrelenir.",
     "contactLoading": "Yükleniyor…",

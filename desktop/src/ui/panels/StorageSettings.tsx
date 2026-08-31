@@ -204,14 +204,14 @@ export function StorageSettings() {
           // there is no `desktop.onlineOnly.*` key for it, and `errors.OFFLINE` says the same
           // thing without inventing one.
           disabled={busy || offline}
-          title={offline ? t('desktop:errors.OFFLINE') : undefined}
+          title={offline ? t('desktop:errors.OFFLINE') : t('desktop:storage.downloadArchive.description')}
           onClick={() =>
             void run(async () => {
               await downloadArchive(Math.max(MIN_RETENTION_DAYS, retentionDays))
             })
           }
         >
-          {t('desktop:storage.downloadArchive')}
+          {t('desktop:storage.downloadArchive.button')}
         </Button>
 
         <Button

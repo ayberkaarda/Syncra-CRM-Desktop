@@ -5,6 +5,7 @@
     "PROTOCOL_ERROR": "Senkron protokolünde bir hata oluştu. Uygulamayı güncellemeniz gerekebilir.",
     "DB_ERROR": "Yerel veritabanında bir hata oluştu.",
     "HTTP_ERROR": "Sunucuya bağlanırken bir hata oluştu.",
+    "SERVER_ERROR": "Sunucuda bir sorun oluştu. Bu, internet bağlantınızla ilgili değil; uygulama kısa süre içinde otomatik olarak yeniden deneyecek.",
     "WRITE_BLOCKED": "Yerel depolama tavanına ulaşıldı. Disk alanını boşaltın veya senkronize edin.",
     "VALIDATION_ERROR": "Girdiğiniz veriler geçersiz.",
     "httpStatus": "Sunucu hatası (HTTP {{status}}).",
@@ -16,6 +17,8 @@
     "ABILITY_REQUIRED": "Bu işlem için gerekli yetkiye sahip değilsiniz.",
     "LOCKED_OUT": "Çok fazla başarısız deneme nedeniyle hesabınız geçici olarak kilitlendi.",
     "USER_INACTIVE": "Hesabınız pasifleştirildi.",
+    "INVALID_CREDENTIALS": "E-posta veya şifre hatalı.",
+    "PENDING_MUTATIONS": "Senkronize edilmemiş değişiklikleriniz var. Önce senkronize edin veya zorla çıkış yapın.",
     "unknown": "Bilinmeyen bir hata oluştu."
   },
   "onlineOnly": {
@@ -64,6 +67,13 @@
     "paused": "Senkron duraklatıldı",
     "syncError": "Senkron sırasında bir hata oluştu."
   },
+  "logout": {
+    "title": "Çıkış Yap",
+    "description": "Bu cihazda henüz sunucuya gönderilmemiş değişiklikleriniz var. Çıkış yapmadan önce senkronize etmenizi öneririz.",
+    "discardWarning_one": "Çıkış yaparsanız {{count}} gönderilmemiş değişiklik kaybolacak.",
+    "discardWarning_other": "Çıkış yaparsanız {{count}} gönderilmemiş değişiklik kaybolacak.",
+    "force": "Yine de çıkış yap"
+  },
   "bootstrap": {
     "title": "İlk kurulum",
     "description": "Verileriniz bu cihaza indiriliyor. Bu işlem birkaç dakika sürebilir.",
@@ -92,6 +102,12 @@
       "localValue": "Yerel değer",
       "serverValue": "Sunucu değeri"
     },
+    "rejected": {
+      "title": "Reddedildi",
+      "description": "Sunucu bu değişikliği kabul etmedi. Nedeni yukarıda yazıyor."
+    },
+    "retry": "Yeniden dene",
+    "discard": "Değişiklikten vazgeç",
     "resolveAll": "Tümünü çöz",
     "resolveSelected": "Seçilenleri çöz",
     "resolvedToast": "Çakışma çözüldü.",
@@ -111,7 +127,10 @@
       "label": "Kullanım",
       "value": "{{used}} / {{total}} MB kullanılıyor"
     },
-    "downloadArchive": "Arşivi indir",
+    "downloadArchive": {
+      "button": "Arşivi indir",
+      "description": "Seçili saklama süresi kapsamındaki geçmiş, bir arşiv dosyası olarak indirilir."
+    },
     "clearLocal": {
       "button": "Yerel veriyi temizle",
       "title": "Yerel Veriyi Temizle",
@@ -167,5 +186,90 @@
       "notificationTitle": "Syncra arka planda çalışıyor",
       "notificationBody": "Uygulama tray'de çalışmaya devam ediyor. Tamamen çıkmak için tray menüsünden Çık'ı kullanın."
     }
+  },
+  "recordBadge": {
+    "pending": "Bekliyor",
+    "conflict": "Çakışma"
+  },
+  "entities": {
+    "company": "Firma",
+    "contact": "Kişi",
+    "lead": "Müşteri Adayı",
+    "deal": "Fırsat",
+    "task": "Görev",
+    "activity": "Aktivite",
+    "ticket": "Talep",
+    "quote": "Teklif",
+    "conversation": "Sohbet",
+    "message": "Mesaj",
+    "conversation_user": "Sohbet Üyeliği",
+    "notification": "Bildirim",
+    "tag": "Etiket",
+    "pipeline_stage": "Aşama",
+    "custom_field": "Özel Alan",
+    "product": "Ürün",
+    "price_list": "Fiyat Listesi",
+    "price_list_item": "Fiyat Listesi Kalemi",
+    "exchange_rate": "Döviz Kuru",
+    "saved_view": "Kayıtlı Görünüm",
+    "setting": "Ayar",
+    "user": "Kullanıcı"
+  },
+  "fields": {
+    "title": "Başlık",
+    "description": "Açıklama",
+    "amount": "Tutar",
+    "currency": "Para Birimi",
+    "probability": "Olasılık",
+    "expected_close_date": "Tahmini Kapanış Tarihi",
+    "company_id": "Firma",
+    "contact_id": "Kişi",
+    "owner_id": "Sahip",
+    "tag_ids": "Etiketler",
+    "tags": "Etiketler",
+    "custom_fields": "Özel Alanlar",
+    "first_name": "Ad",
+    "last_name": "Soyad",
+    "email": "E-posta",
+    "phone": "Telefon",
+    "company_name": "Firma Adı",
+    "position": "Pozisyon",
+    "source": "Kaynak",
+    "status": "Durum",
+    "score": "Skor",
+    "notes": "Notlar",
+    "mobile": "Mobil",
+    "is_primary": "Birincil Kişi",
+    "address": "Adres",
+    "city": "Şehir",
+    "country": "Ülke",
+    "name": "Ad",
+    "website": "Website",
+    "industry": "Sektör",
+    "employee_count": "Çalışan Sayısı",
+    "annual_revenue": "Yıllık Ciro",
+    "due_at": "Vade",
+    "reminder_at": "Hatırlatıcı",
+    "priority": "Öncelik",
+    "assigned_to": "Atanan",
+    "taskable_type": "İlgili Kayıt Türü",
+    "taskable_id": "İlgili Kayıt",
+    "completed_at": "Tamamlanma Tarihi",
+    "type": "Tür",
+    "subject": "Konu",
+    "body": "Açıklama",
+    "occurred_at": "Gerçekleşme Tarihi",
+    "duration_minutes": "Süre (dakika)",
+    "outcome": "Sonuç",
+    "activityable_type": "İlgili Kayıt Türü",
+    "activityable_id": "İlgili Kayıt",
+    "category": "Kategori",
+    "sla_due_at": "SLA Hedefi",
+    "deal_id": "Fırsat",
+    "valid_until": "Geçerlilik Tarihi",
+    "discount_type": "İndirim Tipi",
+    "discount_value": "İndirim Değeri",
+    "terms": "Şartlar",
+    "is_muted": "Sessize Alındı"
   }
 }

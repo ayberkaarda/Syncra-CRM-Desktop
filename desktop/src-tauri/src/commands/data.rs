@@ -21,12 +21,6 @@ pub fn query(
     state.engine.query(query, params).map_err(CommandError::from)
 }
 
-/// Fetch one row by its local identity.
-#[tauri::command]
-pub fn get(state: State<'_, AppState>, entity: Entity, client_id: Uuid) -> CommandResult<Option<Row>> {
-    state.engine.get(entity, client_id).map_err(CommandError::from)
-}
-
 /// Apply a mutation locally and queue it for the next `sync::sync_now`.
 #[tauri::command]
 pub fn mutate(state: State<'_, AppState>, mutation: LocalMutation) -> CommandResult<Uuid> {

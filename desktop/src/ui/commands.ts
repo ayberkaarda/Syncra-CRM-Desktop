@@ -3,8 +3,10 @@
 // `platform/data/engine.ts` is the same seam for `data::*`; this is its counterpart for the
 // commands that are not part of the `DataSource` surface. Every name below is the Rust
 // function name, because `tauri::generate_handler!` registers commands by function name and
-// NOT by module path (`src-tauri/src/lib.rs:79-98`) — `storage::stats` is therefore invoked as
-// `stats`, not as `storage_stats`.
+// NOT by module path (`src-tauri/src/lib.rs`) — a module-qualified name never reaches the
+// wire. `storage`'s accounting command is therefore named `storage_stats` on the Rust side
+// too, which is the name `SYNCDESKTOP.md` §6.2 fixes (ledger O5); `npm run check:commands`
+// compares the Rust fn, this literal and the §6.2 contract on every run.
 //
 // Argument keys are camelCase: Tauri 2 renames command arguments to camelCase on the JS side
 // by default, so `extra_days` is passed as `extraDays`. Struct FIELDS stay snake_case (serde
@@ -143,9 +145,9 @@ export function downloadArchive(extraDays: number): Promise<void> {
   return invokeCommand<void>('download_archive', { extraDays })
 }
 
-/** `storage::stats` — local storage accounting. */
+/** `storage::storage_stats` — local storage accounting. */
 export function readStorageStats(): Promise<StorageStats> {
-  return invokeCommand<StorageStats>('stats')
+  return invokeCommand<StorageStats>('storage_stats')
 }
 
 /** `storage::update_settings` — values below the K8 minimums are clamped by the engine. */

@@ -19,6 +19,7 @@
 //! * `--mutate <name>`    create one company with this name before syncing
 //! * `--search <text>`    run a local full-text search at the end
 //! * `--keychain`         use the real OS keychain instead of an in-process store
+//! * `--logout`           log out at the end, which also revokes the token on the server
 //!
 //! Without `--keychain` the run is self-contained: the database key lives only in memory,
 //! so the file is unreadable after the process exits. That is the right default for a
@@ -171,6 +172,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
+    // 5. logout (opt-in). Forced, because a smoke run routinely leaves a queued mutation
+    // behind and the point here is to exercise the server-side revocation.
+    if args.contains_key("logout") {
+        println!("logging out (token_id {})...", session.token_id);
+        println!("  outcome: {:?}", engine.logout(true).await?);
+    }
+
     Ok(())
 }
 
@@ -182,7 +190,7 @@ fn parse_args() -> HashMap<String, String> {
         let Some(key) = arg.strip_prefix("--") else {
             continue;
         };
-        let takes_value = !matches!(key, "no-bootstrap" | "keychain");
+        let takes_value = !matches!(key, "no-bootstrap" | "keychain" | "logout");
         let value = if takes_value {
             args.next().unwrap_or_default()
         } else {
@@ -201,11 +209,23 @@ fn hostname() -> String {
 
 /// A stable-per-machine-and-account fingerprint, which is what the server keys the
 /// one-token-per-device rule on (protocol §3.5 K-E).
+///
+/// **64 lowercase hex characters, not 32.** `DeviceTokenRequest` validates `size:64` +
+/// `/^[0-9a-f]{64}$/`, so the single `Uuid::new_v5(...).simple()` this used to return — 32
+/// characters — was rejected with a 422 exactly like the shell's own generator was (AUTH-1
+/// U1). Two v5 UUIDs over different seeds give the required width while staying deterministic,
+/// which is what a repeatable smoke test wants: the same run reuses the same device row on the
+/// server instead of leaving a new one behind each time.
+///
+/// The shell does **not** do this — it stores 256 random bits in the OS keychain instead (see
+/// `desktop/src-tauri/src/commands/auth.rs`). A derived value is right here, where there is no
+/// keychain to persist anything and reproducibility is the whole point, and wrong there, where
+/// it would put the customer's machine and account names into a server column.
 fn fingerprint(email: &str) -> String {
     let seed = format!("{}:{}", hostname(), email);
-    Uuid::new_v5(&Uuid::NAMESPACE_DNS, seed.as_bytes())
-        .simple()
-        .to_string()
+    let a = Uuid::new_v5(&Uuid::NAMESPACE_DNS, seed.as_bytes());
+    let b = Uuid::new_v5(&a, seed.as_bytes());
+    format!("{}{}", a.simple(), b.simple())
 }
 
 fn platform() -> &'static str {

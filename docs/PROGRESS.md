@@ -1,6 +1,39 @@
 # Syncra — İlerleme Durumu (PROGRESS)
 
-**Son güncelleme:** 2026-08-25
+> ## ⚠️ BU DEPO ARTIK MASAÜSTÜ PROJESİDİR — ÖNCE BURAYI OKU
+>
+> **Son güncelleme: 2026-08-31 · branch `feat/desktop`**
+>
+> Aşağıdaki "Faz 0-15 tamamlandı, proje teslim edildi" metni **tamamlanmış web projesinin** tarihçesidir ve hâlâ doğrudur — ama **bu deponun bugünkü işi o değil.** Bu kopya, `SYNCDESKTOP.md`'ye göre Tauri 2 tabanlı offline-first bir masaüstü istemcisi ekliyor.
+>
+> **Yol haritası `SYNCDESKTOP.md`'dir.** `docs/ROADMAP.md` (aşağıda atıf verilen) web projesinin tarihçesidir, desktop için plan kaynağı **değildir**.
+>
+> ### Masaüstü faz durumu
+>
+> | Faz | Durum |
+> |---|---|
+> | F0 Keşif + sözleşme | ✅ `docs/DESKTOP-SYNC-PROTOCOL.md`, `docs/DESKTOP-ARCHITECTURE.md` |
+> | F1 Backend | ✅ migration'lar, observer + trigger, device auth, 3 sync endpoint — **1411 test** |
+> | F2 `syncra-sync` crate | ✅ SQLCipher + outbox + sync döngüsü |
+> | F3 Tauri kabuğu + adaptör | ⏳ uygulama açılıyor, 124/124 metot bağlı, A11 realtime köprüsü — **107 test** (crate + kabuk) |
+> | F4 Offline UX | ⏳ 5 ekranın 4'ü (Conflict Inbox, Storage, Devices, connectivity bar) |
+> | F5 OS özellikleri | ❌ başlamadı |
+> | F6 Güvenlik | ⏳ `docs/DESKTOP-THREAT-MODEL.md` + §9/9 log filtresi |
+> | F7 Paketleme + CI | ⏳ workflow'lar yazıldı, **hiç çalıştırılmadı** |
+>
+> ### En kritik bilgi
+>
+> **Hiçbir şey uçtan uca doğrulanmadı.** Yukarıdaki bütün test sayıları kendi mock'una karşı yeşil (wiremock ↔ PHPUnit); iki mock'un aynı wire gerçeğini tarif ettiği kanıtlanmadı. Gerçek login/bootstrap ilk kez deneniyor.
+>
+> ### Oturum başında ayrıca oku
+>
+> - **`docs/DESKTOP-OPEN-ITEMS.md`** — açık işler defteri. Her madde **Karar / Kod / Test** sütunlarıyla izleniyor; bir madde ancak üçü de ✅ olduğunda kapanır. *(Bu defter bir hatadan doğdu: KARAR A25 tutanağa geçti, "kapandı" sayıldı, ama kodda karşılığı yoktu.)*
+> - `docs/DESKTOP-SYNC-PROTOCOL.md` ve `docs/DESKTOP-ARCHITECTURE.md` — bağlayıcı sözleşmeler, EK bölümleriyle birlikte
+> - **Uyarı:** `SYNCDESKTOP.md` henüz revize edilmedi (O15). S1–S10, D1–D13, P17–P20, A25 ve §6.2'deki `handle_realtime` eksiği ona işlenmedi — çeliştiği yerde **karar belgeleri (protokol/mimari EK'leri) günceldir**.
+
+---
+
+**Son güncelleme:** 2026-08-25 *(aşağısı web projesinin tarihçesidir)*
 **Durum özeti:** Faz 0-15 TAMAMLANDI — bildirim merkezi, ayarlar, raporlar, canlı dashboard, chat (DM/grup, tik makinesi, mention, dosya paylaşımı, kayda bağlı panel), Faz 13 (Güvenlik Denetimi, Kırmızı Takım, Kullanıcı Kabul & Attio Analizi — İz A/B/C), Faz 14 (Uluslararasılaştırma — tr/en/de/fr, çoklu para birimi + TCMB kuru, Attio C1–C4 — İz D/E/F) ve Faz 15 (Teslim & Final Kabul — teslim dokümanı EN+TR + ekran görüntüleri, işlevsel test kapsamı tamamlama, 4 dilli gezinti denetimi + 8 hata kapatma, kısa yeniden-kabul turu, Bölüm 6 son kabul turu) dahil. **1316 test / 9695 assertion (2026-08-25).** Proje teslim edildi — sıradaki faz yok; detay `docs/PHASE-DELIVERY.md`.
 
 > Ayrıntılı plan: `docs/ROADMAP.md`. Bu dosya her oturum başında okunur (docs/ENGINEERING-RULES.md kuralı).

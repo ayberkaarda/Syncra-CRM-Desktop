@@ -38,6 +38,16 @@ const SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 /// How often the background loop re-checks connectivity while offline.
 const OFFLINE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
+/// True when `err` is a `5xx` the server answered with ([`SyncError::Server`]).
+///
+/// A `5xx` is not "no network" — the request round-tripped and the server said it broke —
+/// but it is still transient in the same sense [`SyncError::Offline`] is: retrying later is
+/// the right move, so the sync loop backs off on it exactly as it always did for `Offline`
+/// (O25). A `4xx` never matches this: those are the server's final word on the request.
+fn is_server_5xx(err: &SyncError) -> bool {
+    matches!(err, SyncError::Server(server) if server.status >= 500)
+}
+
 /// Handle to the background loop started by [`SyncEngine::start_background_sync`].
 ///
 /// Dropping it does **not** stop the loop; call [`SyncScheduler::stop`] for that, or keep
@@ -231,10 +241,15 @@ impl SyncEngine {
         self.inner.session.read().unwrap().clone()
     }
 
-    /// Drop the session and wipe local state.
+    /// Drop the session, revoke the token on the server, and wipe local state.
     ///
     /// Refuses while unpushed mutations exist unless `force` is set — logging out is how a
     /// user loses offline work, so it asks first.
+    ///
+    /// The server call comes **before** the keychain delete, because it is the last moment the
+    /// bearer token still exists. It is best-effort: an offline logout must still succeed
+    /// locally, so a failure downgrades the result to [`LogoutOutcome::WipedLocalOnly`] rather
+    /// than aborting the wipe or being swallowed (AUTH-1 U6).
     pub async fn logout(&self, force: bool) -> Result<LogoutOutcome> {
         let pending = {
             let conn = self.db()?;
@@ -243,6 +258,23 @@ impl SyncEngine {
         if pending > 0 && !force {
             return Ok(LogoutOutcome::PendingMutations(pending));
         }
+
+        let revocation = match (self.token(), self.session().map(|s| s.token_id)) {
+            (Some(token), Some(token_id)) => {
+                match self.inner.transport.revoke_device(&token, token_id).await {
+                    Ok(()) => None,
+                    Err(err) => {
+                        tracing::warn!(
+                            error = %err,
+                            "logout could not revoke the device token on the server"
+                        );
+                        Some(err.to_string())
+                    }
+                }
+            }
+            // Nothing to revoke: no token, or a token whose id was never recorded.
+            _ => None,
+        };
 
         let service = self.inner.cfg.read().unwrap().keychain_service.clone();
         self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
@@ -256,7 +288,10 @@ impl SyncEngine {
         *self.inner.session.write().unwrap() = None;
         *self.inner.manifest.lock().unwrap() = None;
         self.refresh_status()?;
-        Ok(LogoutOutcome::Wiped)
+        Ok(match revocation {
+            Some(reason) => LogoutOutcome::WipedLocalOnly(reason),
+            None => LogoutOutcome::Wiped,
+        })
     }
 
     // -----------------------------------------------------------------------
@@ -274,7 +309,10 @@ impl SyncEngine {
         let manifest = self.load_manifest(true).await?;
         let entities = pull::granted_entities(&manifest);
         let window_days = self.inner.cfg.read().unwrap().retention_days;
-        self.pull_until_drained(&manifest, &entities, window_days, Some(&progress))
+        // Clamped to the server's own `min:1|max:365` rule: a preference of 0 (or anything
+        // past a year) would be a 422 on every request of the bootstrap (U3).
+        let window_days = window_days.clamp(1, manifest.policy.retention_days_max.max(1));
+        self.pull_until_drained(&manifest, &entities, Some(window_days), Some(&progress))
             .await?;
         self.refresh_status()?;
         self.emit(EngineEvent::TablesChanged { entities });
@@ -316,7 +354,7 @@ impl SyncEngine {
                 if matches!(err, SyncError::Auth) {
                     self.handle_auth_lost()?;
                 }
-                if matches!(err, SyncError::Offline) {
+                if matches!(err, SyncError::Offline) || is_server_5xx(&err) {
                     self.set_online_flag(false);
                 }
                 self.refresh_status()?;
@@ -333,8 +371,10 @@ impl SyncEngine {
         self.push_round(&policy, &mut report).await?;
 
         let entities = pull::granted_entities(&manifest);
+        // `None`, not `0`: a delta pull sends no retention window at all (§4.4). Sending `0`
+        // made the server answer 422 to the pull half of every single round (U3).
         let pulled = self
-            .pull_until_drained(&manifest, &entities, 0, None)
+            .pull_until_drained(&manifest, &entities, None, None)
             .await?;
         report.pulled_rows = pulled.rows;
         report.deletions = pulled.deletions;
@@ -392,9 +432,12 @@ impl SyncEngine {
                     }
                 }
                 Err(err) => {
-                    let conn = self.db()?;
-                    push::requeue_after_failure(&conn, &batch, &err.to_string())?;
-                    drop(conn);
+                    {
+                        let conn = self.db()?;
+                        push::requeue_after_failure(&conn, &batch, &err.to_string())?;
+                    }
+                    // After the connection is released: the A25 wipe takes the same lock.
+                    self.observe_transport_error(&err);
                     return Err(err);
                 }
             }
@@ -406,7 +449,7 @@ impl SyncEngine {
         &self,
         manifest: &Manifest,
         entities: &[Entity],
-        window_days: u32,
+        window_days: Option<u32>,
         progress: Option<&(dyn Fn(BootstrapProgress) + Send + Sync)>,
     ) -> Result<pull::PullOutcome> {
         let token = self.token().ok_or(SyncError::Auth)?;
@@ -427,7 +470,13 @@ impl SyncEngine {
                 let conn = self.db()?;
                 pull::build_request(&conn, &pending, limit, window_days)?
             };
-            let response = self.inner.transport.pull(&token, &request).await?;
+            let response = match self.inner.transport.pull(&token, &request).await {
+                Ok(response) => response,
+                Err(err) => {
+                    self.observe_transport_error(&err);
+                    return Err(err);
+                }
+            };
             let outcome = {
                 let conn = self.db()?;
                 pull::apply(&conn, &response)?
@@ -479,7 +528,11 @@ impl SyncEngine {
             }
         }
 
-        self.pull_until_drained(&manifest, &entities, window, None)
+        // Same `min:1|max:365` clamp as `bootstrap` — this pull resets the cursors, so the
+        // window is genuinely applied and genuinely validated by the server (U3).
+        let window = window.clamp(1, manifest.policy.retention_days_max.max(1));
+
+        self.pull_until_drained(&manifest, &entities, Some(window), None)
             .await?;
         self.refresh_status()?;
         self.emit(EngineEvent::TablesChanged { entities });
@@ -504,7 +557,10 @@ impl SyncEngine {
         if wanted.is_empty() {
             return;
         }
-        if let Ok(outcome) = self.pull_until_drained(&manifest, &wanted, 0, None).await {
+        if let Ok(outcome) = self
+            .pull_until_drained(&manifest, &wanted, None, None)
+            .await
+        {
             let _ = self.refresh_status();
             if !outcome.tables_changed.is_empty() {
                 self.emit(EngineEvent::TablesChanged { entities: outcome.tables_changed });
@@ -878,13 +934,17 @@ impl SyncEngine {
                             failures = 0;
                             SYNC_INTERVAL
                         }
-                        Err(SyncError::Offline) | Err(SyncError::Http(_)) => {
+                        Err(ref err)
+                            if matches!(err, SyncError::Offline | SyncError::Http(_))
+                                || is_server_5xx(err) =>
+                        {
                             let delay = backoff::with_jitter(failures);
                             failures = failures.saturating_add(1);
                             delay
                         }
-                        // Auth and protocol failures are not going to fix themselves on a
-                        // fast retry; wait for a login or an app update.
+                        // Auth, protocol, and 4xx failures are not going to fix themselves
+                        // on a fast retry; wait for a login, an app update, or a fixed
+                        // request.
                         Err(_) => SYNC_INTERVAL,
                     }
                 };
@@ -976,11 +1036,10 @@ impl SyncEngine {
         let token = self.token().ok_or(SyncError::Auth)?;
         let manifest = match self.inner.transport.manifest(&token).await {
             Ok(manifest) => manifest,
-            Err(SyncError::Auth) => {
-                self.handle_auth_lost()?;
-                return Err(SyncError::Auth);
+            Err(err) => {
+                self.observe_transport_error(&err);
+                return Err(err);
             }
-            Err(err) => return Err(err),
         };
 
         if manifest.protocol_version != PROTOCOL_VERSION {
@@ -996,6 +1055,61 @@ impl SyncEngine {
 
         *self.inner.manifest.lock().unwrap() = Some((Instant::now(), manifest.clone()));
         Ok(manifest)
+    }
+
+    /// Apply the session consequences of a failed server call.
+    ///
+    /// KARAR A25 (`docs/DESKTOP-ARCHITECTURE.md` EK 4) splits two things the specification
+    /// used to conflate:
+    ///
+    /// | Signal | Behaviour |
+    /// |---|---|
+    /// | `403 USER_DEACTIVATED` | **wipe** — local database *and* keychain token |
+    /// | any other 401 | `AuthLost`, **outbox preserved** |
+    ///
+    /// The asymmetry is the point: a 401 has many innocent causes (an expired token, a server
+    /// hiccup) and wiping on each of them destroys a user's unpushed offline work, while a 403
+    /// `USER_DEACTIVATED` is a server-certain statement that this account is gone, which is
+    /// what `SYNCDESKTOP.md` §9/2 requires the local copy to follow.
+    ///
+    /// Errors are swallowed on purpose: this runs on the failure path of a call that is
+    /// already returning an error, and a keychain hiccup here must not replace the error the
+    /// caller is about to see.
+    fn observe_transport_error(&self, err: &SyncError) {
+        match err {
+            SyncError::Auth => {
+                if let Err(e) = self.handle_auth_lost() {
+                    tracing::warn!(error = %e, "could not clear the session after a 401");
+                }
+            }
+            SyncError::Server(server)
+                if server.status == 403 && server.code == crate::protocol::codes::USER_DEACTIVATED =>
+            {
+                if let Err(e) = self.handle_deactivated() {
+                    tracing::warn!(error = %e, "could not wipe after USER_DEACTIVATED");
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// KARAR A25: the account is gone, so the local mirror goes with it — encrypted database
+    /// contents, outbox, conflicts and the keychain token.
+    fn handle_deactivated(&self) -> Result<()> {
+        let service = self.inner.cfg.read().unwrap().keychain_service.clone();
+        self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
+        {
+            let conn = self.db()?;
+            db::wipe(&conn)?;
+            db::put_setting(&conn, SETTING_USER_ID, "")?;
+            db::put_setting(&conn, SETTING_SESSION, "")?;
+        }
+        *self.inner.token.write().unwrap() = None;
+        *self.inner.session.write().unwrap() = None;
+        *self.inner.manifest.lock().unwrap() = None;
+        self.emit(EngineEvent::AuthLost);
+        self.refresh_status()?;
+        Ok(())
     }
 
     /// A 401 drops the session but **keeps the outbox** (§5.5): the same user logging back

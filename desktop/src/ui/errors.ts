@@ -31,6 +31,15 @@ const KNOWN_ERROR_CODES = new Set<string>([
   'ABILITY_REQUIRED',
   'LOCKED_OUT',
   'USER_INACTIVE',
+  // FIX-RUST made the server's own refusal codes structural (`SyncError::Server{code, ...}`),
+  // so these two finally arrive as themselves instead of being buried in a message string.
+  // Both keys already existed in all four dictionaries and nothing consumed them (O20).
+  'INVALID_CREDENTIALS',
+  'PENDING_MUTATIONS',
+  // O25: a `5xx` is `SyncError::Server` now, not `SyncError::Offline` — a real server error
+  // no longer reads as "no internet connection". `commands/mod.rs` falls back to this code
+  // whenever the server's own body carried none of its own (the common case for a `500`).
+  'SERVER_ERROR',
 ])
 
 /** `HTTP_403` and friends — `commands/auth.rs` builds this shape from any non-2xx response. */
@@ -62,4 +71,19 @@ export function errorCodeOf(error: unknown): string {
     if (typeof code === 'string') return code
   }
   return 'unknown'
+}
+
+/**
+ * `retry_after` off a rejected command, in seconds.
+ *
+ * `bridge/invoke.ts` copies `CommandError.retry_after` onto `CommandError.retryAfter`; this is
+ * the read side, kept next to `errorCodeOf` because the two are always used together — a
+ * `LOCKED_OUT` code without its countdown is only half the refusal.
+ */
+export function retryAfterOf(error: unknown): number | undefined {
+  if (typeof error === 'object' && error !== null && 'retryAfter' in error) {
+    const value = (error as { retryAfter: unknown }).retryAfter
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+  }
+  return undefined
 }

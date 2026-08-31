@@ -19,6 +19,7 @@ import { i18nReady } from '@/i18n'
 import { PlatformProvider, setPlatform } from '@/platform'
 import { queryClient } from '@/lib/queryClient'
 import { applyEngineStatus, desktopPlatform, primeDesktopPlatform } from './platform/desktop'
+import { handleAuthLost, installDesktopAuth, restoreDesktopSession } from './platform/auth'
 import { subscribeToEngineEvents } from './bridge/events'
 import { startRealtimeBridge } from './bridge/realtime'
 import { DesktopShell } from './ui/DesktopShell'
@@ -26,6 +27,13 @@ import App from '@/App'
 
 // Before the first render, and before anything can call `getPlatform()` from a React tree.
 setPlatform(desktopPlatform)
+
+// The shared auth endpoints are pointed at the engine BEFORE anything can call them
+// (`platform/auth.ts` explains why the transport is redirected instead of a desktop login
+// screen being written). This must run before `restoreDesktopSession()` below and before the
+// tree mounts, because `useAuth` fires `GET /api/me` on its first render and that request must
+// never reach the network: it has to be answerable offline.
+installDesktopAuth()
 primeDesktopPlatform()
 
 // The engine's event stream drives the query cache: `tables_changed` -> `invalidateQueries`
@@ -36,6 +44,12 @@ primeDesktopPlatform()
 // cache the tree is actually reading.
 void subscribeToEngineEvents(queryClient, {
   onStatusChanged: applyEngineStatus,
+  // The server rejected the device token (§5.5). The engine has already dropped it and kept
+  // the outbox; the webview only has to stop claiming a session, which sends `RequireAuth` to
+  // `/login` on the next render. `USER_DEACTIVATED` (403) does NOT arrive here — `transport.rs`
+  // folds every 403 into `PROTOCOL_ERROR` — and wiring that is KARAR A25 / O1, crate work this
+  // strand does not own. Today's behaviour is preserved deliberately.
+  onAuthLost: handleAuthLost,
 })
 
 // The other half of the same rule, for the OTHER event source (KARAR A11). A Reverb frame is
@@ -55,7 +69,11 @@ startRealtimeBridge()
 // it to this file is KARAR D-6, owned by the `frontend/**` strand.
 //
 // With `tr` selected this is an already-resolved promise: one microtask, no network wait.
-void i18nReady.then(() => {
+//
+// `restoreDesktopSession()` is chained onto the SAME gate rather than run in parallel: the
+// router decides on its very first render whether the user is signed in, and a session that
+// lands one tick later would show `/login` and then yank it away.
+void i18nReady.then(restoreDesktopSession).then(() => {
   createRoot(document.getElementById('root')!).render(
     // `DesktopShell` is the F4 chrome (`SYNCDESKTOP.md` §7.2): the connectivity bar and the
     // panel that carries the Conflict Inbox, storage settings and the device list. It wraps

@@ -1,12 +1,40 @@
 //! `sync::*` — manual sync control and the Conflict Inbox (`SYNCDESKTOP.md` §6.2).
 
-use tauri::State;
+use tauri::{AppHandle, Emitter, Runtime, State};
 use uuid::Uuid;
 
 use syncra_sync::{Conflict, RealtimeEvent, Resolution, SyncReport, SyncStatus};
 
 use super::{CommandError, CommandResult};
+use crate::events::BOOTSTRAP_PROGRESS;
 use crate::state::AppState;
+
+/// First full download (`SYNCDESKTOP.md` §5.5, K12): every granted table from cursor 0, inside
+/// the retention window, with progress reported as it goes.
+///
+/// `SyncEngine::bootstrap` is the only path that emits `BootstrapProgress`, and it was missing
+/// from `generate_handler!`, so the webview could not reach it at all. The bootstrap screen had
+/// to imitate it with `download_archive(0)` plus a 400 ms row-count poll — which is both a
+/// different call and a worse progress signal (AUTH-1 U15).
+///
+/// Progress ticks go out as [`BOOTSTRAP_PROGRESS`] Tauri events. They are advisory: a dropped
+/// tick costs a smoother bar, never correctness, since the command's own resolution is what
+/// says the download finished.
+#[tauri::command]
+pub async fn bootstrap<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> CommandResult<()> {
+    let engine = state.engine.clone();
+    engine
+        .bootstrap(move |progress| {
+            if let Err(error) = app.emit(BOOTSTRAP_PROGRESS, &progress) {
+                tracing::warn!(%error, "could not emit bootstrap progress to the webview");
+            }
+        })
+        .await
+        .map_err(CommandError::from)
+}
 
 /// One manual push-then-pull round. The background loop (`SyncEngine::start_background_sync`,
 /// `SYNCDESKTOP.md` §5.5) is not started by this shell yet — F5 wires the OS-integration

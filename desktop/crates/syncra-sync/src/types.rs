@@ -482,11 +482,22 @@ pub struct Session {
 }
 
 /// Result of [`crate::SyncEngine::logout`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// No longer `Copy`: [`LogoutOutcome::WipedLocalOnly`] carries the reason the server-side
+/// revocation failed, and swallowing that would repeat the bug it exists to surface.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogoutOutcome {
-    /// Session dropped and the local database wiped.
+    /// Session dropped, the server token revoked, and the local database wiped.
     Wiped,
+    /// The local wipe succeeded but `DELETE /api/me/devices/{token_id}` did not, so the token
+    /// may still be alive on the server (`SYNCDESKTOP.md` §4.3).
+    ///
+    /// This is the normal outcome of an offline logout. It is a distinct variant rather than a
+    /// silent success because a desktop logout used to leave the personal access token usable
+    /// on the server with no trace of the problem anywhere (AUTH-1 U6); the user's recourse is
+    /// the Devices page, and they can only take it if they are told.
+    WipedLocalOnly(String),
     /// Refused: unpushed mutations exist and `force` was not set.
     PendingMutations(u32),
 }

@@ -45,6 +45,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # HELD at 22.04 on purpose while desktop-ci.yml moved to 24.04 (2026-08-31).
+        # The release runner's glibc becomes the floor for every Linux user who installs the
+        # artifact (22.04 = glibc 2.35, 24.04 = 2.39); bumping it drops older distributions.
+        # That is a product decision and needs an explicit call — open item O34. The cost of
+        # holding is that CI no longer builds on the same base as the release, so a
+        # 22.04-only build break would surface first in `desktop-release.yml`, not in CI.
         os: [windows-latest, ubuntu-22.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -83,7 +89,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo-dev \

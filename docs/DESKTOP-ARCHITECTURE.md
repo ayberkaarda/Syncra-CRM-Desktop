@@ -1246,8 +1246,10 @@ Bugünkü savunma bir **workaround**: köprü 5 sn'de bir kanal nesnesi kimliği
 ## KARAR A25 — 401 ile deaktivasyon aynı olay DEĞİLDİR
 
 `SYNCDESKTOP.md` kendi içinde çelişiyordu (F6-A buldu, teknik lider doğruladı):
-- `:342` ve `:350` → *"401 → AuthLost (**outbox korunur**, aynı user login → devam; farklı user → wipe)"*
-- `:414` (§9/2) → *"Deaktive/silinen kullanıcı → 401 → lokal DB + keychain **tamamen wipe**"*
+- §5.5 ve §5.7 → *"401 → AuthLost (**outbox korunur**, aynı user login → devam; farklı user → wipe)"*
+- §9 madde 2 → *"Deaktive/silinen kullanıcı → 401 → lokal DB + keychain **tamamen wipe**"*
+
+> **Atıf notu (2026-08-31):** bu üç alıntı özgün olarak `SYNCDESKTOP.md:342/:350/:414` satır numaralarıyla verilmişti. Şartname SPEC-1 turunda revize edildiği için satır numaraları kaydı; atıflar bölüm çapalarına taşındı ve **karar bu revizyonla şartnameye işlendi** (`SYNCDESKTOP.md` §13.1, A25 satırı). Karar belgelerinde satır numarasıyla atıf verilmez.
 
 Crate `sync/mod.rs:1001` §5.5'i uygulamış: token silinir, şifreli DB kalır.
 
@@ -1290,7 +1292,11 @@ Yeni migration gerekmiyor. Uygulama sonraki backend turunda; `Ticket::newFromBui
 
 19 satırlık STRIDE tablosu, §9'un 10 maddesi tek tek, 8 bulgu (1 ORTA, 3 DÜŞÜK, 4 BİLGİ). Doküman okumakla yetinilmemiş, **canlı kanıt** toplanmış: `$APPDATA` listelenip token/anahtar dosyası olmadığı, `head -c 16 syncra.db | od -c` ile başlığın `SQLite format 3` **olmadığı** gösterilmiş.
 
-**§9 durumu:** madde 1, 3, 4, 7 KAPALI · madde 2 A25 ile kapandı · madde 5, 6 DEĞERLENDİRİLEMEZ-F5 · madde 8 DEĞERLENDİRİLEMEZ-F7 (bugün fail-closed) · madde 9 **AÇIK** · madde 10 bu teslimat.
+**§9 durumu:** madde 1, 3, 4, 7 KAPALI · **madde 2 AÇIK** · madde 5, 6 DEĞERLENDİRİLEMEZ-F5 · madde 8 DEĞERLENDİRİLEMEZ-F7 (bugün fail-closed) · madde 9 KAPALI (§9/9 log filtresi, EK 5) · madde 10 bu teslimat.
+
+> ⚠️ **DÜZELTME (RISK-1 denetimi, 2026-08-31).** Bu satır önce "madde 2 A25 ile kapandı" diyordu. **Yanlıştı.** A25 bir *karardır*, uygulama değil — ve kodda hiçbir karşılığı yok: `transport.rs:137` 403'ü ayrıştırmadan `SyncError::Protocol`'e katlıyor, `USER_DEACTIVATED` masaüstü kodunda hiç geçmiyor (grep 0), `handle_auth_lost` yalnız 401'de çalışıyor. **Bugünkü davranış karardan da kötü:** deaktive edilmiş kullanıcı oturumu düşmeden "protocol error" görüyor ve wipe hiç olmuyor.
+>
+> Bu hata, kararı tutanağa geçirmenin işi bitirmekle karıştırılmasından doğdu. Yapısal önlemi `docs/DESKTOP-OPEN-ITEMS.md`: her madde **Karar / Kod / Test** sütunlarıyla izleniyor ve ancak üçü de ✅ olduğunda kapanıyor. Bu madde orada **O1**.
 
 **§9/9 (tracing PII filtresi) F5'i bekleyemez.** Log plugin'i F3'ten beri **filtresiz DEBUG seviyesinde** diske yazıyor (`lib.rs:78`; canlı `Syncra.log`'da keyring DEBUG satırları var — girdi *adları* görünüyor, sır *değerleri* görünmüyor). Bugün sır sızmıyor ama bunu garanti eden bir katman yok. Bir sonraki turun adayı.
 

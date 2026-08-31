@@ -9,6 +9,8 @@
     "build:desktop": "tsc -b && vite build --config vite.desktop.config.ts",
     "check:data": "node scripts/check-data-wiring.mjs",
     "check:realtime": "node scripts/check-realtime-wiring.mjs",
+    "check:commands": "node scripts/check-command-wiring.mjs",
+    "check:identifier": "node scripts/check-identifier.mjs",
     "tauri": "node scripts/tauri.mjs",
     "dev": "node scripts/tauri.mjs dev"
   },

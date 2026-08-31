@@ -101,7 +101,6 @@
     "stageReadonlyHint": "Stage changes are made by dragging the card on the board.",
     "stageHint": "If not specified, the server places it in the first active stage.",
     "statusLabel": "Status",
-    "companyLabel": "Company",
     "contactLabel": "Contact",
     "contactHint": "If a company is selected, the contact list is filtered to that company.",
     "contactLoading": "Loading…",
