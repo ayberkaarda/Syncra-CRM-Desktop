@@ -1,0 +1,40 @@
+[package]
+name = "syncra-sync"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Offline-first sync engine for the Syncra CRM desktop client"
+license = "MIT"
+publish = false
+
+[lib]
+name = "syncra_sync"
+path = "src/lib.rs"
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl", "functions", "backup"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
+thiserror = "1"
+tracing = "0.1"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+wiremock = "0.6"
+tempfile = "3"
+tokio-test = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+
+[features]
+default = []
+
+# The vendored OpenSSL that `bundled-sqlcipher-vendored-openssl` builds ships object files
+# without PDBs, so every MSVC link emits hundreds of LNK4099 notes. They say nothing about
+# this crate's own code and drown out real output.
+[lints.rust]
+linker_messages = "allow"

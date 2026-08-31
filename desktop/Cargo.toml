@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["crates/syncra-sync", "src-tauri"]
+
+# Neither member declares its own `[workspace]` table, so both are free to join this one —
+# verified before adding this file (`grep -n workspace crates/syncra-sync/Cargo.toml
+# src-tauri/Cargo.toml` → no hits). A single shared `target/` is what makes
+# `cargo check -p syncra-sync -p syncra-desktop` compile the SQLCipher/OpenSSL vendor tree
+# in `syncra-sync` exactly once instead of twice (see `.cargo/config.toml` and the phase
+# report for the Perl trap this avoids).
