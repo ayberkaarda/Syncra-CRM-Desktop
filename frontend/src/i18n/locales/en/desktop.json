@@ -1,0 +1,171 @@
+{
+  "errors": {
+    "AUTH_REQUIRED": "No active session found. Please sign in again.",
+    "OFFLINE": "No internet connection.",
+    "PROTOCOL_ERROR": "A sync protocol error occurred. You may need to update the app.",
+    "DB_ERROR": "A local database error occurred.",
+    "HTTP_ERROR": "An error occurred while connecting to the server.",
+    "WRITE_BLOCKED": "Local storage limit reached. Free up disk space or sync.",
+    "VALIDATION_ERROR": "The data you entered is invalid.",
+    "httpStatus": "Server error (HTTP {{status}}).",
+    "ONLINE_ONLY": "This action requires an internet connection.",
+    "UNRESOLVED_REFERENCE": "A related record could not be found. Sync first.",
+    "FIELD_CONFLICT": "This record has changes that conflict with the server.",
+    "RECORD_DELETED": "This record has been deleted on the server.",
+    "PROTOCOL_VERSION_MISMATCH": "Your sync protocol version is incompatible with the server. Please update the app.",
+    "ABILITY_REQUIRED": "You don't have permission to perform this action.",
+    "LOCKED_OUT": "Your account is temporarily locked due to too many failed attempts.",
+    "USER_INACTIVE": "Your account has been deactivated.",
+    "unknown": "An unknown error occurred."
+  },
+  "onlineOnly": {
+    "leads": {
+      "convert": "Converting a lead to a deal requires an internet connection.",
+      "import": "Importing leads requires an internet connection."
+    },
+    "quotes": {
+      "send": "Sending a quote requires an internet connection.",
+      "revise": "Creating a quote revision requires an internet connection.",
+      "pdf": "Viewing the PDF requires an internet connection when it isn't cached.",
+      "calculate": "Quote calculation runs on the server and requires an internet connection."
+    },
+    "settings": "Accessing settings requires an internet connection.",
+    "users": "User management requires an internet connection.",
+    "roles": "Role management requires an internet connection.",
+    "reports": "Accessing reports requires an internet connection.",
+    "dashboard": "Refreshing dashboard data requires an internet connection.",
+    "logs": "Accessing logs requires an internet connection.",
+    "exchangeRates": "Manually refreshing exchange rates requires an internet connection.",
+    "attachments": {
+      "upload": "This file will be queued while offline and uploaded once you're back online."
+    },
+    "savedViews": {
+      "create": "Creating a saved view requires an internet connection.",
+      "update": "Updating a saved view requires an internet connection."
+    },
+    "password": {
+      "change": "Changing your password requires an internet connection."
+    }
+  },
+  "sync": {
+    "status": {
+      "online": "Online",
+      "offline": "Offline",
+      "syncing": "Syncing…",
+      "conflict": "Conflict detected"
+    },
+    "lastSynced": "Last synced {{time}} ago",
+    "lastSyncedNever": "Not synced yet",
+    "pendingChanges_one": "{{count}} pending change",
+    "pendingChanges_other": "{{count}} pending changes",
+    "syncNow": "Sync now",
+    "pauseSync": "Pause sync",
+    "resumeSync": "Resume sync",
+    "paused": "Sync paused",
+    "syncError": "An error occurred while syncing."
+  },
+  "bootstrap": {
+    "title": "Initial setup",
+    "description": "Your data is being downloaded to this device. This may take a few minutes.",
+    "downloading": "Downloading data…",
+    "preparing": "Preparing…",
+    "tableProgress": "{{table}}: {{count}} records",
+    "progressLabel": "{{percent}}% complete",
+    "completed": "Setup complete",
+    "completedDescription": "You're ready to work offline now.",
+    "continue": "Continue",
+    "error": "An error occurred during setup.",
+    "retry": "Retry"
+  },
+  "conflicts": {
+    "title": "Conflict Inbox",
+    "subtitle": "Your local changes conflict with changes made on the server. Choose how to resolve them.",
+    "empty": {
+      "title": "No conflicts",
+      "description": "There are no conflicts to resolve right now."
+    },
+    "keepMine": "Keep mine",
+    "takeServer": "Take server's",
+    "mergeFields": "Merge field by field",
+    "fieldList": {
+      "title": "Conflicting fields",
+      "localValue": "Local value",
+      "serverValue": "Server value"
+    },
+    "resolveAll": "Resolve all",
+    "resolveSelected": "Resolve selected",
+    "resolvedToast": "Conflict resolved.",
+    "resolveError": "An error occurred while resolving the conflict."
+  },
+  "storage": {
+    "title": "Storage",
+    "retention": {
+      "label": "Retention period (days)",
+      "description": "Local data is kept on this device for this period."
+    },
+    "cap": {
+      "label": "Storage cap (MB)",
+      "description": "The local database cannot exceed this size."
+    },
+    "usage": {
+      "label": "Usage",
+      "value": "{{used}} / {{total}} MB used"
+    },
+    "downloadArchive": "Download archive",
+    "clearLocal": {
+      "button": "Clear local data",
+      "title": "Clear Local Data",
+      "description": "This action CANNOT BE UNDONE. All local data on this device will be deleted and re-downloaded from the server on the next sync.",
+      "confirmSuffix": "clear the local data?"
+    },
+    "saveSuccess": "Storage settings saved.",
+    "saveError": "An error occurred while saving storage settings."
+  },
+  "devices": {
+    "title": "Devices",
+    "subtitle": "Manage the devices linked to this account.",
+    "columns": {
+      "name": "Device",
+      "platform": "Platform",
+      "lastUsed": "Last Used",
+      "actions": "Actions"
+    },
+    "thisDevice": "This device",
+    "revoke": "Sign out",
+    "revokeConfirm": {
+      "title": "Sign Out Device",
+      "description": "This device will be signed out and won't be able to sync until it signs in again.",
+      "confirmSuffix": "sign out this device?"
+    },
+    "empty": {
+      "title": "No devices found",
+      "description": "There are no devices linked to this account."
+    },
+    "loadError": "An error occurred while loading devices.",
+    "revokeSuccess": "Device signed out.",
+    "revokeError": "An error occurred while signing out the device."
+  },
+  "tray": {
+    "menu": {
+      "open": "Open",
+      "syncNow": "Sync now",
+      "quickCapture": "Quick capture",
+      "pauseSync": "Pause sync",
+      "resumeSync": "Resume sync",
+      "quit": "Quit"
+    },
+    "tooltip": {
+      "online": "Syncra — Online",
+      "offline": "Syncra — Offline",
+      "syncing": "Syncra — Syncing",
+      "conflict": "Syncra — Conflict detected"
+    }
+  },
+  "window": {
+    "closeToTray": {
+      "label": "Keep running in the tray when the window is closed",
+      "notificationTitle": "Syncra is running in the background",
+      "notificationBody": "The app keeps running in the tray. Use Quit from the tray menu to exit completely."
+    }
+  }
+}

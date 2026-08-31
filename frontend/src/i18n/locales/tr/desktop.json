@@ -1,0 +1,171 @@
+{
+  "errors": {
+    "AUTH_REQUIRED": "Oturum bulunamadı. Lütfen tekrar giriş yapın.",
+    "OFFLINE": "İnternet bağlantısı yok.",
+    "PROTOCOL_ERROR": "Senkron protokolünde bir hata oluştu. Uygulamayı güncellemeniz gerekebilir.",
+    "DB_ERROR": "Yerel veritabanında bir hata oluştu.",
+    "HTTP_ERROR": "Sunucuya bağlanırken bir hata oluştu.",
+    "WRITE_BLOCKED": "Yerel depolama tavanına ulaşıldı. Disk alanını boşaltın veya senkronize edin.",
+    "VALIDATION_ERROR": "Girdiğiniz veriler geçersiz.",
+    "httpStatus": "Sunucu hatası (HTTP {{status}}).",
+    "ONLINE_ONLY": "Bu işlem çevrimiçi bağlantı gerektirir.",
+    "UNRESOLVED_REFERENCE": "İlişkili bir kayıt bulunamadı. Önce senkronize edin.",
+    "FIELD_CONFLICT": "Bu kayıtta sunucuyla çakışan değişiklikler var.",
+    "RECORD_DELETED": "Bu kayıt sunucuda silinmiş.",
+    "PROTOCOL_VERSION_MISMATCH": "Senkron protokolü sürümünüz sunucuyla uyumsuz. Lütfen uygulamayı güncelleyin.",
+    "ABILITY_REQUIRED": "Bu işlem için gerekli yetkiye sahip değilsiniz.",
+    "LOCKED_OUT": "Çok fazla başarısız deneme nedeniyle hesabınız geçici olarak kilitlendi.",
+    "USER_INACTIVE": "Hesabınız pasifleştirildi.",
+    "unknown": "Bilinmeyen bir hata oluştu."
+  },
+  "onlineOnly": {
+    "leads": {
+      "convert": "Müşteri adayını fırsata dönüştürmek çevrimiçi bağlantı gerektirir.",
+      "import": "Müşteri adayı içe aktarma işlemi çevrimiçi bağlantı gerektirir."
+    },
+    "quotes": {
+      "send": "Teklif gönderimi çevrimiçi bağlantı gerektirir.",
+      "revise": "Teklif revizyonu oluşturmak çevrimiçi bağlantı gerektirir.",
+      "pdf": "PDF önbellekte yoksa görüntülemek için çevrimiçi bağlantı gerekir.",
+      "calculate": "Teklif hesaplaması sunucuda yapılır ve çevrimiçi bağlantı gerektirir."
+    },
+    "settings": "Ayarlara erişmek çevrimiçi bağlantı gerektirir.",
+    "users": "Kullanıcı yönetimi çevrimiçi bağlantı gerektirir.",
+    "roles": "Rol yönetimi çevrimiçi bağlantı gerektirir.",
+    "reports": "Raporlara erişmek çevrimiçi bağlantı gerektirir.",
+    "dashboard": "Dashboard verilerini yenilemek çevrimiçi bağlantı gerektirir.",
+    "logs": "Loglara erişmek çevrimiçi bağlantı gerektirir.",
+    "exchangeRates": "Döviz kurlarını manuel güncellemek çevrimiçi bağlantı gerektirir.",
+    "attachments": {
+      "upload": "Bu dosya çevrimdışıyken kuyruğa alınacak ve bağlantı geri geldiğinde yüklenecek."
+    },
+    "savedViews": {
+      "create": "Kayıtlı görünüm oluşturmak çevrimiçi bağlantı gerektirir.",
+      "update": "Kayıtlı görünümü güncellemek çevrimiçi bağlantı gerektirir."
+    },
+    "password": {
+      "change": "Şifre değiştirmek çevrimiçi bağlantı gerektirir."
+    }
+  },
+  "sync": {
+    "status": {
+      "online": "Çevrimiçi",
+      "offline": "Çevrimdışı",
+      "syncing": "Senkronize ediliyor…",
+      "conflict": "Çakışma var"
+    },
+    "lastSynced": "Son senkron: {{time}} önce",
+    "lastSyncedNever": "Henüz senkronize edilmedi",
+    "pendingChanges_one": "{{count}} bekleyen değişiklik",
+    "pendingChanges_other": "{{count}} bekleyen değişiklik",
+    "syncNow": "Şimdi senkronize et",
+    "pauseSync": "Senkronu duraklat",
+    "resumeSync": "Senkronu devam ettir",
+    "paused": "Senkron duraklatıldı",
+    "syncError": "Senkron sırasında bir hata oluştu."
+  },
+  "bootstrap": {
+    "title": "İlk kurulum",
+    "description": "Verileriniz bu cihaza indiriliyor. Bu işlem birkaç dakika sürebilir.",
+    "downloading": "Veriler indiriliyor…",
+    "preparing": "Hazırlanıyor…",
+    "tableProgress": "{{table}}: {{count}} kayıt",
+    "progressLabel": "%{{percent}} tamamlandı",
+    "completed": "Kurulum tamamlandı",
+    "completedDescription": "Artık çevrimdışı çalışmaya hazırsınız.",
+    "continue": "Devam et",
+    "error": "Kurulum sırasında bir hata oluştu.",
+    "retry": "Tekrar dene"
+  },
+  "conflicts": {
+    "title": "Çakışma Kutusu",
+    "subtitle": "Yerel değişiklikleriniz sunucudaki değişikliklerle çakışıyor. Nasıl çözüleceğini seçin.",
+    "empty": {
+      "title": "Çakışma yok",
+      "description": "Şu anda çözülmesi gereken bir çakışma bulunmuyor."
+    },
+    "keepMine": "Benimkini koru",
+    "takeServer": "Sunucudakini al",
+    "mergeFields": "Alan bazlı birleştir",
+    "fieldList": {
+      "title": "Çakışan alanlar",
+      "localValue": "Yerel değer",
+      "serverValue": "Sunucu değeri"
+    },
+    "resolveAll": "Tümünü çöz",
+    "resolveSelected": "Seçilenleri çöz",
+    "resolvedToast": "Çakışma çözüldü.",
+    "resolveError": "Çakışma çözülürken bir hata oluştu."
+  },
+  "storage": {
+    "title": "Depolama",
+    "retention": {
+      "label": "Saklama süresi (gün)",
+      "description": "Yerel veriler bu süre boyunca cihazda tutulur."
+    },
+    "cap": {
+      "label": "Depolama tavanı (MB)",
+      "description": "Yerel veritabanı bu boyutu aşamaz."
+    },
+    "usage": {
+      "label": "Kullanım",
+      "value": "{{used}} / {{total}} MB kullanılıyor"
+    },
+    "downloadArchive": "Arşivi indir",
+    "clearLocal": {
+      "button": "Yerel veriyi temizle",
+      "title": "Yerel Veriyi Temizle",
+      "description": "Bu işlem GERİ ALINAMAZ. Bu cihazdaki tüm yerel veriler silinecek ve bir sonraki senkronda sunucudan yeniden indirilecek.",
+      "confirmSuffix": "yerel verileri temizlemek istediğinize emin misiniz?"
+    },
+    "saveSuccess": "Depolama ayarları kaydedildi.",
+    "saveError": "Depolama ayarları kaydedilirken bir hata oluştu."
+  },
+  "devices": {
+    "title": "Cihazlar",
+    "subtitle": "Bu hesaba bağlı cihazları yönetin.",
+    "columns": {
+      "name": "Cihaz",
+      "platform": "Platform",
+      "lastUsed": "Son Kullanım",
+      "actions": "İşlemler"
+    },
+    "thisDevice": "Bu cihaz",
+    "revoke": "Oturumu kapat",
+    "revokeConfirm": {
+      "title": "Cihaz Oturumunu Kapat",
+      "description": "Bu cihazın oturumu kapatılacak ve yeniden giriş yapılana kadar senkronize olamayacak.",
+      "confirmSuffix": "cihazının oturumunu kapatmak istediğinize emin misiniz?"
+    },
+    "empty": {
+      "title": "Cihaz bulunamadı",
+      "description": "Bu hesaba bağlı herhangi bir cihaz yok."
+    },
+    "loadError": "Cihazlar yüklenirken bir hata oluştu.",
+    "revokeSuccess": "Cihaz oturumu kapatıldı.",
+    "revokeError": "Cihaz oturumu kapatılırken bir hata oluştu."
+  },
+  "tray": {
+    "menu": {
+      "open": "Aç",
+      "syncNow": "Şimdi senkronize et",
+      "quickCapture": "Hızlı kayıt",
+      "pauseSync": "Senkronu duraklat",
+      "resumeSync": "Senkronu devam ettir",
+      "quit": "Çık"
+    },
+    "tooltip": {
+      "online": "Syncra — Çevrimiçi",
+      "offline": "Syncra — Çevrimdışı",
+      "syncing": "Syncra — Senkronize ediliyor",
+      "conflict": "Syncra — Çakışma var"
+    }
+  },
+  "window": {
+    "closeToTray": {
+      "label": "Pencereyi kapatınca tray'de çalışmaya devam et",
+      "notificationTitle": "Syncra arka planda çalışıyor",
+      "notificationBody": "Uygulama tray'de çalışmaya devam ediyor. Tamamen çıkmak için tray menüsünden Çık'ı kullanın."
+    }
+  }
+}

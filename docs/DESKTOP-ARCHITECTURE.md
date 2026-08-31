@@ -1115,3 +1115,58 @@ Ayrıca: `desktop/src-tauri/target` (996 MB) workspace öncesinden kalma ölü d
 **Kayda geçen üç implementasyon kararı (şartnamede adı geçmiyordu):** bundle identifier `com.syncra.desktop`, productName `Syncra`, veri yerleşimi `$APPDATA/syncra/{syncra.db,cache}` (capability scope'uyla tutarlı). Ayrıca Rust tarafı API host'u için `SYNCRA_API_URL` env adı seçildi — D-3 yalnız frontend'in `VITE_API_URL`'ini adlandırıyordu, bu isim F7'de build parametrizasyonuyla birlikte gözden geçirilmeli.
 
 **Küçük açık:** `storage::clear_local` motorun önbelleğe alınmış `SyncStatus`'unu yenilemiyor (`refresh_status()` dondurulmuş API'de private). Sonraki `mutate`/`sync_now` kendiliğinden düzeltiyor; `storage.rs`'te belgeli.
+
+---
+
+# EK 2 — F3-A SONUÇLARI
+
+## D-4 ÇÖZÜLDÜ — `localStorage` Windows/WebView2'de KALICI
+
+Ölçüm yapıldı (varsayım değil). İki oturum, arada süreç `Stop-Process -Force` ile tamamen öldürüldü:
+
+```
+Oturum A:  prev=NULL                       now=2026-08-31T07:44:20.634Z  keys=["syncra-theme","__d4_probe"]
+Oturum B:  prev=2026-08-31T07:44:20.634Z   now=2026-08-31T07:44:50.633Z  keys=["syncra-theme","__d4_probe"]
+```
+
+**Sonuçları (bağlayıcı):**
+- `syncra-theme`, `syncra-locale`, `syncra-sidebar` **olduğu yerde kalır**.
+- §3.7 dokunuş listesinin **6-7-8. satırları düşer** — `stores/themeStore.ts`, `i18n/index.ts`, `components/layout/AppLayout.tsx` değiştirilmeyecek. W1'den beri süren yasak artık kalıcı bir karardır, geçici kısıt değil.
+- `Platform`'a `storage {get,set}` üyesi **eklenmez** (E.1 D-4'ün fallback dalı iptal).
+- Yan fayda: `check-i18n-bootstrap.mjs`'in kaynak-metin assert'leri hiç riske girmedi.
+
+**Linux/WebKitGTK ÖLÇÜLMEDİ.** Gerekçe gerçek çıktı: WSL2 Ubuntu'da `cargo`/`rustc` yok, `pkg-config --modversion webkit2gtk-4.1` → NOT INSTALLED. K11 Linux'u birinci sınıf hedef sayıyor; **bu ölçüm F7 Linux paketlemesinden önce yapılmalıdır.** Sonuç farklı çıkarsa yukarıdaki üç karar Linux için yeniden değerlendirilir.
+
+## §4.2 DÜZELTMESİ — `watch.ignored` yetersizdi (ölçülmüş çökme)
+
+`.cargo/config.toml` kaldırılıp varsayılan `desktop/target` kullanılmaya başlanınca `target/` Vite root'unun **içine** girdi. Chokidar, çalışan uygulamanın açık tuttuğu `target/debug/deps/syncra_desktop_lib.dll`'i izlemeye kalkıp `EBUSY` fırlattı; dev server öldü, `tauri dev` "beforeDevCommand terminated with a non-zero status code" ile durdu.
+
+**Doğru değer:**
+```ts
+watch: { ignored: ['**/src-tauri/**', '**/target/**', '**/.tauri/**'] }
+```
+§4.2'deki tek elemanlı liste artık **yanlıştır** ve dev server'ı çökertir.
+
+## §4.2 EKLEMESİ — `resolve.dedupe` ZORUNLU
+
+```ts
+resolve: { dedupe: ['react', 'react-dom'] }
+```
+Kabuğun kendi `node_modules`'ı olduğu için React diskte iki kopya. Dedupe olmadan `desktop/src` ile `frontend/src` **ayrı React örneklerine** bağlanır ve tüm hook'lar "invalid hook call" ile ölür. Belirti sebepten uzak olduğu için bu satır kaldırılmamalıdır.
+
+## E.5.2 / E.5.3 AÇIKLARI — durum
+
+| Açık | Durum |
+|---|---|
+| E.5.2/1 CSP host'ları sabit | **KAPANDI** — `desktop/scripts/tauri.mjs` `frontend/.env`'den okuyup CSP'yi build-time üretiyor, `--config` ile birleştiriyor. `https://crm.example.com` + `wss://ws.example.com:443` ile de doğrulandı. |
+| E.5.2/2 `.cargo/config.toml` | **KAPANDI** — kaldırıldı, soğuk derleme yeniden doğrulandı (7dk53sn). Yan etkisi yukarıdaki `watch.ignored` düzeltmesiydi. |
+| E.5.2/3 `desktop/package.json` yok | **KAPANDI** — `dev:desktop`, `build:desktop`, `tauri` script'leri var; CI'ın `npm run tauri` sözleşmesi korundu. |
+| E.5.3 updater mayını | **DEVREDİLDİ** — `#[cfg(not(debug_assertions))]` ile dev ve `--debug`'tan kaldırıldı. Sahte pubkey commit edilmedi (doğru karar). **Release binary hâlâ `plugins.updater` bloğu olmadan çalışmaz → F7'nin 1. maddesi.** |
+
+## F3'ün DEVAMI İÇİN AÇIK KALANLAR
+
+1. **`data`: 124 metottan 0'ı bağlı.** `IMPLEMENTED` map'i bilerek boş; her çağrı `NOT_IMPLEMENTED` fırlatıyor (sessiz `undefined` yok). Login ekranı auth'u `authApi`/axios üzerinden yaptığı için açılıyor, ama **login sonrası her ekran patlar**. Sıradaki turun 1. maddesi: `NamedQuery` beyaz listesi + row→DTO eşlemesi.
+2. **Event bridge yok.** `desktop/src/bridge/{events,realtime}.ts` yazılmadı; `handle_realtime` komutu Rust tarafında da kayıtlı değil. Desktop şu an web gibi doğrudan Echo'ya abone — KARAR A11 (realtime → motor → mini-pull) henüz uygulanmadı.
+3. **D-6 yapılmadı.** `check-i18n-bootstrap.mjs`'in `main.desktop.tsx`'i kapsaması `frontend/scripts/**` yazmayı gerektiriyordu. Desktop girişindeki açılış kapısı bugün elle doğru ama **hiçbir otomatik kapı korumuyor**.
+4. **Gerçek login akışı denenmedi** — `:8000`'de başka bir servis var (`/api/me` → 404). Backend ayağa kalkınca device token akışı uçtan uca denenmeli.
+5. `desktop/src-tauri/target` (996 MB, workspace öncesinden ölü) diskte duruyor — silme onayı bekliyor.

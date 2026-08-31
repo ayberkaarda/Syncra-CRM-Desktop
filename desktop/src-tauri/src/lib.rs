@@ -41,6 +41,24 @@ pub fn run() {
         }));
     }
 
+    // ⚠️ THE UPDATER MINE (`docs/DESKTOP-ARCHITECTURE.md` §E.5.3). `tauri-plugin-updater`'s
+    // `Config` has a mandatory, default-less `pubkey: String`, read out of `plugins.updater` in
+    // `tauri.conf.json`. That block does not exist yet — F7 owns the real minisign key and the
+    // release manifest — so registering the plugin unconditionally makes `.setup()` fail and the
+    // app never opens at all. That is what blocked `tauri dev` before this turn.
+    //
+    // Fix chosen: register it only where it can actually do something, i.e. NOT in a debug build.
+    // The alternative (writing a throwaway pubkey into `tauri.conf.json`) was rejected: a fake
+    // signing key committed to the repo is the kind of placeholder that survives to production.
+    //
+    // Consequence, recorded on purpose: a real `--release` build still needs `plugins.updater`
+    // present. `tauri build --debug` (what CI runs) keeps `debug_assertions` on and is therefore
+    // unaffected. F7's FIRST task is to add the block and delete this `cfg`.
+    #[cfg(not(debug_assertions))]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
     builder
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
@@ -50,7 +68,6 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
