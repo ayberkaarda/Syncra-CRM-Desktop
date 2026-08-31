@@ -1,8 +1,9 @@
 // Gösterge paneli — Faz 11. KPI kartları satırı, satış hunisi, gelir trendi, son aktiviteler ve
 // görev özeti; tek bir tarih aralığı seçici tüm bileşenleri besler (görev tanımı §ÜRETECEKLERİN).
 // `useDashboardSocket` burada çağrılır: dashboard sorguları yalnızca bu sayfa mount'luyken
-// abone kalır, sayfadan ayrılınca `echo.leave()` ile bırakılır (diğer canlılık kancalarıyla aynı
-// desen, bkz. `features/dashboard/hooks/useDashboardSocket.ts`).
+// abone kalır, sayfadan ayrılınca hook'un temizleyicisi `releaseChannel()` çağırır — kanalın
+// kendisi PAYLAŞILAN, referans sayan `src/lib/channelRegistry.ts` üzerinden yönetilir (diğer
+// canlılık kancalarıyla aynı desen, bkz. `features/dashboard/hooks/useDashboardSocket.ts`).
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardBody, CardHeader, Tab, TabList, Tabs } from '../components/ui'

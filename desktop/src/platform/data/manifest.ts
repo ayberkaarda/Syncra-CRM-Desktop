@@ -1,4 +1,4 @@
-// The wiring table: what every one of the 124 `DataSource` methods is actually bound to.
+// The wiring table: what every one of the 126 `DataSource` methods is actually bound to.
 //
 // This exists so the classification can be **checked** rather than asserted in prose.
 // `desktop/scripts/check-data-wiring.mjs` reads three things and cross-references them:
@@ -43,7 +43,7 @@ export interface MethodBinding {
 }
 
 /**
- * `"<domain>.<method>"` -> binding, for all 124 methods of `DataSource`.
+ * `"<domain>.<method>"` -> binding, for all 126 methods of `DataSource`.
  *
  * Ordered exactly as `frontend/src/platform/types.ts` declares them, so the two can be read
  * side by side.
@@ -56,6 +56,13 @@ export const DATA_METHOD_MANIFEST: Record<string, MethodBinding> = {
   'deals.update': { kind: 'mutate', via: 'deal.update' },
   'deals.delete': { kind: 'mutate', via: 'deal.delete' },
   'deals.assign': { kind: 'mutate', via: 'deal.assign (action)' },
+  // The Kanban board. `deals_board` is NOT what this reads through: that variant pins
+  // `status = 'open'` and carries none of the board filters, so it cannot reproduce
+  // `GET /api/deals/board`, which lists won/lost cards in their own columns.
+  'deals.board': { kind: 'query', via: 'pipeline_stages + deals_list (one per stage)' },
+  // KARAR P20: the wire field is `to_stage_id`; `pipeline_stage_id` rides along as the mirror
+  // COLUMN so the card moves locally too (see `crm.ts`). `position` is never sent.
+  'deals.move': { kind: 'mutate', via: 'deal.move (action)' },
 
   // ---- contacts ------------------------------------------------------------------------
   'contacts.list': { kind: 'query', via: 'contact_list' },

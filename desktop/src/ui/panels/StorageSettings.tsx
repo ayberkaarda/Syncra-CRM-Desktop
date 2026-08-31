@@ -1,17 +1,14 @@
 // Storage settings — `SYNCDESKTOP.md` §7.2, fourth item; ceilings from K8.
 //
-// ## Known gap: the engine has no settings GETTER
-//
-// `SyncEngine`'s public API (`SYNCDESKTOP.md` §5.2) is frozen and exposes `update_settings` but
-// nothing that reads `DesktopSettings` back. `StorageStats` carries two of the three ceilings
-// (`max_db_bytes`, `max_outbox`) and NOT `retention_days`, which lives only in `SyncConfig` and
-// the `desktop_settings` table. So the two ceilings below are prefilled from the engine and the
-// retention window is prefilled from a device-local mirror this screen writes on every
-// successful save, falling back to the K8 default (30). The mirror can be stale — after a
-// re-install, or if the window is ever changed from somewhere else — which is why the form
-// never submits on its own: the value only reaches the engine when the user presses save.
-// `docs/DESKTOP-ARCHITECTURE.md` §9 already puts device-local preferences in `localStorage`
-// (D-4 measured it as durable under WebView2).
+// All three fields below are prefilled from the engine itself: `readStorageStats` for the two
+// ceilings carried on `StorageStats` (`max_db_bytes`, `max_outbox`) and `readStorageSettings`
+// (`storage::storage_settings`, wrapping `SyncEngine::settings`) for `retention_days`, which
+// `StorageStats` does not carry. There used to be no engine-side getter for `DesktopSettings` —
+// only `update_settings` (write) existed — so this screen prefilled the retention window from a
+// `localStorage` mirror it wrote on every successful save. That mirror could go stale (after a
+// re-install, or if the window changed from somewhere else) and is gone now that the engine can
+// be asked directly. The form still never submits on its own: a value only reaches the engine
+// when the user presses save.
 import { useCallback, useEffect, useState } from 'react'
 
 import { Button, Input, Modal, toast } from '@/components/ui'
@@ -24,6 +21,7 @@ import {
   MIN_MAX_DB_SIZE_MB,
   MIN_MAX_OUTBOX,
   MIN_RETENTION_DAYS,
+  readStorageSettings,
   readStorageStats,
   updateStorageSettings,
 } from '../commands'
@@ -32,34 +30,10 @@ import { formatMegabytes } from '../format'
 import { useEngineStatus } from '../useEngineStatus'
 import { useIntlLocale, useT } from '../useT'
 
-/** `SyncConfig::new`'s `DEFAULT_RETENTION_DAYS` (`crates/syncra-sync/src/config.rs`). */
-const DEFAULT_RETENTION_DAYS = 30
-
-/** Where the retention window is mirrored; see the module comment. */
-const RETENTION_MIRROR_KEY = 'syncra-desktop-retention-days'
-
 const BYTES_PER_MB = 1024 * 1024
 
 /** `SYNCDESKTOP.md` §5.6 — the engine emits `StorageWarning` at 80% of the ceiling. */
 const USAGE_WARNING_PERCENT = 80
-
-function readRetentionMirror(): number {
-  try {
-    const stored = Number(window.localStorage.getItem(RETENTION_MIRROR_KEY))
-    return Number.isFinite(stored) && stored >= MIN_RETENTION_DAYS ? stored : DEFAULT_RETENTION_DAYS
-  } catch {
-    // Storage denied: the default stands, the screen still works.
-    return DEFAULT_RETENTION_DAYS
-  }
-}
-
-function writeRetentionMirror(days: number): void {
-  try {
-    window.localStorage.setItem(RETENTION_MIRROR_KEY, String(days))
-  } catch {
-    // A stale prefill next time is the whole cost. Not worth surfacing.
-  }
-}
 
 export function StorageSettings() {
   const t = useT()
@@ -68,7 +42,7 @@ export function StorageSettings() {
 
   const [stats, setStats] = useState<StorageStats | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [retentionDays, setRetentionDays] = useState<number>(readRetentionMirror)
+  const [retentionDays, setRetentionDays] = useState<number>(MIN_RETENTION_DAYS)
   const [maxDbSizeMb, setMaxDbSizeMb] = useState<number>(MIN_MAX_DB_SIZE_MB)
   const [maxOutbox, setMaxOutbox] = useState<number>(MIN_MAX_OUTBOX)
   const [busy, setBusy] = useState(false)
@@ -76,10 +50,11 @@ export function StorageSettings() {
 
   const load = useCallback(async () => {
     try {
-      const next = await readStorageStats()
+      const [next, settings] = await Promise.all([readStorageStats(), readStorageSettings()])
       setStats(next)
       setMaxDbSizeMb(Math.round(next.max_db_bytes / BYTES_PER_MB))
       setMaxOutbox(next.max_outbox)
+      setRetentionDays(settings.retention_days)
       setLoadError(null)
     } catch (error) {
       setLoadError(errorMessage(t, errorCodeOf(error)))
@@ -123,7 +98,6 @@ export function StorageSettings() {
       setBusy(true)
       try {
         await updateStorageSettings(settings)
-        writeRetentionMirror(settings.retention_days)
         toast.success(t('desktop:storage.saveSuccess'))
       } catch (error) {
         toast.error(`${t('desktop:storage.saveError')} ${errorMessage(t, errorCodeOf(error))}`)

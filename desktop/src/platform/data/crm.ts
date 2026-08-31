@@ -24,26 +24,44 @@ import type {
   Lead,
 } from '@/features/leads/types'
 import type { CustomFieldDef as ContactCustomFieldDef } from '@/features/contacts/types'
-import type { Deal } from '@/features/deals/types'
+import type {
+  BoardColumn,
+  BoardFilters,
+  BoardResponse,
+  Deal,
+  DealCard,
+  DealStatus,
+  PipelineStage,
+} from '@/features/deals/types'
 
 import { http } from '../http'
 import {
+  bool,
+  countRows,
   listPage,
   MAX_PAGE,
+  num,
   pagination,
   rowId,
   runQuery,
+  str,
+  text,
+  toInt,
   type LocalRow,
   type NamedQuery,
 } from './engine'
 import { loadCounts, loadRefs, loadRefsByIds, EMPTY_REFS } from './refs'
 import {
   activityTimelineItem,
+  fullNameRef,
   mapCompany,
   mapContact,
   mapContactSummary,
   mapDeal,
   mapLead,
+  mapPipelineStage,
+  nameRef,
+  tagList,
   taskTimelineItem,
 } from './mappers'
 import {
@@ -146,6 +164,101 @@ function withTagColumn(payload: WritePayload): WritePayload {
   return { ...payload, tags: payload.tag_ids }
 }
 
+/** Relations one page of board cards needs; the same set a page of deals needs. */
+type BoardRefs = Awaited<ReturnType<typeof dealRefs>>
+
+/**
+ * `DealService::board()` hard-codes `'TRY'` as the board currency, and nothing in the sync
+ * scope carries a per-board currency to read instead. Transcribed rather than guessed.
+ */
+const BOARD_CURRENCY = 'TRY'
+
+/** `BoardDealRequest::DEFAULT_PER_STAGE`. */
+const BOARD_PER_STAGE = 50
+
+/**
+ * The cards of one stage, filtered exactly as `DealRepository::applyFilters()` filters them
+ * for `GET /api/deals/board`.
+ *
+ * **No `status` filter, on purpose.** The REST board lists a stage's cards whatever their
+ * status, which is what puts a won card in the "Won" column; `NamedQuery::DealsBoard` pins
+ * `status = 'open'` and carries none of these filters, so it cannot reproduce that response
+ * and is not what this reads through.
+ *
+ * One known divergence: the server's `q` also matches the company name through a relation
+ * (`orWhereHas('company')`), while the local `deals_list` matches `title` and `description`.
+ * The mirror has no join to widen it with, and narrowing the local search to `title` alone
+ * would drop hits the server returns.
+ */
+function boardCardsQuery(
+  filters: BoardFilters,
+  narrow: { stage_id?: number; status?: string } = {},
+): NamedQuery {
+  return {
+    query: 'deals_list',
+    q: filters.q || undefined,
+    stage_id: narrow.stage_id,
+    status: narrow.status,
+    owner_id: filters.owner_id,
+    company_id: filters.company_id,
+    from: filters.from || undefined,
+    to: filters.to || undefined,
+  }
+}
+
+/**
+ * `DealCardResource::isOverdue()` - a card is late only while it is still open.
+ *
+ * Compared at LOCAL midnight (`today()` on the server, `setHours(0,0,0,0)` here) so a card due
+ * today never reads as overdue; `expected_close_date` is sliced to its date part because the
+ * mirror keeps whatever the column held, which may be a full timestamp.
+ */
+function isOverdue(status: DealStatus, expectedCloseDate: string | null): boolean {
+  if (status !== 'open' || !expectedCloseDate) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(`${expectedCloseDate.slice(0, 10)}T00:00:00`)
+  return Number.isFinite(due.getTime()) && due < today
+}
+
+/**
+ * Mirror row -> `DealCardResource`.
+ *
+ * A card is NOT a trimmed `Deal`: it carries `pipeline_stage_id` as a bare id (not the nested
+ * stage), drops `description`/`custom_fields`/`closed_at`, and exposes a two-ability `can`
+ * rather than four. `mappers.ts` owns `mapDeal` for the detail shape; the card shape stays
+ * here because the board is what this module serves.
+ *
+ * `can` is permissive for the same reason every other mapper's is (`mappers.ts` header):
+ * row-level permissions are not mirrored, and the push endpoint is the authority.
+ */
+function boardCard(row: LocalRow, refs: BoardRefs): DealCard {
+  const status = (text(row.status) || 'open') as DealStatus
+  const expectedCloseDate = str(row.expected_close_date)
+  const stageRow = refs.stages.resolve(row.pipeline_stage_id, row.pipeline_stage_client_id)
+  return {
+    id: rowId(row),
+    title: text(row.title),
+    amount: num(row.amount),
+    currency: text(row.currency),
+    // The stage the card is filed under. Resolved through the same index the detail mapper
+    // uses, so a row that carries only the local reference still reports a real id.
+    pipeline_stage_id: toInt(row.pipeline_stage_id) ?? (stageRow ? rowId(stageRow) : 0),
+    // A fractional index, and a STRING on purpose (`features/deals/types.ts`).
+    position: text(row.position),
+    version: toInt(row.version) ?? 1,
+    probability: toInt(row.probability) ?? null,
+    expected_close_date: expectedCloseDate,
+    status,
+    company: nameRef(refs.companies.resolve(row.company_id, row.company_client_id)),
+    contact: fullNameRef(refs.contacts.resolve(row.contact_id, row.contact_client_id)),
+    owner: nameRef(refs.users.resolve(row.owner_id, row.owner_client_id)),
+    tags: tagList(row, refs.tags),
+    is_overdue: isOverdue(status, expectedCloseDate),
+    can: { update: true, move: true },
+  }
+}
+
 export const dealsSource: DealsSource = {
   list: async (query): Promise<DealsListResponse> =>
     listPage(
@@ -194,6 +307,119 @@ export const dealsSource: DealsSource = {
     await runAction('deal', id, 'assign', { owner_id: ownerId })
     const row = await readBack('deal', id)
     return mapDeal(row, await dealRefs([row]))
+  },
+
+  /**
+   * `GET /api/deals/board`, rebuilt from the mirror - F4's offline Kanban.
+   *
+   * The shape follows `DealService::board()` step for step, so no board component has to know
+   * which platform produced the response:
+   *
+   * * columns = ACTIVE `pipeline_stages` in `position` order (`activeStagesOrdered()`);
+   * * `deals` = that stage's cards in fractional-index order, capped at `per_stage`;
+   * * `meta.count` / `meta.total_amount` = the stage's totals over EVERY matching card, not
+   *   just the loaded page (`boardAggregates()`), which is why the count is its own
+   *   `count_only` read;
+   * * `meta.has_more` = more matching cards exist than were loaded;
+   * * `meta.total_open_amount` = open cards across all stages, stage filter deliberately
+   *   absent (`totalOpenAmount()`).
+   *
+   * References are resolved ONCE for the whole board rather than per column: `dealRefs` costs
+   * five reads, and paying that per stage would make a six-column board thirty reads heavier
+   * for exactly the same index.
+   *
+   * Known ceiling: a stage with more than `MAX_PAGE` matching cards contributes only those to
+   * `total_amount` (`meta.count` stays exact - it is counted, not measured). The crate has no
+   * aggregate query to sum with, and adding one is outside this change.
+   */
+  board: async (filters): Promise<BoardResponse> => {
+    const perStage = Math.max(1, filters.per_stage ?? BOARD_PER_STAGE)
+    const stageRows = await runQuery({ query: 'pipeline_stages' }, { limit: MAX_PAGE })
+
+    const stages: PipelineStage[] = []
+    for (const row of stageRows) {
+      if (!bool(row.is_active)) continue
+      const stage = mapPipelineStage(row)
+      if (stage) stages.push(stage)
+    }
+
+    const loaded = await Promise.all(
+      stages.map(async (stage) => {
+        const query = boardCardsQuery(filters, { stage_id: stage.id })
+        const [rows, count] = await Promise.all([
+          runQuery(query, { limit: MAX_PAGE, sort_by: 'position', sort_dir: 'asc' }),
+          countRows(query),
+        ])
+        return { stage, rows, count }
+      }),
+    )
+
+    const openRows = await runQuery(boardCardsQuery(filters, { status: 'open' }), {
+      limit: MAX_PAGE,
+    })
+    const refs = await dealRefs(loaded.flatMap((column) => column.rows))
+
+    const data: BoardColumn[] = loaded.map(({ stage, rows, count }) => ({
+      stage,
+      deals: rows.slice(0, perStage).map((row) => boardCard(row, refs)),
+      meta: {
+        count,
+        total_amount: rows.reduce((sum, row) => sum + num(row.amount), 0),
+        has_more: count > perStage,
+      },
+    }))
+
+    return {
+      data,
+      meta: {
+        currency: BOARD_CURRENCY,
+        total_open_amount: openRows.reduce((sum, row) => sum + num(row.amount), 0),
+      },
+    }
+  },
+
+  /**
+   * `PATCH /api/deals/{id}/move`, offline. NOTHING is sent here: the row moves in the mirror
+   * and the mutation is queued as `deal.move`, which the next sync round pushes.
+   *
+   * ## The payload carries two names for one thing, deliberately
+   *
+   * `to_stage_id` is the WIRE field (KARAR P20, `MoveDealRequest:44`; the spec's older
+   * `pipeline_stage_id` was wrong and was once copied into a crate fixture, which is why the
+   * distinction is spelled out here rather than assumed). `pipeline_stage_id` is the MIRROR
+   * COLUMN. `local::apply` writes only payload keys that are real columns, so `to_stage_id`
+   * alone would leave the card in its old column offline; `MoveDealRequest` declares no
+   * `pipeline_stage_id` rule, so the server drops it from `validated()` and the move still
+   * runs through `DealMoveService` untouched. Same two-names-one-payload shape as
+   * `withTagColumn` above, and for the same reason.
+   *
+   * `pipeline_stage_client_id` is deliberately left alone. It is the second half of the FK
+   * pair (protocol §5.3) and goes stale for exactly as long as the move is pending, which
+   * costs nothing here: every read path prefers the server id (`RefIndex.resolve`,
+   * `deals_list`'s `stage_id`), and the pull that follows the push rewrites both halves.
+   *
+   * `position` is NOT sent and NOT written locally: `MoveDealRequest` marks it `prohibited`,
+   * so a payload carrying it would be rejected with a 422 and the move would be lost. The
+   * consequence is honest and bounded - offline this call owns the COLUMN a card is in, never
+   * its rank inside that column; the fractional index is generated under a row lock on the
+   * server and reaches the mirror on the pull that follows the push.
+   *
+   * ## Snap-back
+   *
+   * The board renders the mirror, so there is no second copy to unwind. If the server refuses
+   * the move (`DEAL_VERSION_CONFLICT`, a policy denial, a validation refusal) the push marks
+   * the row `conflict` and files it in the Conflict Inbox with the server's own row attached
+   * (`MutationApplier::fromHttpResponse` puts `DealCardResource` in `server_row`). Settling it
+   * - `Resolution::TakeServer`, the inbox's `desktop:conflicts.discard` - writes that row back
+   * over the local one, restoring `pipeline_stage_id` and `position`, and emits
+   * `TablesChanged{deal}`, which `bridge/events.ts` maps to `['deals','board']`. The board
+   * refetches from the mirror and the card is back in its old column. There is no
+   * board-specific rollback path, because a second one would be a second truth.
+   */
+  move: async (id, payload): Promise<DealCard> => {
+    await runAction('deal', id, 'move', { ...payload, pipeline_stage_id: payload.to_stage_id })
+    const row = await readBack('deal', id)
+    return boardCard(row, await dealRefs([row]))
   },
 }
 

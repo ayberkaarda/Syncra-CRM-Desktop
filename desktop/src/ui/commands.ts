@@ -155,6 +155,11 @@ export function updateStorageSettings(settings: DesktopSettings): Promise<void> 
   return invokeCommand<void>('update_settings', { settings })
 }
 
+/** `storage::storage_settings` — the settings the engine actually has persisted. */
+export function readStorageSettings(): Promise<DesktopSettings> {
+  return invokeCommand<DesktopSettings>('storage_settings')
+}
+
 /** `storage::clear_local` — wipe the mirror and the file cache, KEEPING the session. */
 export function clearLocal(): Promise<void> {
   return invokeCommand<void>('clear_local')

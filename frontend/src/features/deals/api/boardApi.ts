@@ -1,13 +1,22 @@
-// Kanban panosu veri katmanı: `GET /api/deals/board`, `PATCH /api/deals/{id}/move`,
-// sütun/kart cache'i üzerinde çalışan SAF yardımcılar ve pano için gereken lookup'lar.
+// Kanban panosu veri katmanı: pano okuması, kart taşıma ve sütun/kart cache'i üzerinde
+// çalışan SAF yardımcılar ile pano için gereken lookup'lar.
+//
+// Pano ile taşıma artık DOĞRUDAN axios kullanmaz: ikisi de platform sözleşmesinden
+// (`platform.data.deals.board/move`, KARAR A19) geçer. Web'de bu sözleşme aynı iki isteği
+// aynı parametrelerle yapar (`platform/web.ts`); masaüstünde aynı iki fiil yerel SQLCipher
+// aynasından okunur ve taşıma outbox'a yazılır — bu dosyanın geri kalanı ve panoyu render
+// eden bileşenlerin hiçbiri değişmez.
 //
 // Cache yardımcıları burada durur (bileşenlerde değil) çünkü pano cache'inin ŞEKLİ bu
 // dosyanın sözleşmesidir: sorgu anahtarını, yanıt tipini ve o yanıtın nasıl güncelleneceğini
 // tek yerde tutmak, üç ayrı yazarın (sürükle-bırak, taşıma yanıtı, realtime) aynı yapıyı
-// farklı varsayımlarla bozmasını engeller.
+// farklı varsayımlarla bozmasını engeller. Bu yardımcılar zaten SAF: ellerindeki
+// `BoardResponse`'u dönüştürürler, veriyi nereden geldiğini bilmezler — platform ayrımı
+// onlara hiç dokunmaz.
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../../lib/axios'
+import { getPlatform } from '../../../platform'
 import type {
   BoardColumn,
   BoardFilters,
@@ -46,18 +55,12 @@ function normalizeFilters(filters: BoardFilters): BoardFilters {
   return normalized
 }
 
-async function fetchBoard(filters: BoardFilters): Promise<BoardResponse> {
-  const { data } = await api.get<BoardResponse>('/api/deals/board', {
-    params: {
-      per_stage: filters.per_stage,
-      'filter[q]': filters.q || undefined,
-      'filter[owner_id]': filters.owner_id,
-      'filter[company_id]': filters.company_id,
-      'filter[from]': filters.from || undefined,
-      'filter[to]': filters.to || undefined,
-    },
-  })
-  return data
+/**
+ * Pano yanıtı. Web'de `GET /api/deals/board`, masaüstünde yerel aynadan kurulan AYNI şekil
+ * (`platform/types.ts` → `DealsSource.board`).
+ */
+function fetchBoard(filters: BoardFilters): Promise<BoardResponse> {
+  return getPlatform().data.deals.board(filters)
 }
 
 /**
@@ -77,12 +80,25 @@ export function useBoardQuery(filters: BoardFilters) {
   })
 }
 
-export async function moveDealRequest(dealId: number, payload: MoveDealPayload): Promise<DealCard> {
-  const { data } = await api.patch<{ data: DealCard }>(`/api/deals/${dealId}/move`, payload)
-  return data.data
+/**
+ * Kartı taşır ve kartın SON hâlini döner — çağıran bunu `placeCardInBoard` ile yerine oturtur.
+ *
+ * Masaüstünde bu çağrı ağa ÇIKMAZ: yerel satır güncellenir, mutasyon `deal.move` olarak
+ * outbox'a girer ve bir sonraki senkron turunda gönderilir. Dolayısıyla çözülen promise
+ * "sunucu kabul etti" demek değildir; kabul/ret sinyali sonradan motorun çakışma yolundan
+ * gelir (bkz. `desktop/src/platform/data/crm.ts` → `dealsSource.move`).
+ */
+export function moveDealRequest(dealId: number, payload: MoveDealPayload): Promise<DealCard> {
+  return getPlatform().data.deals.move(dealId, payload)
 }
 
-/** 409 gövdesindeki güncel kartı çıkarır; başka bir hata ise `null`. */
+/**
+ * 409 gövdesindeki güncel kartı çıkarır; başka bir hata ise `null`.
+ *
+ * Bu üç yardımcı (409/422/ağ) WEB'in eşzamanlı istek yoluna aittir. Masaüstünde taşıma
+ * çevrimdışı yazıldığı için bu yollardan hiçbiri tetiklenmez — hata olmadığında üçü de
+ * `null`/`false` döner ve akış zaten "başarılı yazma" dalına girer.
+ */
 export function conflictCardFrom(error: unknown): DealCard | null {
   if (!axios.isAxiosError(error)) return null
   if (error.response?.status !== 409) return null

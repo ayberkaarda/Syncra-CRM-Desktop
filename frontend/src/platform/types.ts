@@ -46,7 +46,13 @@ import type {
   UserOption as ContactUserOption,
 } from '../features/contacts/types'
 import type { DealPayload, DealsListResponse, DealsQuery } from '../features/deals/api/dealsApi'
-import type { Deal } from '../features/deals/types'
+import type {
+  BoardFilters,
+  BoardResponse,
+  Deal,
+  DealCard,
+  MoveDealPayload,
+} from '../features/deals/types'
 import type { ExchangeRatesCurrentResponse } from '../features/exchange/types'
 import type { LeadPayload } from '../features/leads/api/leadsApi'
 import type {
@@ -165,7 +171,15 @@ export interface RequestOptions {
 // issue no request.
 // ------------------------------------------------------------------------------------------------
 
-/** `features/deals/api/dealsApi.ts`. The kanban board (`boardApi.ts`) is a separate module, outside this surface. */
+/**
+ * `features/deals/api/dealsApi.ts`, plus the two reads/writes the kanban board is built on
+ * (`features/deals/api/boardApi.ts`).
+ *
+ * The board's two verbs live here rather than in a surface of their own because they are the
+ * only part of `boardApi.ts` that talks to a backend at all: everything else in that module —
+ * `boardKeys`, `normalizeFilters` and the pure column/card cache helpers — operates on a
+ * `BoardResponse` that is already in hand and is platform-independent by construction.
+ */
 export interface DealsSource {
   /** <- `fetchDeals` */
   list(query: DealsQuery): Promise<DealsListResponse>
@@ -179,6 +193,17 @@ export interface DealsSource {
   delete(id: number): Promise<void>
   /** <- `assignDealRequest` */
   assign(id: number, ownerId: number | null): Promise<Deal>
+  /** <- `fetchBoard` (`boardApi.ts`) — every active stage as a column, `per_stage` cards each. */
+  board(filters: BoardFilters): Promise<BoardResponse>
+  /**
+   * <- `moveDealRequest` (`boardApi.ts`).
+   *
+   * Resolves with the card as it now stands, which is what the caller re-seats in its cache.
+   * `MoveDealPayload` carries neighbours, never a `position`: the sort key is generated under
+   * a row lock on the server (`MoveDealRequest` rejects a client `position` outright), so an
+   * offline implementation owns the column a card is in, never its rank inside that column.
+   */
+  move(id: number, payload: MoveDealPayload): Promise<DealCard>
 }
 
 /** `features/contacts/api/contactsApi.ts` */

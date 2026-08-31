@@ -6,7 +6,7 @@
 >
 > **Kural:** bir madde ancak **üç sütunu da ✅ olduğunda** kapanır. Karar ✅ + kod ❌ = **AÇIK**.
 
-Son güncelleme: 2026-08-31 · W1 dalgası (O24/O25/O28/O29/O30 kapandı, O27 yarım) + CI düzeltmeleri
+Son güncelleme: 2026-08-31 · W2 dalgası kapandı (O2/O7/O8/O9/O35/O37) · CI yeşil
 
 ---
 
@@ -25,7 +25,7 @@ Son güncelleme: 2026-08-31 · W1 dalgası (O24/O25/O28/O29/O30 kapandı, O27 ya
 | # | Madde | Karar | Kod | Test | Kanıt / not |
 |---|---|---|---|---|---|
 | ~~**O1**~~ | **A25 — 403 `USER_DEACTIVATED` → wipe** — **KAPANDI 2026-08-31** | ✅ EK 4 | ✅ `sync/mod.rs:1072` (`status==403 && code==USER_DEACTIVATED`), `protocol.rs:372`, `error.rs` yapısal `code` | ✅ `tests/wire_contract.rs` 3 test — biri pozitif, **ikisi negatif kontrol** (`a_plain_403_does_not_wipe_anything`, `a_bare_401_still_keeps_the_outbox`) | `transport.rs:137` 403'ü ayrıştırmadan `SyncError::Protocol`'e katlıyor; `USER_DEACTIVATED` desktop kodunda **hiç geçmiyor** (grep 0). `handle_auth_lost` yalnız 401'de. **Bugünkü davranış karardan da kötü:** deaktive kullanıcı oturumu düşmeden "protocol error" görüyor. §9/2 AÇIK, F6 kapatılamaz. |
-| **O2** | **A26 — SLA alanları pull satırında** | ✅ EK 4 | ✅ `SyncPullService::attachTicketSla()` | ✅ `SyncPullTicketSlaTest` (4 senaryo) | Sunucu tarafı tam. **İstemci tarafı henüz tüketmiyor** — `mappers.ts` A23'ün `null`/`0` davranışında. INT-1 sonrası bağlanmalı. |
+| ~~**O2**~~ | **A26 SLA alanları — KAPANDI 2026-08-31, uçtan uca** | ✅ EK 4 | ✅ üç halka birden: sunucu (`attachTicketSla()`), ayna (`0002` migration, 4 kolon), istemci (`mapTicket()` — `null`=SLA yok, `0`=süre doldu ayrımı korunuyor) | ✅ Sunucu: `SyncPullTicketSlaTest` 4 senaryo. Taşıma: `ticket_sla_fields_survive_the_upsert_round_trip` + `a_null_sla_remaining_seconds_survives_as_sql_null_not_zero`. Mapper: 7 test, 2'si negatif kontrol. |
 | ~~**O3**~~ | **TM-F2 — `sync_deletions` sahip kapsamı** — **KAPANDI 2026-08-31** | ✅ | ✅ `SyncDeletionObserver.php:51`, `SyncPullService.php:542` (`owner_key` MATCH, "başkasınınki değil" değil), migration `2026_09_01_100010` | ✅ | `owner_key` repoda hiç yok (grep 0). Bir kullanıcı başkasının silinmiş bildirim uuid'lerini görebiliyor. F6 buna bloklu. |
 | **O4** | **R4 — `tauri.conf.json` hardcoded localhost CSP** | ❌ | ❌ | ❌ | `tauri.conf.json:28` `http://localhost:8000` taşıyor; doğru CSP yalnız `scripts/tauri.mjs` sarmalayıcısından geçince üretiliyor. `npx tauri build` doğrudan çağrılırsa **sessizce localhost-CSP'li paket** çıkar. |
 | ~~**O5**~~ | **komut adı `stats` vs `storage_stats` — KAPANDI 2026-08-31** | ✅ sözleşme adı kazandı | ✅ `storage.rs:19`, `lib.rs:106`, `commands.ts:150` üçü de `storage_stats` | ✅ `npm run check:commands` — dört kaynağı (TS `invoke` · Rust fn · `generate_handler!` · §6.2) karşılaştırır. Teknik lider bozup ölçtü: **bozukken exit 1, düzeltilince exit 0**. |
@@ -38,26 +38,50 @@ Son güncelleme: 2026-08-31 · W1 dalgası (O24/O25/O28/O29/O30 kapandı, O27 ya
 | ~~**O29**~~ | **`data::get` ölü komutu — KAPANDI 2026-08-31 (silindi)** | ✅ | ✅ komut + `generate_handler!` + kontrolör `CONTRACT`'ı birlikte silindi; §6.2'den de düşürüldü | ✅ `check:commands` → `dead commands: 0`. Silme öncesi tüketici yokluğu grep'le kanıtlandı (`rowById` yerel `query` yolundan gidiyor) |
 | ~~**O30**~~ | **`deals:form.companyLabel` — KAPANDI 2026-08-31 (silindi)** | ✅ | ✅ dört dilden birden silindi | ✅ `i18n:dead-keys` 96 → **95**; `BoardFilters.tsx`'in kullandığı `board.filters.companyLabel` korundu |
 
-| **O32** | **CI Linux: `libappindicator3-dev` çakışması** | ✅ | ✅ düzeltildi | ⏳ doğrulanmadı | `rust workspace (ubuntu-22.04)` apt exit 100. Sebep: workflow **hem** `libappindicator3-dev` **hem** `libayatana-appindicator3-dev` kuruyordu; ikincisi birincisiyle `Conflicts`, üstelik birincisinin kendi bağımlılığı (`libappindicator3-1`) jammy’de sağlanamıyor. Tauri 2 yalnız ayatana olanını ister. **3 yerden kaldırıldı** (`desktop-ci.yml` ×2, `desktop-release.yml` ×1). Diğer paketlerin hepsi bulundu — webkit2gtk-4.1 jammy’de mevcut, O23 bu hatanın sebebi değildi. |
-| **O33** | **CI backend: Redis servisi yoktu** | ✅ | ✅ düzeltildi | ⏳ doğrulanmadı | `15 failed, 1396 passed`; **15’inin de tek sebebi** `Connection refused [tcp://127.0.0.1:6379]`. `.env.example` `SESSION_DRIVER`/`QUEUE_CONNECTION`/`CACHE_STORE` = redis, CI `.env`’i ondan kopyalıyor, ama işte MariaDB servisi varken Redis yoktu. `redis:7-alpine` servisi + `REDIS_*` env eklendi. **Sürücüleri `sync`/`array`’e çevirmek reddedildi:** iş yeşile döner ama üretimden farklı bir yürütme modelini test eder — kırmızının anlamı kaybolurdu. |
+| ~~**O32**~~ | **CI Linux: `libappindicator3-dev` çakışması — KAPANDI 2026-08-31, CI ile DOĞRULANDI** | ✅ | ✅ 3 yerden kaldırıldı | ✅ `rust workspace (ubuntu-24.04)` işi **success**. Önceki koşumda apt exit 100 ile ölüyordu; şimdi derleyip test ediyor. |
+| ~~**O33**~~ | **CI backend: Redis servisi — KAPANDI 2026-08-31, CI ile DOĞRULANDI** | ✅ | ✅ `redis:7-alpine` servisi + `REDIS_*` env | ✅ `backend (php artisan test)` işi **success** (önceki koşumda 15 kırmızı, hepsi `Connection refused [tcp://127.0.0.1:6379]`). Sürücüleri `sync`/`array`'e çevirme yolu reddedildi — iş yeşile dönerdi ama üretimden farklı bir yürütme modelini test ederdi. |
 
 | **O34** | **Release runner'ı `ubuntu-22.04`'te tutuldu** | ⚠️ kullanıcı kararı | — | — | `desktop-ci.yml` keşif turu kararıyla **24.04**'e taşındı, ama `desktop-release.yml` **22.04**'te bırakıldı: release runner'ın glibc'si dağıtılan binary'nin **tabanı** olur (22.04 = 2.35, 24.04 = 2.39) ve yükseltmek eski dağıtımları düşürür. Bu ürün kararıdır, CI temizliği değil. Bedeli: CI artık release ile aynı taban üzerinde derlemiyor, yani 22.04'e özgü bir kırılma önce `desktop-release.yml`'de görünür. F7'de karara bağlanmalı. |
+
+| ~~**O35**~~ | **Yerel şema SLA kolonlarını aynalamıyordu — KAPANDI 2026-08-31** | ✅ | ✅ `migrations/0002_ticket_sla_fields.sql` + **migration zinciri** (`MIGRATIONS: &[(i32, &str)]`, sürüm aralığına göre sırayla uygulama) | ✅ `existing_v1_database_gets_migration_0002_applied_on_next_open` — teknik lider adıyla koşturdu, `ok`. Negatif kontrol `an_unmirrored_key_is_still_silently_dropped` da geçiyor: kolon eklemek `upsert`'in bilinçli sessiz-düşürme güvenliğini bozmadı. |
+
+| **O36** | **Pano filtre açılırları hâlâ doğrudan axios** | ❌ | ❌ | ❌ | `boardApi.ts` içinde üç lookup sözleşmeye girmedi: `GET /api/pipeline-stages`, `/api/users`, `/api/companies`. Pano **kartları** çevrimdışı doluyor ama **filtre açılırları** boş kalır. Yalnız pano değil — `DealsListPage`, `DealFormModal`, `AssignDealOwnerModal` de aynı üç hook'u kullanıyor. O7'nin görev tanımında yoktu; F4'ün "Kanban çevrimdışı çalışır" kabulünü **kısmen** karşılıyor. |
+| ~~**O37**~~ | **`pipeline_stages.name_key` — KAPANDI 2026-08-31** | ✅ | ✅ aynı `0002` migration + `mapPipelineStage` artık satırdan okuyor | ✅ `pipeline_stage_name_key_survives_the_upsert_round_trip` + null varyantı. Masaüstünde aşama başlıkları yine `enums:pipelineStage.<name_key>` ile çevriliyor. |
+| **O38** | **Kontrolörlerin satır-sonu kırılganlığı** | ✅ | ✅ düzeltildi | ⚠️ | `check-data-wiring.mjs`'in manifest regex'i `\n}\n`'e sabitliydi ve CRLF ağaçta **çöküyordu** (`DATA_METHOD_MANIFEST not found`). <br><br>**Bu bir şerit hatası değildi, gizli bir kusurdu:** `core.autocrlf=true` ve index **%100 LF** (189 dosya, sıfır CRLF) — yani git Windows'ta çalışma ağacına **kasten** CRLF veriyor. Kontrolör hiçbir zaman temiz bir Windows clone'unda güvenilir değildi; bugüne kadar yalnız o dosyaya dokunulmadığı için ortaya çıkmamıştı. Regex `\r?\n` toleranslı yapıldı. Diğer dört kontrolör ampirik olarak CRLF ağaçta yeşil. <br><br>**Ders:** bir şeridin "kontrolör yeşil" raporu, o kontrolörü teknik lider yeniden koşmadan kanıt değildir — bu turda tam olarak bu oldu, rapor yeşildi, tekrarlanabilir değildi. |
+
+| **O39** | **Migration zinciri işlem (transaction) sarmalı taşımıyor** | ⚠️ | ❌ | ❌ | `migrate()` her migration'ı `execute_batch` ile çalıştırıp ardından `user_version`'ı ilerletiyor; `BEGIN`/`COMMIT` yok. `0002` beş `ALTER TABLE` içeriyor: üçüncüsünde bir hata olursa (disk dolu, kilit) ilk ikisi kalıcı olur, `user_version` 1'de kalır, **sonraki açılışta migration baştan koşar ve "duplicate column name" ile kalıcı olarak patlar**. <br><br>Ayna kendi başına atılabilir (bootstrap yeniden kurar) — asıl bedel **outbox**: gönderilmemiş kullanıcı işi orada duruyor. SQLite DDL'i işlemsel olduğu için düzeltme birkaç satır. Mekanizma bu turda kuruldu ve her gelecek şema değişikliği bundan geçecek; sertleştirmek için doğru an şimdi. |
 
 ## 2. AÇIK — bilinçli ertelenmiş
 
 | # | Madde | Neden ertelendi | Ne zaman |
 |---|---|---|---|
 | **O6** | F4 kayıt rozetlerinin **kayıt satırlarına** inmesi | `frontend/src/features/*/pages/*` dokunuşu + liste DTO'larına `sync_state` gerekiyor | F4 devamı |
-| **O7** | `boardApi` `DataSource` dışında; `deals_board`/`pipeline_stages` rezerve | Kanban offline move şartnamede (F4) ama board hâlâ HTTP | **F4'ün kalan işi buna bloklu** |
-| **O8** | `storage::settings` getter yok | UI `retention_days` için `localStorage` aynası kullanıyor, reinstall'da bayat | Küçük crate işi |
-| **O9** | 3 hook'ta ham `echo.leave()` + 5 sn watchdog birlikte yaşıyor | Refcount deseni kuruldu ama `useDashboardSocket`/`useActivityStream`/`usePresence` geçirilmedi | Köprü kapsamı genişlemeden |
+| ~~**O7**~~ | **`boardApi` → `DataSource` — KAPANDI 2026-08-31** | ✅ `DealsSource`'a `board`/`move` (124 → **126** metot) | ✅ Web uçları artık yalnız `platform/web.ts`'te (birebir taşındı); masaüstünde `board()` aynadan `BoardResponse` kuruyor, `move()` HTTP atmadan outbox'a `deal.move` + `to_stage_id` yazıyor | ✅ `check-data-wiring` 126/126, EXIT=0 |
+| ~~**O8**~~ | **`storage::settings` getter — KAPANDI 2026-08-31** | ✅ | ✅ `storage_settings` komutu dört kaynakta (`storage.rs:38`, `lib.rs:107`, `commands.ts:160`, kontrolör `CONTRACT`); `StorageSettings.tsx` `localStorage` aynasını bıraktı, motordan okuyor | ✅ `settings_reflects_a_write_without_a_restart` — mevcut `settings_are_persisted` yalnız restart-sonrası kalıcılığı kanıtlıyordu, aynı-oturum simetriyi değil |
+| ~~**O9**~~ | **Üç hook refcount desenine geçti — KAPANDI 2026-08-31** | ✅ | ✅ `useDashboardSocket`, `useActivityStream`, `usePresence` artık `acquireChannel`/`releaseChannel` kullanıyor; `DashboardPage.tsx` ve `LiveStreamTab.tsx`'in bayat `echo.leave()` yorumları düzeltildi | ✅ 4 senaryoluk refcount probu: paylaşılan kanalda ilk release **bırakmıyor**, son release bırakıyor; presence aynı; bağımsız kanallar birbirini etkilemiyor; Echo yokken `null` dönüp çökmüyor |
 | **O10** | `docs/DESKTOP-OFFLINE-TEST.md` **yok** | F4 kabul kriteri; senaryo hiç koşulmadı | F4 kapanışı |
 | **O11** | §9/5 (deep link) ve §9/6 (clipboard) değerlendirilemiyor | F5 kodu yok — tutarlı, fail-closed | F5 |
 | **O12** | Updater `plugins.updater` bloğu yok → release binary panikler | Sahte pubkey commit edilmedi (doğru karar) | F7'nin 1. maddesi |
 | ~~**O13**~~ | ~~Linux/WebKitGTK **sıfır ölçüm** (D-4 dahil)~~ | **KAPANDI 2026-08-31** — WSL2 Ubuntu 26.04 + rustc 1.98.0 + WebKitGTK 2.52.3 kuruldu, D-4 Linux'ta ölçüldü (§4 D-4 satırı). Kalan Linux borcu artık O13 değil, **O23** (CI ubuntu-22.04 ↔ yerel 26.04 sürüm farkı). |
-| **O14** | **CI ilk kez koştu (2026-08-31) — 2 iş kırmızı, düzeltmeler ağaçta, yeniden push bekliyor** | Kullanıcı push etti; `frontend`, `cargo audit`, `rust workspace (macos-latest)` **yeşil**. İki gerçek hata çıktı, ikisi de düzeltildi ama **doğrulanmadı** — push kullanıcıya ait (§0.2). Bkz. O32, O33. |
+| ~~**O14**~~ | **CI ilk kez koştu ve YEŞİLE DÖNDÜ — 2026-08-31** | Beş işin beşi de success: `backend (php artisan test)`, `rust workspace (ubuntu-24.04 / macos-latest)`, `frontend`, `cargo audit`. (`windows-latest` vendored OpenSSL derlemesi nedeniyle uzun sürüyor, ayrı izleniyor.) İlk koşum iki gerçek hata çıkardı (O32, O33) — ikisi de düzeltildi ve **aynı SHA üzerinde** doğrulandı. |
 
 ## 3. BELGE BORCU
+
+> **Bu defterin iki kaydı yanlıştı (2026-08-31, W2-D ortaya çıkardı).** İkisi de teknik liderin
+> yazdığı satırlardı ve **şerit prompt'larına aynen kopyalanmıştı**, yani yanlış bilgi iş
+> tanımına dönüşmüştü:
+>
+> - **O8** "crate'te settings getter yok" diyordu. Yanlış — `SyncEngine::settings()`
+>   (`sync/mod.rs:866`) önceki bir fazda eklenmiş ve test edilmişti; hiçbir Tauri komutuna
+>   bağlanmamıştı sadece. `StorageSettings.tsx`'in başındaki yorum da aynı bayat iddiayı
+>   taşıyordu — muhtemelen defter oradan yazılmıştı.
+> - **O9** "3 hook'ta ham `echo.leave()` **+ 5 sn watchdog** birlikte yaşıyor" diyordu.
+>   Watchdog kısmı kodda **hiç yoktu**; şerit aramaya gönderildi ve bulamadı.
+>
+> **Ders:** bu defter kanıt belgesi olduğunu iddia ediyor (`dosya:satır` sütunu var), ama bu
+> iki satır kanıtsız yazılmıştı. Bir madde yazılırken iddiası **o an** grep'le doğrulanmalı;
+> "muhtemelen böyledir" bir sonraki şeridin görev tanımı hâline geliyor.
+
 
 | # | Madde | Not |
 |---|---|---|
@@ -70,7 +94,7 @@ Son güncelleme: 2026-08-31 · W1 dalgası (O24/O25/O28/O29/O30 kapandı, O27 ya
 | # | Madde | Not |
 |---|---|---|
 | **O18** | P4a'nın iki uzun transaction ölçümü | `PipelineStageService::deactivate` ve `ChatReadState::fanOutNewMessage` — protokol §2.4 istiyor, hiçbir belgede iz yok. `sync_counter` küresel mutex'inin en riskli müşterisi ölçülmemiş. *(F1 raporu `fanOutNewMessage` için 2.6–4.0 ms verdi; `deactivate` için 7.5 ms/deal. Bu satır o ölçümlerin protokol belgesine işlenmediğini kaydediyor.)* |
-| **O23** | **CI ↔ yerel Linux sürüm uçurumu** | `desktop-ci.yml` `ubuntu-22.04` hedefliyor; ölçüm makinesi Ubuntu **26.04** / WebKitGTK **2.52.3**. 22.04'ün webkit2gtk-4.1'i çok daha eski. D-4 sonucu 26.04'te doğrulandı, 22.04'te **doğrulanmadı**. CI ilk koştuğunda (O14) eşitlenmeli. |
+| ~~**O23**~~ | **CI Linux hedefi — KAPANDI 2026-08-31** | `desktop-ci.yml` 5 yerde `ubuntu-22.04` → **`ubuntu-24.04`** (keşif turu kararı: 22.04'ün webkit2gtk-4.1'i D-4 ölçüm ortamından iki nesil geride ve imaj emekliliğe yaklaşıyor; `ubuntu-26.04` runner'ı GA değil). Yeşil koşumla doğrulandı. **`desktop-release.yml` bilinçli olarak 22.04'te tutuldu** — bkz. O34. |
 | ~~**O24**~~ | **`identifier` kalıcı depolama anahtarı — KAPANDI 2026-08-31** | ✅ | ✅ `desktop/scripts/check-identifier.mjs` `com.syncra.desktop`'a sabitliyor | ✅ negatif kontrol: değer bozulunca exit 1, geri alınınca exit 0 (`tail` değil, exit koduyla ölçüldü) |
 | **O19** | **Uçtan uca doğrulama** | Tüm testler mock-simetrik (wiremock ↔ PHPUnit). İki mock'un aynı wire gerçeğini tarif ettiği hiç kanıtlanmadı. INT-1 şeridi bunu ilk kez deniyor. |
 | **O31** | **Ölü i18n anahtarı tabanı = 96** | `npm run i18n:dead-keys` (2026-08-31, O20 sonrası): `desktop.json` 95 + `deals:form.companyLabel` 1. `desktop.json` dağılımı `fields.*` 47 · `onlineOnly.*` 17 · `tray.*` 10 · `sync.*` 4 · `window.closeToTray.*` 3 · `conflicts.*` 4 · `recordBadge.*` 2. Çoğu F4/F5 için önceden yazıldı — **ama O20 tam olarak böyle başlamıştı.** Bu sayı F4/F5 kapanışında düşmezse anahtarlar gerçekten ölüdür. Kontrol kapıya **eklenmedi** (sezgisel; yanlış pozitif kapıya olan güveni öldürür), `--strict` ile elle koşulur. |

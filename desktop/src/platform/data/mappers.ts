@@ -59,6 +59,7 @@ import {
   tagIds,
   text,
   toInt,
+  toNumber,
   type LocalRow,
 } from './engine'
 import { EMPTY_REFS, type RefIndex } from './refs'
@@ -134,15 +135,20 @@ export interface DealRefs {
   tags: RefIndex
 }
 
-/** `PipelineStageResource`. `name_key` is a server-side taxonomy flag and is not mirrored. */
+/**
+ * `PipelineStageResource`.
+ *
+ * `name_key` is mirrored (migration `0002_ticket_sla_fields.sql` added the column; defter O7
+ * follow-up). `null` means "customer-created stage, print `name` as-is" (`features/deals/
+ * types.ts`) — a built-in taxonomy stage carries its key (e.g. `"qualified"`) and the UI
+ * renders `enums:pipelineStage.<name_key>` for it, exactly like the web client.
+ */
 export function mapPipelineStage(row: LocalRow | null): PipelineStage | null {
   if (!row) return null
   return {
     id: rowId(row),
     name: text(row.name),
-    // `null` means "customer data, print as-is" (`features/deals/types.ts`), which is the
-    // safe reading for a column the mirror does not carry.
-    name_key: null,
+    name_key: str(row.name_key),
     slug: text(row.slug),
     position: num(row.position),
     probability: num(row.probability),
@@ -450,17 +456,29 @@ export interface TicketRefs {
 /**
  * `TicketResource`.
  *
- * **The derived SLA fields stay server-owned.** `docs/SLA-DESIGN.md` makes the server the
- * single authority for `sla_remaining_seconds`, `sla_total_seconds` and `sla_target_hours`,
- * and none of the three is mirrored. They are reported as "no value" (`null` / `0`) so
- * `useSlaCountdown` renders nothing rather than counting down from a number this client
- * invented. `sla_paused` is the one exception the type file itself defines locally
- * ("`status === 'pending'` ile eşdeğer"), and `sla_breached` uses the definition the same file
- * gives for an open ticket. `notes_count` has no mirrored source and is `0`.
+ * **The derived SLA fields stay server-owned** (`docs/SLA-DESIGN.md`, KARAR A26): the server
+ * is the single authority for `sla_remaining_seconds`, `sla_total_seconds`, `sla_target_hours`
+ * and `sla_breached` — this mapper only reads what `SyncPullService::attachTicketSla()`
+ * (`backend/app/Services/Sync/SyncPullService.php`) already computed and attached to the
+ * `tickets` pull row, via the SAME `SlaService` methods `TicketResource` uses, and never
+ * re-derives the arithmetic itself.
+ *
+ * ⚠️ **`null` vs `0` is not interchangeable here.** `sla_remaining_seconds` is `null` when the
+ * SLA clock has stopped (resolved/closed ticket, or no `sla_due_at`) and `0`-or-negative when
+ * it is still running but the deadline has arrived or passed. `toInt(...) ?? null` is used
+ * instead of `num(...)` (which defaults to `0`) or a truthy/`??`-only check, precisely so a
+ * `0` remaining-seconds row is NOT collapsed into "no SLA" — see the file header and KARAR A23.
+ * `sla_total_seconds` and `sla_target_hours` are never `null` on the wire (`SlaService` always
+ * falls back to the priority target), so they default to `0` like every other decimal field
+ * this mapper handles; `sla_breached` is always a wire `bool`.
+ *
+ * `sla_paused` has no server field of its own on the pull row — `SyncPullTicketSlaTest` lists
+ * only the four fields above — so it stays the locally-defined equivalent the type file
+ * documents ("`status === 'pending'` ile eşdeğer"). `notes_count` has no mirrored source and is
+ * `0`.
  */
 export function mapTicket(row: LocalRow, refs: TicketRefs): Ticket {
   const status = (text(row.status) || 'open') as TicketStatus
-  const settled = status === 'resolved' || status === 'closed'
   return {
     id: rowId(row),
     ticket_number: text(row.ticket_number),
@@ -471,12 +489,17 @@ export function mapTicket(row: LocalRow, refs: TicketRefs): Ticket {
     category: str(row.category),
 
     sla_due_at: str(row.sla_due_at),
-    sla_total_seconds: 0,
-    sla_remaining_seconds: null,
+    // Server-computed, never null on the wire (`SlaService::totalSeconds()` /
+    // `targetHoursForTicket()` always fall back to the priority target) — `0` only when the
+    // pull row predates this field (KARAR A26) and the mirror has not re-pulled yet.
+    sla_total_seconds: toInt(row.sla_total_seconds) ?? 0,
+    // `undefined` (missing/pre-A26 row) also reads as "no value", same as an explicit `null` —
+    // both fall through to `null`, never to `0`.
+    sla_remaining_seconds: toInt(row.sla_remaining_seconds) ?? null,
     sla_paused: status === 'pending',
-    sla_breached: !settled && isPast(row.sla_due_at),
+    sla_breached: bool(row.sla_breached),
     sla_paused_seconds: num(row.sla_paused_seconds),
-    sla_target_hours: 0,
+    sla_target_hours: toNumber(row.sla_target_hours) ?? 0,
 
     first_response_at: str(row.first_response_at),
     resolved_at: str(row.resolved_at),

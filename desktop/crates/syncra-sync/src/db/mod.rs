@@ -11,11 +11,25 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::Value as Json;
 use std::path::Path;
 
-/// The one and only migration; applied on open when `user_version` is 0.
 const MIGRATION_0001: &str = include_str!("../../migrations/0001_init.sql");
+/// Adds the four server-computed SLA columns to `tickets` (defter O2/O35, KARAR A26) — see
+/// the file for the full contract.
+const MIGRATION_0002: &str = include_str!("../../migrations/0002_ticket_sla_fields.sql");
 
-/// Schema version written to `PRAGMA user_version` once the migration has run.
-const SCHEMA_VERSION: i32 = 1;
+/// Schema version written to `PRAGMA user_version` once every migration has run.
+const SCHEMA_VERSION: i32 = 2;
+
+/// Every migration, in order, paired with the `user_version` it brings the database to.
+///
+/// `migrate()` walks this list and applies every entry whose version is still ahead of the
+/// database's current `user_version` — not just the newest one. A database that was created
+/// before this list grew past `(1, MIGRATION_0001)` sits at `user_version = 1` forever unless
+/// something applies `MIGRATION_0002` to it specifically; re-running `MIGRATION_0001` on it
+/// would fail (the tables already exist), and jumping straight to `SCHEMA_VERSION` without
+/// applying the intermediate SQL would silently leave its columns out. `user_version` is
+/// advanced after each individual migration (not once at the end), so a crash mid-chain
+/// resumes at the next unapplied entry instead of re-running one that already succeeded.
+const MIGRATIONS: &[(i32, &str)] = &[(1, MIGRATION_0001), (2, MIGRATION_0002)];
 
 /// Open (or create) the encrypted database and bring it to the current schema version.
 ///
@@ -88,12 +102,43 @@ pub fn fold(input: &str) -> String {
 }
 
 fn migrate(conn: &Connection) -> Result<()> {
+    // `SCHEMA_VERSION` is not read directly by the loop below (each entry carries its own
+    // target version) — it exists as the single named "latest" other code and tests assert
+    // against, so this check is what keeps it from silently drifting out of sync with
+    // `MIGRATIONS` if a future migration is appended without bumping it.
+    debug_assert_eq!(
+        MIGRATIONS.last().map(|(version, _)| *version),
+        Some(SCHEMA_VERSION),
+        "SCHEMA_VERSION must equal the version of the last entry in MIGRATIONS"
+    );
+
+    migrate_with(conn, MIGRATIONS)
+}
+
+/// The actual migration walk, parameterised over the migration list so tests can exercise a
+/// deliberately broken entry without touching the real [`MIGRATIONS`] table (defter O39).
+///
+/// Each migration's SQL *and* the `user_version` bump that records it landing are applied in
+/// one transaction — `conn.unchecked_transaction()`, the same pattern [`wipe`] and every sync
+/// writer in this crate use. SQLite DDL (`ALTER TABLE` included) participates in transactions
+/// like any other statement, so if a migration's `execute_batch` fails partway through — the
+/// third of five `ALTER TABLE`s, say — the whole transaction (earlier statements in that same
+/// batch included) rolls back on drop, because it is never committed. `PRAGMA user_version` is
+/// written through the same transaction handle, so a failed migration leaves the database
+/// exactly as it was before the attempt: none of its DDL applied, and the version unmoved. The
+/// next `open()` retries that same migration from scratch instead of either re-running SQL that
+/// already landed or getting stuck re-applying SQL that partially landed.
+fn migrate_with(conn: &Connection, migrations: &[(i32, &str)]) -> Result<()> {
     let current: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if current >= SCHEMA_VERSION {
-        return Ok(());
+    for (version, sql) in migrations {
+        if *version <= current {
+            continue;
+        }
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(sql)?;
+        tx.pragma_update(None, "user_version", *version)?;
+        tx.commit()?;
     }
-    conn.execute_batch(MIGRATION_0001)?;
-    conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     Ok(())
 }
 
@@ -298,6 +343,132 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    /// The migration-chain test (defter O2/O35). A database created before `MIGRATION_0002`
+    /// existed is stuck at `user_version = 1` forever unless `migrate()` walks the *whole*
+    /// pending range on the next `open()`, not just the newest entry. Without this behaviour
+    /// the ticket SLA columns fix would be correct in a fresh install and silently absent on
+    /// every real user's existing mirror — the same "works nowhere it needs to" failure the
+    /// coordinator caught in the mapper-only version of this fix.
+    #[test]
+    fn existing_v1_database_gets_migration_0002_applied_on_next_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let key = "c".repeat(64);
+
+        // Fixture: replicate exactly what `migrate()` used to do end-to-end, before
+        // MIGRATION_0002 existed — apply only MIGRATION_0001 and stamp user_version = 1.
+        {
+            let conn = Connection::open_with_flags(
+                &path,
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+            )
+            .unwrap();
+            conn.pragma_update(None, "key", &key).unwrap();
+            conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get::<_, i64>(0))
+                .unwrap();
+            conn.execute_batch(MIGRATION_0001).unwrap();
+            conn.pragma_update(None, "user_version", 1).unwrap();
+        }
+
+        // Sanity: the fixture really is a pre-0002 database (v1, no SLA columns).
+        {
+            let conn =
+                Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
+            conn.pragma_update(None, "key", &key).unwrap();
+            let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+            assert_eq!(version, 1, "fixture must start at v1, or this test proves nothing");
+            let cols = columns(&conn, "tickets").unwrap();
+            assert!(!cols.contains(&"sla_remaining_seconds".to_string()));
+            let stage_cols = columns(&conn, "pipeline_stages").unwrap();
+            assert!(!stage_cols.contains(&"name_key".to_string()));
+        }
+
+        // The real entry point every app launch goes through: open() on the SAME file/key
+        // must bring an existing v1 database the rest of the way to SCHEMA_VERSION.
+        let conn = open(&path, &key).unwrap();
+
+        let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+
+        let cols = columns(&conn, "tickets").unwrap();
+        for col in [
+            "sla_remaining_seconds",
+            "sla_total_seconds",
+            "sla_target_hours",
+            "sla_breached",
+        ] {
+            assert!(
+                cols.contains(&col.to_string()),
+                "tickets.{col} missing after migrating an existing v1 database"
+            );
+        }
+
+        let stage_cols = columns(&conn, "pipeline_stages").unwrap();
+        assert!(
+            stage_cols.contains(&"name_key".to_string()),
+            "pipeline_stages.name_key missing after migrating an existing v1 database"
+        );
+    }
+
+    /// A migration whose `execute_batch` fails partway through must leave the database exactly
+    /// as it was before the attempt: the earlier statement(s) in that same batch rolled back
+    /// and `user_version` unmoved — never a state where the SQL landed but the version didn't
+    /// (or vice versa). Proven against a synthetic migration list, not the real [`MIGRATIONS`]
+    /// (defter O39): the fix is `migrate_with`'s transaction wrapping, not anything about
+    /// migration 0002's actual SQL.
+    #[test]
+    fn a_failing_migration_rolls_back_and_can_be_retried_after_the_fix() {
+        let (_dir, conn) = temp_db();
+        let starting_version: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(starting_version, SCHEMA_VERSION);
+
+        // The first statement is valid and, taken alone, would succeed; the second targets a
+        // table that does not exist and must fail. If the two statements were not wrapped in a
+        // single transaction, the first `ALTER TABLE` would survive the second one's error.
+        const BROKEN: &[(i32, &str)] = &[(
+            SCHEMA_VERSION + 1,
+            "ALTER TABLE tickets ADD COLUMN o39_probe TEXT;\n\
+             ALTER TABLE table_that_does_not_exist ADD COLUMN x TEXT;",
+        )];
+
+        let err = migrate_with(&conn, BROKEN);
+        assert!(err.is_err(), "a migration with a failing statement must return Err");
+
+        // 1) The first statement's effect is NOT present — it was rolled back.
+        let cols = columns(&conn, "tickets").unwrap();
+        assert!(
+            !cols.contains(&"o39_probe".to_string()),
+            "the successful first ALTER TABLE must have been rolled back with the failed second one"
+        );
+
+        // 2) user_version has NOT advanced past the last good migration.
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            version, SCHEMA_VERSION,
+            "user_version must not advance when the migration that would have earned it failed"
+        );
+
+        // 3) Once the migration is fixed, the same connection (matching a real re-open after
+        // the bug is patched) migrates cleanly from where it left off — no "duplicate column"
+        // wall, because the broken attempt left nothing behind to collide with.
+        const FIXED: &[(i32, &str)] = &[(
+            SCHEMA_VERSION + 1,
+            "ALTER TABLE tickets ADD COLUMN o39_probe TEXT;",
+        )];
+        migrate_with(&conn, FIXED).expect("retry with corrected SQL must succeed");
+
+        let cols = columns(&conn, "tickets").unwrap();
+        assert!(cols.contains(&"o39_probe".to_string()));
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION + 1);
     }
 
     #[test]

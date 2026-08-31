@@ -2,8 +2,19 @@
 // katılma-ayrılma olaylarını tekilleştirilmiş bir haritada tutar. Sunucu
 // tarafı yetkilendirme `routes/channels.php` → `Broadcast::channel('online', ...)`
 // içinde tanımlı; üye payload'ı `App\Broadcasting\ChannelRegistry::payload()`.
+//
+// Abonelik/temizlik deseni `features/tickets/hooks/useTicketRealtime.ts` ile AYNI TEMELE
+// dayanır (presence kanalı olduğu için `kind: 'presence'`): kanal aboneliği PAYLAŞILAN,
+// referans sayan `src/lib/channelRegistry.ts` üzerinden alınır — doğrudan `echo.leave()`
+// ÇAĞRILMAZ (referans saymaz; bugün bu kanalın tek abonesi bu hook olsa da `Echo.leave()`
+// StrictMode'un çift mount'unda kendi ikinci aboneliğini altından çekebilir — registry bunu
+// sayaçla çözer). Unmount'ta yalnızca KENDİ üç dinleyicimiz (`here`/`joining`/`leaving` — Echo
+// presence kanallarında `stopListening` karşılığı yoktur, `leave` tüm dinleyicileri birlikte
+// söker) `releaseChannel()` ile bırakılır.
 import { useEffect, useState } from 'react'
 import { getEcho, onConnectionStateChange } from '../lib/echo'
+import { acquireChannel, releaseChannel } from '../lib/channelRegistry'
+import type { PresenceChannel } from '../lib/channelRegistry'
 
 export type PresenceMember = {
   id: number
@@ -26,10 +37,9 @@ export function usePresence(): UsePresenceResult {
   const [isConnected, setIsConnected] = useState(false)
 
   useEffect(() => {
-    const echo = getEcho()
-    if (!echo) return
-
-    const channel = echo.join(CHANNEL_NAME)
+    if (!getEcho()) return
+    const channel = acquireChannel(CHANNEL_NAME, 'presence') as PresenceChannel | null
+    if (!channel) return
 
     // Aynı kullanıcı birden fazla sekme açtığında `here`/`joining` aynı id'yi
     // tekrar gönderebilir — Map üzerinde id anahtarıyla tekilleştiriyoruz, bu
@@ -56,7 +66,7 @@ export function usePresence(): UsePresenceResult {
     })
 
     return () => {
-      echo.leave(CHANNEL_NAME)
+      releaseChannel(CHANNEL_NAME)
       setMembersById(new Map())
     }
   }, [])

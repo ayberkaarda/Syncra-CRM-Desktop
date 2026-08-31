@@ -104,6 +104,7 @@ pub fn run() {
             commands::sync::handle_realtime,
             commands::storage::storage_stats,
             commands::storage::update_settings,
+            commands::storage::storage_settings,
             commands::storage::clear_local,
         ])
         .setup(|app| {

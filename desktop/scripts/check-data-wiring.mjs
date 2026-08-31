@@ -47,8 +47,11 @@ const DOMAIN_FILES = ['crm.ts', 'work.ts', 'comms.ts', 'catalog.ts'].map((name) 
  * the whitelist. Anything not listed here and not referenced by the adapter fails the run.
  */
 const RESERVED_QUERIES = {
-  deals_board: 'features/deals/api/boardApi.ts is a separate module, outside the DataSource surface (types.ts)',
-  pipeline_stages: 'the Kanban column order — same boardApi surface; deals.get resolves a single stage through rows_by_server_ids',
+  // `deals.board` reads through `deals_list`, one query per stage, NOT through this variant:
+  // `DealsBoard` pins `status = 'open'` and carries none of the board filters (q / owner /
+  // company / from / to), so it cannot reproduce `GET /api/deals/board`, which lists a stage's
+  // won and lost cards in that stage's own column.
+  deals_board: 'DealsBoard pins status = open and takes no board filters, so deals.board reads through deals_list per stage instead',
   pending_rows: 'the pending/conflict badges, F4 scope (SYNCDESKTOP.md §7.2)',
 }
 
@@ -96,7 +99,7 @@ const contract = parseContract(read(CONTRACT))
 // ------------------------------------------------------------------------------------------------
 
 function parseManifest(source) {
-  const body = source.match(/export const DATA_METHOD_MANIFEST[^=]*= \{([\s\S]*?)\n\}\n/)
+  const body = source.match(/export const DATA_METHOD_MANIFEST[^=]*= \{([\s\S]*?)\r?\n\}\r?\n/)
   if (!body) throw new Error('DATA_METHOD_MANIFEST not found')
 
   const bindings = new Map()
@@ -104,7 +107,7 @@ function parseManifest(source) {
   // The trailing newline is re-added because the capture stops before the closing brace, and
   // without it the LAST entry would be skipped — silently, which is the one thing this script
   // must not do.
-  const entries = `${body[1]}\n`
+  const entries = `${body[1].replace(/\r\n/g, '\n')}\n`
   const entryPattern = /'([\w.]+)':\s*\{([\s\S]*?)\},?\n/g
   let match
   while ((match = entryPattern.exec(entries)) !== null) {

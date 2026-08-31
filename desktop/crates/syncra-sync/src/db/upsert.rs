@@ -314,3 +314,221 @@ impl ColumnCache {
 pub fn parse_uuid(value: &str) -> Result<Uuid> {
     Uuid::parse_str(value).map_err(|e| SyncError::Validation(format!("bad uuid {value:?}: {e}")))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::open;
+    use serde_json::json;
+
+    fn temp_conn() -> (tempfile::TempDir, Connection) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let conn = open(&path, &"a".repeat(64)).unwrap();
+        (dir, conn)
+    }
+
+    /// The transport test (defter O2/O35, KARAR A26). Before migration
+    /// `0002_ticket_sla_fields.sql` these four keys had no matching column and were silently
+    /// dropped by the per-key loop above ("the server is free to send columns this build does
+    /// not mirror") — the mapper could read the field correctly and it would still show
+    /// null/0, because the value never survived the trip into SQLite. This shapes a pull row
+    /// exactly like `SyncPullService::attachTicketSla()` does and proves it now round-trips
+    /// through `upsert_row` into a plain `SELECT`.
+    #[test]
+    fn ticket_sla_fields_survive_the_upsert_round_trip() {
+        let (_dir, conn) = temp_conn();
+        let spec = schema::spec_for(Entity::Ticket);
+        let table_columns = columns(&conn, "tickets").unwrap();
+
+        let row = json!({
+            "id": 501,
+            "ticket_number": "T-0501",
+            "subject": "Cannot log in",
+            "priority": "high",
+            "status": "open",
+            "sla_due_at": "2026-09-01T00:00:00Z",
+            "sla_paused_seconds": 0,
+            "sla_remaining_seconds": 3600,
+            "sla_total_seconds": 72000,
+            "sla_target_hours": 20.0,
+            "sla_breached": false,
+            "sync_version": 1,
+        });
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let mut id_map = IdMap::new();
+        upsert_row(&tx, spec, &row, &mut id_map, &table_columns).unwrap();
+        tx.commit().unwrap();
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT sla_remaining_seconds, sla_total_seconds, sla_target_hours, sla_breached
+                 FROM tickets WHERE server_id = 501",
+            )
+            .unwrap();
+        let (remaining, total, hours, breached): (Option<i64>, Option<i64>, Option<f64>, Option<i64>) =
+            stmt.query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+                .unwrap();
+
+        assert_eq!(remaining, Some(3600));
+        assert_eq!(total, Some(72000));
+        assert_eq!(hours, Some(20.0));
+        // false -> 0, same convention every other boolean column already uses (e.g.
+        // contacts.is_primary) — see json_to_sql().
+        assert_eq!(breached, Some(0));
+    }
+
+    /// The `null` half of the same round trip: a resolved ticket's `sla_remaining_seconds` is
+    /// `null` on the wire (`SlaService::remainingSeconds()`), and that must survive as SQL
+    /// `NULL`, not get coerced into `0` by `json_to_sql()` or dropped as "absent".
+    #[test]
+    fn a_null_sla_remaining_seconds_survives_as_sql_null_not_zero() {
+        let (_dir, conn) = temp_conn();
+        let spec = schema::spec_for(Entity::Ticket);
+        let table_columns = columns(&conn, "tickets").unwrap();
+
+        let row = json!({
+            "id": 502,
+            "ticket_number": "T-0502",
+            "subject": "Resolved already",
+            "priority": "urgent",
+            "status": "resolved",
+            "sla_due_at": "2026-08-25T00:00:00Z",
+            "resolved_at": "2026-08-26T00:00:00Z",
+            "sla_paused_seconds": 0,
+            "sla_remaining_seconds": null,
+            "sla_total_seconds": 14400,
+            "sla_target_hours": 4.0,
+            "sla_breached": true,
+            "sync_version": 2,
+        });
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let mut id_map = IdMap::new();
+        upsert_row(&tx, spec, &row, &mut id_map, &table_columns).unwrap();
+        tx.commit().unwrap();
+
+        let remaining: Option<i64> = conn
+            .query_row(
+                "SELECT sla_remaining_seconds FROM tickets WHERE server_id = 502",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(remaining, None, "null must stay SQL NULL, never become 0");
+    }
+
+    /// The same transport test, for `pipeline_stages.name_key` (defter O7 follow-up). Same
+    /// mechanism as the ticket SLA fields: `SyncPullService`'s `pipeline_stages` pull query is
+    /// `SELECT *`, so `name_key` was always on the wire — it just had no column to land in
+    /// until this migration.
+    #[test]
+    fn pipeline_stage_name_key_survives_the_upsert_round_trip() {
+        let (_dir, conn) = temp_conn();
+        let spec = schema::spec_for(Entity::PipelineStage);
+        let table_columns = columns(&conn, "pipeline_stages").unwrap();
+
+        let row = json!({
+            "id": 9,
+            "name": "Qualified",
+            "name_key": "qualified",
+            "slug": "qualified",
+            "position": 2,
+            "sync_version": 1,
+        });
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let mut id_map = IdMap::new();
+        upsert_row(&tx, spec, &row, &mut id_map, &table_columns).unwrap();
+        tx.commit().unwrap();
+
+        let name_key: Option<String> = conn
+            .query_row(
+                "SELECT name_key FROM pipeline_stages WHERE server_id = 9",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(name_key, Some("qualified".to_string()));
+    }
+
+    /// The `null` half: a custom, user-created stage has no taxonomy key on the server
+    /// either — `null` must survive as SQL `NULL`, the same discipline as the SLA fields.
+    #[test]
+    fn a_null_pipeline_stage_name_key_survives_as_sql_null() {
+        let (_dir, conn) = temp_conn();
+        let spec = schema::spec_for(Entity::PipelineStage);
+        let table_columns = columns(&conn, "pipeline_stages").unwrap();
+
+        let row = json!({
+            "id": 10,
+            "name": "Vendor Review",
+            "name_key": null,
+            "slug": "vendor-review",
+            "position": 3,
+            "sync_version": 1,
+        });
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let mut id_map = IdMap::new();
+        upsert_row(&tx, spec, &row, &mut id_map, &table_columns).unwrap();
+        tx.commit().unwrap();
+
+        let name_key: Option<String> = conn
+            .query_row(
+                "SELECT name_key FROM pipeline_stages WHERE server_id = 10",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(name_key, None);
+    }
+
+    /// NEGATIVE CONTROL: the four SLA columns were added ON TOP of the "unmirrored key is
+    /// dropped, not rejected" behaviour, not instead of it. A pull row carrying a field this
+    /// build still has no column for (the server is free to add columns ahead of the client,
+    /// per the comment on the loop above) must upsert cleanly and simply not carry that field
+    /// locally — proving migration 0002 did not accidentally widen the mirror into an
+    /// "accept anything" table or break the drop path for every OTHER unmirrored column.
+    #[test]
+    fn an_unmirrored_key_is_still_silently_dropped() {
+        let (_dir, conn) = temp_conn();
+        let spec = schema::spec_for(Entity::Ticket);
+        let table_columns = columns(&conn, "tickets").unwrap();
+        assert!(
+            !table_columns.iter().any(|c| c == "totally_unmirrored_future_field"),
+            "fixture bug: this column must not exist for the test to mean anything"
+        );
+
+        let row = json!({
+            "id": 503,
+            "ticket_number": "T-0503",
+            "subject": "x",
+            "priority": "high",
+            "status": "open",
+            "totally_unmirrored_future_field": "server can add this anytime",
+            "sync_version": 1,
+        });
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let mut id_map = IdMap::new();
+        // Must not error: an unrecognised column is dropped, never rejected.
+        let outcome = upsert_row(&tx, spec, &row, &mut id_map, &table_columns).unwrap();
+        tx.commit().unwrap();
+
+        assert_eq!(outcome, UpsertOutcome::Written);
+
+        let ticket_number: String = conn
+            .query_row(
+                "SELECT ticket_number FROM tickets WHERE server_id = 503",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(ticket_number, "T-0503", "the rest of the row must still write normally");
+    }
+}

@@ -1265,4 +1265,43 @@ mod tests {
         let out = restrict(&payload, &["title".into(), "amount".into()]);
         assert_eq!(out, serde_json::json!({"title": "t", "amount": 1}));
     }
+
+    /// `settings()` is the symmetric read for `update_settings`'s write (defter O8): the getter
+    /// used to not exist, and the desktop `StorageSettings` screen prefilled `retention_days`
+    /// from a `localStorage` mirror as a result. `tests/retention_storage.rs::settings_are_persisted`
+    /// already proves the value survives an engine restart; this proves the getter needs no
+    /// restart at all — it reads whatever `update_settings` just wrote, in the same session.
+    #[tokio::test]
+    async fn settings_reflects_a_write_without_a_restart() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cfg = SyncConfig::new(
+            url::Url::parse("http://127.0.0.1/api/").expect("url"),
+            dir.path().join("syncra.db"),
+        );
+        let engine = SyncEngine::open_ephemeral(cfg)
+            .await
+            .expect("open ephemeral engine");
+
+        assert_eq!(
+            engine.settings(),
+            DesktopSettings::default(),
+            "a fresh engine reads back the constructor defaults"
+        );
+
+        let written = DesktopSettings {
+            retention_days: 90,
+            max_db_size_mb: 250,
+            max_outbox: 1200,
+            clipboard_capture: false,
+        };
+        engine
+            .update_settings(written.clone())
+            .expect("update_settings");
+
+        assert_eq!(
+            engine.settings(),
+            written,
+            "the getter must read back exactly what update_settings just wrote"
+        );
+    }
 }

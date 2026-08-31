@@ -30,6 +30,7 @@ import * as priceLists from '../features/price-lists/api/priceListsApi'
 import * as exchange from '../features/exchange/api/exchangeRatesApi'
 import * as savedViews from '../features/saved-views/api/savedViewsApi'
 import * as users from '../features/users/api/usersApi'
+import type { BoardFilters, BoardResponse, DealCard, MoveDealPayload } from '../features/deals/types'
 import type { AppNotification, ConnState, Platform, RealtimeChannel } from './types'
 
 // `platform/web.ts` is the declared single source for the API base URL and Reverb connection
@@ -57,6 +58,36 @@ const http: Platform['http'] = {
 }
 
 // ------------------------------------------------------------------------------------------------
+// The kanban board is the one pair with no plain function to delegate to.
+//
+// `boardApi.ts` now reads through `getPlatform().data.deals.board/move`, so a delegation back
+// into that module would recurse. The two requests were therefore MOVED here verbatim — same
+// endpoints, same query parameter names (`per_stage`, `filter[...]`), same response unwrapping
+// — and nothing about the web's behaviour changes.
+//
+// `filters.q`/`from`/`to` keep their `|| undefined`: axios omits an `undefined` param but sends
+// an empty string, and `filter[q]=` is a `''` the backend would validate as a real filter.
+// ------------------------------------------------------------------------------------------------
+async function fetchBoard(filters: BoardFilters): Promise<BoardResponse> {
+  const { data } = await api.get<BoardResponse>('/api/deals/board', {
+    params: {
+      per_stage: filters.per_stage,
+      'filter[q]': filters.q || undefined,
+      'filter[owner_id]': filters.owner_id,
+      'filter[company_id]': filters.company_id,
+      'filter[from]': filters.from || undefined,
+      'filter[to]': filters.to || undefined,
+    },
+  })
+  return data
+}
+
+async function moveDeal(dealId: number, payload: MoveDealPayload): Promise<DealCard> {
+  const { data } = await api.patch<{ data: DealCard }>(`/api/deals/${dealId}/move`, payload)
+  return data.data
+}
+
+// ------------------------------------------------------------------------------------------------
 // DataSource — the web implementation is pure delegation to the plain functions each feature's api
 // module already exports (`docs/DESKTOP-ARCHITECTURE.md` §3.4 / KARAR A19). Every member is an
 // arrow wrapper rather than a bare function reference on purpose: the shared hooks now import
@@ -73,6 +104,8 @@ const data: Platform['data'] = {
     update: (id, payload) => deals.updateDealRequest(id, payload),
     delete: (id) => deals.deleteDealRequest(id),
     assign: (id, ownerId) => deals.assignDealRequest(id, ownerId),
+    board: (filters) => fetchBoard(filters),
+    move: (id, payload) => moveDeal(id, payload),
   },
   contacts: {
     list: (query) => contacts.fetchContacts(query),

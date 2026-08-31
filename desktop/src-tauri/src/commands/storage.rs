@@ -29,6 +29,16 @@ pub fn update_settings(state: State<'_, AppState>, settings: DesktopSettings) ->
         .map_err(CommandError::from)
 }
 
+/// Read back the settings the engine actually has persisted (`SyncEngine::settings`) — the
+/// symmetric read for `update_settings`'s write. Named `storage_settings`, not `settings`, for
+/// the same reason `storage_stats` is not `stats`: `generate_handler!` registers by function
+/// name, so the module prefix has to live in the name itself (`SYNCDESKTOP.md` §6.2 pattern,
+/// ledger O5).
+#[tauri::command]
+pub fn storage_settings(state: State<'_, AppState>) -> DesktopSettings {
+    state.engine.settings()
+}
+
 /// Wipe the local mirror and the file cache, **keeping the session**
 /// (`docs/DESKTOP-ARCHITECTURE.md` §5.2: "Lokal DB + dosya cache silme").
 ///

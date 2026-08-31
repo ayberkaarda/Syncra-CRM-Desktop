@@ -63,7 +63,7 @@ const CONTRACT = {
     'bootstrap',
     'handle_realtime',
   ],
-  storage: ['storage_stats', 'update_settings', 'clear_local'],
+  storage: ['storage_stats', 'update_settings', 'storage_settings', 'clear_local'],
   files: ['cache_quote_pdf', 'open_cached', 'attach_from_paths', 'screenshot_to_ticket'],
   os: ['set_badge', 'register_hotkey', 'set_autostart', 'notify'],
 }
