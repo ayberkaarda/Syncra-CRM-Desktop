@@ -51,6 +51,9 @@ async fn a_401_raises_auth_lost_and_preserves_the_outbox() {
 }
 
 /// §5.5: a login by a *different* user wipes the local database.
+///
+/// O67: the wipe is a privacy boundary, not just a row count reset — user A's cached quote
+/// PDFs must not still be readable on disk once user B has logged in on the same machine.
 #[tokio::test]
 async fn a_different_user_login_wipes_the_local_database() {
     let h = Harness::start().await;
@@ -78,6 +81,13 @@ async fn a_different_user_login_wipes_the_local_database() {
     assert_eq!(h.row_count(Entity::Company), 2);
     assert_eq!(h.engine.status().pending, 1);
 
+    // A's cached quote PDF, recorded in the ledger like a real cache write would.
+    let blob = write_blob(&h, "quote-44-1.pdf");
+    h.engine
+        .record_cached_file("quote_pdf", "44-1", &blob, 4096)
+        .expect("record cached file");
+    assert!(blob.exists(), "the fixture must actually write the file");
+
     h.login_as(2, "second@example.com").await;
 
     assert_eq!(
@@ -89,6 +99,11 @@ async fn a_different_user_login_wipes_the_local_database() {
         h.engine.status().pending,
         0,
         "the previous user's outbox goes with the wipe"
+    );
+    assert!(
+        !blob.exists(),
+        "O67: a different-user login must remove the previous user's cached blobs, not just \
+         the ledger rows that named them"
     );
 }
 
@@ -114,6 +129,9 @@ async fn the_same_user_logging_back_in_keeps_the_outbox() {
 }
 
 /// `logout` refuses to throw away unpushed work unless it is forced.
+///
+/// O67: a forced logout is one of the three wipe paths (`sync/mod.rs:397`), so it must clear
+/// the cached blobs on disk along with the rows that name them.
 #[tokio::test]
 async fn logout_refuses_while_mutations_are_pending() {
     let h = Harness::start().await;
@@ -133,9 +151,20 @@ async fn logout_refuses_while_mutations_are_pending() {
     );
     assert_eq!(h.engine.status().pending, 1);
 
+    let blob = write_blob(&h, "quote-1-1.pdf");
+    h.engine
+        .record_cached_file("quote_pdf", "1-1", &blob, 4096)
+        .expect("record cached file");
+    assert!(blob.exists(), "the fixture must actually write the file");
+
     assert_eq!(h.engine.logout(true).await.unwrap(), LogoutOutcome::Wiped);
     assert_eq!(h.row_count(Entity::Company), 0);
     assert!(h.engine.session().is_none());
+    assert!(
+        !blob.exists(),
+        "O67: a forced logout must remove cached blobs, not just the ledger rows that named \
+         them"
+    );
 }
 
 /// §4.4: a protocol version the client does not implement stops the engine.

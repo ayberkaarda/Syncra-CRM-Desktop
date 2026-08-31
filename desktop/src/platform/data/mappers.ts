@@ -37,6 +37,7 @@ import type { Company, ContactSummary } from '@/features/companies/types'
 import type { Contact } from '@/features/contacts/types'
 import type { Deal, DealStatus, PipelineStage } from '@/features/deals/types'
 import type { Lead, LeadSource, LeadStatus } from '@/features/leads/types'
+import { resolveNotificationText } from '@/features/notifications/notificationText'
 import type { Notification, NotificationType } from '@/features/notifications/types'
 import type { PriceList, PriceListItem } from '@/features/price-lists/types'
 import type { Product } from '@/features/products/types'
@@ -726,22 +727,26 @@ export function mapMessage(row: LocalRow, users: RefIndex): Message {
  * `client_id` **is** the id (protocol §6.1 P12: `notifications.id` is already a UUID), which
  * is why this is the one mapper that does not call `rowId`.
  *
- * ⚠️ **Known gap.** `title`/`body` are rendered by the server from `data.title_key` +
- * `data.params` using Laravel's PHP translation catalogue (`NotificationText::resolve`), which
- * the desktop does not have — the frontend's i18n namespaces are a different catalogue. Rows
- * written before that change carry plain `title`/`body` and render correctly; newer rows fall
- * back to the raw key, which identifies the notification but is not a sentence. Closing this
- * needs the server to include the rendered text in the pull payload (or to publish the keys);
- * it is recorded rather than papered over with an invented string.
+ * `title`/`body` used to fall back straight to the raw `title_key`/`body_key` string when
+ * `data.title`/`data.body` were absent (defter O61 / B3) — every key-mode row (all 12 types as
+ * of Phase 14 / Track D) showed something like `notifications.deal_assigned.title` in the
+ * notification list instead of a sentence. `resolveNotificationText()`
+ * (`@/features/notifications/notificationText`) fixes the resolution order — key + params first,
+ * plain `title`/`body` only as the legacy fallback — and is the one place this logic lives; see
+ * that module's docblock for why the desktop needs its own resolution step at all (the web never
+ * does: `NotificationResource` resolves server-side) and for the current content gap (the
+ * sentence catalogue itself is not yet in `frontend/src/i18n/**`, so an unresolved key degrades
+ * to a generic translated label today rather than a raw key).
  */
 export function mapNotification(row: LocalRow): Notification {
   const data = (row.data && typeof row.data === 'object' ? row.data : {}) as Record<string, unknown>
   const meta = data.meta && typeof data.meta === 'object' ? (data.meta as Record<string, unknown>) : {}
+  const resolved = resolveNotificationText(data)
   return {
     id: rowClientId(row),
     type: (str(data.type) ?? '') as NotificationType,
-    title: str(data.title) ?? str(data.title_key) ?? '',
-    body: str(data.body) ?? str(data.body_key) ?? '',
+    title: resolved.title,
+    body: resolved.body,
     link: str(data.link) ?? '',
     meta,
     read_at: str(row.read_at),

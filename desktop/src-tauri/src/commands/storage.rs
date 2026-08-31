@@ -1,5 +1,7 @@
 //! `storage::*` — retention settings and local storage accounting (`SYNCDESKTOP.md` §6.2).
 
+use std::path::Path;
+
 use tauri::State;
 
 use syncra_sync::db;
@@ -54,6 +56,18 @@ pub fn storage_settings(state: State<'_, AppState>) -> DesktopSettings {
 /// Known gap (see the phase report): the live engine's cached `SyncStatus` (`pending`,
 /// `conflicts`) is not recomputed by this call, because `SyncEngine::refresh_status` is
 /// private. It self-heals on the next `mutate`/`sync_now`.
+///
+/// Second known gap, not fixed here: `db::wipe` only clears the `cached_files` *rows* — it has
+/// no filesystem access and cannot touch the blobs those rows pointed at. This command closes
+/// that gap for itself by clearing `state.cache_dir`'s contents right after (below), but the
+/// crate's *own* internal wipe on a different-user login (§5.5 — inside `SyncEngine::login`,
+/// not reachable from this module) has the identical gap and nothing here calls it: that path
+/// runs entirely inside the engine, with no hook for the shell to clear the cache dir alongside
+/// it. Concretely, user A's cached quote PDFs and queued attachments can still be sitting under
+/// `$APPDATA/syncra/cache` after user B logs in on the same machine. Fixing that needs either a
+/// new engine event this shell can react to, or a crate-side cache-dir hook — an API change,
+/// not a shell-side one, so it is out of scope this turn and is flagged here rather than
+/// silently left unmentioned.
 #[tauri::command]
 pub fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
     let key = SystemKeyStore
@@ -67,17 +81,123 @@ pub fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
     db::wipe(&conn).map_err(CommandError::from)?;
     drop(conn);
 
-    if state.cache_dir.exists() {
-        std::fs::remove_dir_all(&state.cache_dir).map_err(|e| {
-            CommandError::new("VALIDATION_ERROR", format!("cannot clear cache directory: {e}"))
-        })?;
-    }
-    std::fs::create_dir_all(&state.cache_dir).map_err(|e| {
-        CommandError::new(
-            "VALIDATION_ERROR",
-            format!("cannot recreate cache directory: {e}"),
-        )
-    })?;
+    clear_cache_dir_contents(&state.cache_dir);
 
     Ok(())
+}
+
+/// Delete everything **inside** `cache_dir`, without deleting `cache_dir` itself.
+///
+/// `db::wipe` (above) only clears the `cached_files` ledger rows; this is the other half —
+/// removing the quote PDFs and queued attachments those rows (and the offline attachment queue)
+/// actually point at, so a local wipe empties the disk, not just the database.
+///
+/// Best-effort by design, not `Result`-returning: the local database has *already* been wiped
+/// by the time this runs, and there is no way back from that, so a single locked file (say, a
+/// cached PDF the OS's default viewer still has open from `commands::files::open_cached`) must
+/// not turn an otherwise-successful wipe into a reported failure that leaves the caller unsure
+/// whether the (already irreversible) database wipe went through. Each entry is removed
+/// independently; a failure is logged and the rest of the directory is still cleared.
+fn clear_cache_dir_contents(cache_dir: &Path) {
+    let entries = match std::fs::read_dir(cache_dir) {
+        Ok(entries) => entries,
+        Err(error) => {
+            // `NotFound` means there was never anything to clear (no cache write has happened
+            // yet) — not worth a log line. Anything else is unexpected and worth one.
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(
+                    %error,
+                    path = %cache_dir.display(),
+                    "clear_local: cannot read cache directory"
+                );
+            }
+            return;
+        }
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let result = match entry.file_type() {
+            Ok(file_type) if file_type.is_dir() => std::fs::remove_dir_all(&path),
+            _ => std::fs::remove_file(&path),
+        };
+        if let Err(error) = result {
+            tracing::warn!(%error, path = %path.display(), "clear_local: cannot remove cached entry");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    /// A throwaway directory under the OS temp dir, removed on drop — same pattern
+    /// `commands::files`'s test module uses.
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!("syncra-storage-test-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&path).expect("temp dir");
+            TempDir(path)
+        }
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// The cache directory survives; every quote PDF, sub-directory and loose file under it
+    /// does not.
+    #[test]
+    fn clear_cache_dir_contents_empties_the_directory_but_keeps_it() {
+        let temp = TempDir::new();
+        let cache = temp.path().join("cache");
+        std::fs::create_dir_all(cache.join("quotes")).expect("quotes subdir");
+        std::fs::write(cache.join("quotes").join("42-3.pdf"), b"%PDF").expect("pdf");
+        std::fs::create_dir_all(cache.join("attachments")).expect("attachments subdir");
+        std::fs::write(cache.join("attachments").join("staged.bin"), b"x").expect("staged file");
+        std::fs::write(cache.join("loose.tmp"), b"y").expect("loose file");
+
+        clear_cache_dir_contents(&cache);
+
+        assert!(cache.is_dir(), "the cache directory itself must survive");
+        assert_eq!(
+            std::fs::read_dir(&cache).expect("read_dir").count(),
+            0,
+            "every entry inside it must be gone"
+        );
+    }
+
+    /// A cache directory that was never created (no cache write has happened yet) is a silent
+    /// no-op: nothing to clear, and nothing is created either.
+    #[test]
+    fn clear_cache_dir_contents_on_a_missing_directory_is_a_no_op() {
+        let temp = TempDir::new();
+        let missing = temp.path().join("never-created");
+
+        clear_cache_dir_contents(&missing);
+
+        assert!(!missing.exists());
+    }
+
+    /// An already-empty cache directory stays exactly that.
+    #[test]
+    fn clear_cache_dir_contents_on_an_empty_directory_is_a_no_op() {
+        let temp = TempDir::new();
+        let cache = temp.path().join("cache");
+        std::fs::create_dir_all(&cache).expect("cache dir");
+
+        clear_cache_dir_contents(&cache);
+
+        assert!(cache.is_dir());
+        assert_eq!(std::fs::read_dir(&cache).expect("read_dir").count(), 0);
+    }
 }

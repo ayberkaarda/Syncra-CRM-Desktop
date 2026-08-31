@@ -18,7 +18,9 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
 
-import { mapTicket } from './mappers'
+import i18n from '@/i18n'
+
+import { mapNotification, mapTicket } from './mappers'
 import { EMPTY_REFS } from './refs'
 import type { LocalRow } from './engine'
 import type { TicketRefs } from './mappers'
@@ -155,5 +157,117 @@ describe('mapTicket — SLA field consumption (KARAR A26)', () => {
 
     assert.equal(pending.sla_paused, true)
     assert.equal(open.sla_paused, false)
+  })
+})
+
+/**
+ * `mapNotification` — defter O61 / finding B3.
+ *
+ * `title`/`body` used to fall back straight to the raw `title_key`/`body_key` (e.g.
+ * `notifications.deal_assigned.title`), because the frontend's i18n catalogue is a different
+ * tree from the Laravel one the server resolves against — see `resolveNotificationText()`'s
+ * docblock (`frontend/src/features/notifications/notificationText.ts`) for the full picture,
+ * including why the real 4-language sentence catalogue does not exist yet and is out of this
+ * task's scope (`frontend/src/i18n/**`). These tests inject a small fake `notifications` bundle
+ * via `i18n.addResourceBundle` — the same shape (namespace `notifications`, `{{param}}`
+ * interpolation) that follow-up catalogue would use — to prove the RESOLUTION MECHANISM (key
+ * lookup, param interpolation, `_at` date formatting, fallback chain) is correct independent of
+ * whether that catalogue has shipped.
+ */
+describe('mapNotification — title_key/body_key resolution (defter O61 / B3)', () => {
+  function notificationRow(data: Record<string, unknown>, overrides: Partial<LocalRow> = {}): LocalRow {
+    return {
+      client_id: 'notif-1',
+      data,
+      read_at: null,
+      created_at: '2026-08-30T12:00:00Z',
+      ...overrides,
+    }
+  }
+
+  it('POSITIVE: a key-mode row (title_key/body_key + params) resolves to translated, interpolated text', () => {
+    i18n.addResourceBundle(
+      'tr',
+      'notifications',
+      {
+        deal_assigned: {
+          title: 'Size bir fırsat atandı',
+          body: '{{subject}} — {{amount}}',
+        },
+      },
+      true,
+      true
+    )
+
+    const row = notificationRow({
+      type: 'deal.assigned',
+      title_key: 'notifications.deal_assigned.title',
+      body_key: 'notifications.deal_assigned.body',
+      params: { subject: 'Acme A.Ş.', amount: '₺12.500,00' },
+      link: '/deals/42',
+      meta: { deal_id: 42 },
+    })
+
+    const notification = mapNotification(row)
+
+    assert.equal(notification.title, 'Size bir fırsat atandı')
+    assert.equal(notification.body, 'Acme A.Ş. — ₺12.500,00')
+    // Never the raw key — that is exactly the bug this closes.
+    assert.notEqual(notification.title, 'notifications.deal_assigned.title')
+  })
+
+  it('POSITIVE: a `_at`-suffixed param is reformatted at read time, not passed through as raw ISO-8601', () => {
+    i18n.addResourceBundle(
+      'tr',
+      'notifications',
+      {
+        task_assigned: {
+          body_with_due: '{{title}} — vade {{due_at}}',
+        },
+      },
+      true,
+      true
+    )
+
+    const row = notificationRow({
+      type: 'task.assigned',
+      title_key: 'notifications.task_assigned.title', // unresolved on purpose; only body_key is under test here
+      body_key: 'notifications.task_assigned.body_with_due',
+      params: { title: 'Sözleşmeyi gönder', due_at: '2026-09-05T14:30:00Z' },
+    })
+
+    const notification = mapNotification(row)
+
+    assert.ok(!notification.body.includes('2026-09-05T14:30:00Z'), 'the raw ISO string must not leak through')
+    assert.ok(notification.body.startsWith('Sözleşmeyi gönder — vade '), notification.body)
+  })
+
+  it('NEGATIVE CONTROL 1: an unresolved key falls back to a generic translated label, never the raw key', () => {
+    const row = notificationRow({
+      type: 'deal.assigned',
+      title_key: 'notifications.made_up_future_type.title',
+      body_key: 'notifications.made_up_future_type.body',
+      params: { subject: 'Acme A.Ş.' },
+    })
+
+    const notification = mapNotification(row)
+
+    assert.notEqual(notification.title, 'notifications.made_up_future_type.title')
+    assert.notEqual(notification.body, 'notifications.made_up_future_type.body')
+    // `desktop:entities.notification` (tr) — already-shipped, already-translated, generic.
+    assert.equal(notification.title, 'Bildirim')
+  })
+
+  it('NEGATIVE CONTROL 2: a legacy plain-text row (no title_key) is unaffected — no regression', () => {
+    const row = notificationRow({
+      type: 'deal.assigned',
+      title: 'A deal was assigned to you',
+      body: 'Acme Inc — $12,500.00',
+    })
+
+    const notification = mapNotification(row)
+
+    assert.equal(notification.title, 'A deal was assigned to you')
+    assert.equal(notification.body, 'Acme Inc — $12,500.00')
   })
 })

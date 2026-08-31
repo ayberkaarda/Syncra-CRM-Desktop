@@ -5,7 +5,9 @@ mod common;
 
 use common::*;
 use serde_json::json;
-use syncra_sync::{Entity, LocalMutation, NamedQuery, QueryParams, RealtimeEvent};
+use syncra_sync::{
+    DesktopSettings, Entity, LocalMutation, NamedQuery, QueryParams, RealtimeEvent, SyncError,
+};
 use uuid::Uuid;
 
 /// Coming back online is a trigger: the background loop wakes without waiting out the
@@ -403,5 +405,85 @@ async fn concurrent_sync_rounds_coalesce() {
     assert!(
         pull_requests(&h.server).await.len() <= 2,
         "a coalesced trigger must not multiply round-trips"
+    );
+}
+
+// -------------------------------------------------------------------------------------------
+// Teardown (defter C1) — `SyncEngine::shutdown`.
+// -------------------------------------------------------------------------------------------
+
+/// The engine runs in WAL mode (K3), so an unclean exit leaves `-wal` and `-shm` next to the
+/// database with the tail of the last transactions still in them. `shutdown` checkpoints with
+/// `TRUNCATE` and closes the connection, which is what lets SQLite delete both siblings.
+///
+/// The second call must be a no-op rather than a panic or an error: the shell will end up
+/// calling this from a tray Quit *and* from the window teardown path, and a teardown that only
+/// tolerates being run once is a teardown that crashes on exit.
+#[tokio::test]
+async fn shutdown_checkpoints_the_wal_and_is_idempotent() {
+    let h = Harness::start().await;
+
+    // Give the WAL something to hold: settings are a plain local write, no server needed.
+    h.engine
+        .update_settings(DesktopSettings {
+            retention_days: 45,
+            ..Default::default()
+        })
+        .unwrap();
+
+    let wal = h.db_path.with_extension("db-wal");
+    let shm = h.db_path.with_extension("db-shm");
+    let wal_before = std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0);
+    assert!(
+        wal_before > 0,
+        "the fixture must leave a non-empty -wal at {}, or this test proves nothing",
+        wal.display()
+    );
+
+    h.engine.shutdown().expect("first shutdown");
+
+    let wal_after = std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0);
+    assert!(
+        wal_after == 0,
+        "-wal must be truncated or removed by shutdown; it is still {wal_after} bytes"
+    );
+    assert!(
+        !shm.exists(),
+        "closing the last connection must take the -shm sibling with it"
+    );
+
+    // Idempotent.
+    h.engine.shutdown().expect("second shutdown must be a no-op");
+
+    // And the connection really is closed: further database work fails cleanly instead of
+    // running against a half-torn-down handle.
+    let err = h.engine.run_retention().unwrap_err();
+    assert!(matches!(err, SyncError::Validation(_)), "got {err:?}");
+}
+
+/// `shutdown` is the half of teardown that `SyncScheduler::stop` is not: it makes the
+/// background loop return by itself, without the shell having to hold on to the scheduler
+/// handle. The loop is finished when its task completes.
+#[tokio::test]
+async fn shutdown_ends_the_background_loop_without_the_scheduler_handle() {
+    let h = Harness::start().await;
+    h.login().await;
+    mount_empty_pull(&h.server).await;
+    mount_push_responder(&h.server, ApplyAll).await;
+
+    let scheduler = h.engine.start_background_sync();
+
+    h.engine.shutdown().expect("shutdown");
+
+    // The loop leaves at its next check point, which is at most one round away.
+    let finished = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while !scheduler.is_finished() {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    assert!(
+        finished.is_ok(),
+        "the background loop must return once shutdown raises the stop flag"
     );
 }

@@ -1,11 +1,18 @@
 {
-  "breadcrumb": { "home": "Accueil", "notifications": "Notifications" },
+  "breadcrumb": {
+    "home": "Accueil",
+    "notifications": "Notifications"
+  },
   "page": {
     "title": "Notifications",
     "subtitle_one": "{{count}} notification",
     "subtitle_other": "{{count}} notifications",
     "markAllRead": "Tout marquer comme lu",
-    "tabs": { "all": "Toutes", "unread": "Non lues", "read": "Lues" },
+    "tabs": {
+      "all": "Toutes",
+      "unread": "Non lues",
+      "read": "Lues"
+    },
     "emptyTitle": "Aucune notification",
     "emptyUnread": "Vous n'avez aucune notification non lue.",
     "emptyAll": "Vous n'avez encore reçu aucune notification.",
@@ -30,5 +37,65 @@
   "toast": {
     "markAllReadSuccess": "Toutes les notifications ont été marquées comme lues.",
     "deleteSuccess": "Notification supprimée."
+  },
+  "deal_assigned": {
+    "title": "Une opportunité vous a été attribuée",
+    "body": "{{subject}} — {{amount}}"
+  },
+  "task_assigned": {
+    "title": "Une tâche vous a été attribuée",
+    "body": "{{title}}",
+    "body_with_due": "{{title}} — échéance {{due_at}}"
+  },
+  "chat_mention": {
+    "title": "{{actor}} vous a mentionné",
+    "title_in_group": "{{actor}} vous a mentionné ({{conversation}})",
+    "title_unknown_actor": "Vous avez été mentionné",
+    "title_unknown_actor_in_group": "Vous avez été mentionné ({{conversation}})",
+    "body": "{{excerpt}}",
+    "body_no_content": "A partagé un fichier."
+  },
+  "deal_lost": {
+    "title": "Opportunité perdue",
+    "body": "{{subject}} — {{amount}}"
+  },
+  "deal_won": {
+    "title": "Opportunité gagnée",
+    "body": "{{subject}} — {{amount}}"
+  },
+  "deal_stage_changed": {
+    "title": "Étape de l'opportunité modifiée",
+    "body": "{{deal_title}} — désormais à l'étape « {{stage}} »"
+  },
+  "lead_assigned": {
+    "title": "Un prospect vous a été attribué",
+    "body": "{{person}}",
+    "body_with_company": "{{person}} — {{company}}"
+  },
+  "quote_status_changed": {
+    "title": "Statut du devis modifié",
+    "body_draft": "{{quote_number}} — Brouillon",
+    "body_sent": "{{quote_number}} — Envoyé",
+    "body_accepted": "{{quote_number}} — Accepté",
+    "body_rejected": "{{quote_number}} — Refusé",
+    "body_expired": "{{quote_number}} — Expiré",
+    "body_default": "{{quote_number}} — {{status}}"
+  },
+  "task_reminder": {
+    "title": "Rappel de tâche",
+    "body": "{{title}}",
+    "body_with_label": "{{title}} — {{label}}"
+  },
+  "ticket_assigned": {
+    "title": "Un ticket de support vous a été attribué",
+    "body": "{{ticket_number}} — {{subject}}"
+  },
+  "ticket_sla_breached": {
+    "title": "SLA dépassé",
+    "body": "{{ticket_number}} — {{subject}} ({{minutes}} min de retard)"
+  },
+  "ticket_sla_warning": {
+    "title": "Délai SLA presque écoulé",
+    "body": "{{ticket_number}} — {{subject}} (~{{minutes}} min restantes)"
   }
 }

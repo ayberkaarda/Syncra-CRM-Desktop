@@ -18,6 +18,7 @@ use crate::{conflicts, retention};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use rusqlite::Connection;
 use serde_json::Value as Json;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
@@ -88,14 +89,32 @@ pub struct SyncScheduler {
 impl SyncScheduler {
     /// Stop the background loop. In-flight requests are cancelled at the next await point;
     /// the outbox is durable, so nothing is lost.
+    ///
+    /// This is the *task* half of teardown and it is not the same thing as
+    /// [`SyncEngine::shutdown`], which is the *engine* half: aborting the task says nothing
+    /// about the database, and the engine — which never owned this handle — cannot abort the
+    /// task. See [`SyncEngine::shutdown`] for how the two fit together.
     pub fn stop(self) {
         self.handle.abort();
+    }
+
+    /// Whether the loop has returned.
+    ///
+    /// The counterpart of the cooperative stop in [`SyncEngine::shutdown`]: that one asks the
+    /// loop to leave and returns immediately, so a shell that wants to be sure no round is
+    /// still running before it exits the process needs a way to see that it has. `stop` needs
+    /// no such thing -- an abort is done when it returns.
+    pub fn is_finished(&self) -> bool {
+        self.handle.is_finished()
     }
 }
 
 struct Inner {
     cfg: RwLock<SyncConfig>,
-    db: Mutex<Connection>,
+    /// `None` once [`SyncEngine::shutdown`] has closed the connection. Every reader goes
+    /// through [`SyncEngine::db`], which is what turns "the engine is shut down" into a clean
+    /// error instead of a panic or a query against a half-torn-down handle.
+    db: Mutex<Option<Connection>>,
     keystore: KeyStoreHandle,
     transport: Transport,
     events: broadcast::Sender<EngineEvent>,
@@ -109,6 +128,71 @@ struct Inner {
     halted: AtomicBool,
     /// Signalled by the triggers of §5.5 so the background loop wakes early.
     wake: tokio::sync::Notify,
+    /// Set by [`SyncEngine::shutdown`]; the background loop reads it and returns.
+    stopping: AtomicBool,
+}
+
+/// Borrow of the open database connection, handed out by [`SyncEngine::db`].
+///
+/// Exists only so the `Option` that [`SyncEngine::shutdown`] empties stays an implementation
+/// detail: every call site keeps writing `conn.execute(...)` and `&conn`, and the `None` case
+/// is turned into an error once, at the point the lock is taken.
+struct DbGuard<'a>(std::sync::MutexGuard<'a, Option<Connection>>);
+
+impl std::ops::Deref for DbGuard<'_> {
+    type Target = Connection;
+
+    fn deref(&self) -> &Connection {
+        // `SyncEngine::db` only constructs a guard after checking `is_some`, and the lock is
+        // held for the guard's whole life, so nothing can take the connection out from under
+        // it.
+        self.0.as_ref().expect("DbGuard holds an open connection")
+    }
+}
+
+/// Wipe the local database **and** the cached blobs its ledger names (defter O67).
+///
+/// [`db::wipe`] clears the `cached_files` **rows**; it has no file system access and never
+/// had. That left the three wipe paths below deleting the ledger while the quote PDFs it
+/// described stayed on disk — so after user A logged out and user B logged in on the same
+/// machine, A's quote PDFs were still readable under the cache directory (§5.5). A wipe that
+/// is a privacy boundary has to free the disk, not just the table.
+///
+/// # Why the engine is allowed to touch these files at all
+///
+/// The rule "the engine owns the ledger, the shell owns the blob" is already, deliberately,
+/// not absolute: [`retention::trim_cached_files`] unlinks blobs on LRU eviction, because a
+/// 100 MB ceiling that deletes only rows frees nothing. Deleting the row and leaving the file
+/// on a wipe was the same asymmetry with a worse consequence. What stays true is the narrower
+/// rule this keeps: the engine deletes **only what it was told about**. It walks
+/// `cached_files` and unlinks those paths; a stray file nobody recorded is not its business,
+/// and the cache *directory* is never handed to it to empty wholesale.
+///
+/// # Order: blobs first, rows second
+///
+/// The same ordering, and the same reason, as the eviction path. If the process dies between
+/// the two halves, blobs-first leaves rows pointing at files that are gone — which the next
+/// pass or the next wipe cleans up harmlessly. Rows-first would leave the opposite: files on
+/// disk that nothing in the database names any more, unreachable by every later sweep, which
+/// is precisely the leak this closes made permanent.
+///
+/// A blob that cannot be unlinked (open in a PDF viewer, most plausibly on Windows) is logged
+/// and skipped rather than aborting: the wipe of the database must still happen — it is the
+/// half that carries the session, the mirror and the outbox — and a locked file must not turn
+/// a security-relevant wipe into an error the caller may retry forever.
+fn wipe_local(conn: &Connection) -> Result<()> {
+    let paths: Vec<String> = {
+        let mut stmt =
+            conn.prepare("SELECT DISTINCT path FROM cached_files WHERE path IS NOT NULL")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        rows.filter_map(std::result::Result::ok).collect()
+    };
+    for path in &paths {
+        if !retention::remove_cached_blob(Path::new(path)) {
+            tracing::warn!(path = %path, "wipe could not remove a cached blob");
+        }
+    }
+    db::wipe(conn)
 }
 
 /// The offline-first sync engine.
@@ -164,7 +248,7 @@ impl SyncEngine {
 
         let inner = Arc::new(Inner {
             cfg: RwLock::new(cfg),
-            db: Mutex::new(conn),
+            db: Mutex::new(Some(conn)),
             keystore,
             transport,
             events,
@@ -175,6 +259,7 @@ impl SyncEngine {
             round: tokio::sync::Mutex::new(()),
             halted: AtomicBool::new(false),
             wake: tokio::sync::Notify::new(),
+            stopping: AtomicBool::new(false),
         });
 
         let engine = SyncEngine { inner };
@@ -222,7 +307,8 @@ impl SyncEngine {
             let previous = db::get_setting(&conn, SETTING_USER_ID)?
                 .and_then(|raw| raw.parse::<i64>().ok());
             if previous.is_some_and(|prev| prev != user_id) {
-                db::wipe(&conn)?;
+                // O67: the previous user's cached PDFs go with their rows, not after them.
+                wipe_local(&conn)?;
             }
             db::put_setting(&conn, SETTING_USER_ID, &user_id.to_string())?;
             db::put_setting(&conn, SETTING_SESSION, &serde_json::to_string(&session)?)?;
@@ -308,7 +394,7 @@ impl SyncEngine {
         self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
         {
             let conn = self.db()?;
-            db::wipe(&conn)?;
+            wipe_local(&conn)?;
             db::put_setting(&conn, SETTING_USER_ID, "")?;
             db::put_setting(&conn, SETTING_SESSION, "")?;
         }
@@ -854,23 +940,17 @@ impl SyncEngine {
     /// Current local storage accounting.
     pub fn storage_stats(&self) -> StorageStats {
         let cfg = self.inner.cfg.read().unwrap().clone();
-        match self.inner.db.lock() {
-            Ok(conn) => retention::storage_stats(&conn, &cfg).unwrap_or(StorageStats {
-                db_bytes: 0,
-                max_db_bytes: cfg.max_db_bytes(),
-                cached_file_bytes: 0,
-                outbox_count: 0,
-                max_outbox: cfg.max_outbox,
-                db_usage_percent: 0,
-            }),
-            Err(_) => StorageStats {
-                db_bytes: 0,
-                max_db_bytes: cfg.max_db_bytes(),
-                cached_file_bytes: 0,
-                outbox_count: 0,
-                max_outbox: cfg.max_outbox,
-                db_usage_percent: 0,
-            },
+        let empty = StorageStats {
+            db_bytes: 0,
+            max_db_bytes: cfg.max_db_bytes(),
+            cached_file_bytes: 0,
+            outbox_count: 0,
+            max_outbox: cfg.max_outbox,
+            db_usage_percent: 0,
+        };
+        match self.db() {
+            Ok(conn) => retention::storage_stats(&conn, &cfg).unwrap_or(empty),
+            Err(_) => empty,
         }
     }
 
@@ -890,15 +970,47 @@ impl SyncEngine {
         Ok(())
     }
 
-    /// Read back the persisted settings.
+    /// Read back the effective settings.
+    ///
+    /// The three numeric ceilings come from the in-memory `cfg`, not from re-parsing the
+    /// persisted row: `cfg` is the clamped value the engine is actually enforcing right now
+    /// (what `run_retention` sweeps by, what blocks the outbox), and `open_with_keystore`
+    /// already seeds it from the persisted row -- with the same clamp -- at startup. Under
+    /// normal operation the two agree; where they could not (a row hand-edited or written by
+    /// a future build with a looser clamp), `cfg` is the one that cannot silently diverge from
+    /// what is actually being enforced, so it wins.
+    ///
+    /// `clipboard_capture` and `close_to_tray` have no counterpart in `cfg` -- `SyncConfig`
+    /// never grew fields for them -- so they come from the persisted `SETTING_PREFERENCES`
+    /// row. No row yet (first run) or a row that fails to parse (corrupt or from an
+    /// incompatible build) both fall back to [`DesktopSettings::default`] rather than
+    /// panicking; that default is also what a caller gets from a freshly opened engine before
+    /// [`SyncEngine::update_settings`] has ever run.
     pub fn settings(&self) -> DesktopSettings {
-        let cfg = self.inner.cfg.read().unwrap();
+        let (retention_days, max_db_size_mb, max_outbox) = {
+            let cfg = self.inner.cfg.read().unwrap();
+            (cfg.retention_days, cfg.max_db_size_mb, cfg.max_outbox)
+        };
+        let persisted = self.persisted_settings();
         DesktopSettings {
-            retention_days: cfg.retention_days,
-            max_db_size_mb: cfg.max_db_size_mb,
-            max_outbox: cfg.max_outbox,
-            clipboard_capture: false,
+            retention_days,
+            max_db_size_mb,
+            max_outbox,
+            clipboard_capture: persisted.clipboard_capture,
+            close_to_tray: persisted.close_to_tray,
         }
+    }
+
+    /// The `SETTING_PREFERENCES` row, deserialized -- or [`DesktopSettings::default`] if there
+    /// is no row, the engine is shut down, or the row does not parse. Every failure mode folds
+    /// into the same safe fallback rather than surfacing three different ways to not have an
+    /// answer.
+    fn persisted_settings(&self) -> DesktopSettings {
+        self.db()
+            .ok()
+            .and_then(|conn| db::get_setting(&conn, SETTING_PREFERENCES).ok().flatten())
+            .and_then(|raw| serde_json::from_str::<DesktopSettings>(&raw).ok())
+            .unwrap_or_default()
     }
 
     /// Run retention now, regardless of when it last ran.
@@ -910,6 +1022,109 @@ impl SyncEngine {
         drop(conn);
         self.refresh_status()?;
         Ok(report)
+    }
+
+    /// Account for a file the shell has just written into the on-disk cache (§5.6/3).
+    ///
+    /// The engine owns the *ledger*, not the blob: the caller writes the file and then says
+    /// what it wrote, and from that moment the file is subject to the 100 MB LRU ceiling —
+    /// [`SyncEngine::run_retention`] may evict it, deleting the blob along with the row. A
+    /// file that is never recorded is never counted by [`SyncEngine::storage_stats`] and never
+    /// evicted, so it grows the user's disk usage invisibly and forever; that is precisely the
+    /// gap this method closes.
+    ///
+    /// `kind` and `reference` are the caller's own naming of what the file *is*
+    /// (`"quote_pdf"` and `"42-3"`, say). Together they are the identity: recording the same
+    /// pair again refreshes the existing row rather than adding a second one, and
+    /// [`SyncEngine::touch_cached_file`] names the row with them too. `path` must be absolute.
+    ///
+    /// Returns the row's deterministic id ([`retention::cached_file_id`]).
+    pub fn record_cached_file(
+        &self,
+        kind: &str,
+        reference: &str,
+        path: &Path,
+        bytes: u64,
+    ) -> Result<Uuid> {
+        let conn = self.db()?;
+        retention::record_cached_file(&conn, kind, reference, path, bytes)
+    }
+
+    /// Mark a cached file as used *now*, so the LRU ordering reflects reads and not only
+    /// downloads (§5.6/3).
+    ///
+    /// Call it on every cache **hit**. Without it `fetched_at` never moves after the first
+    /// download, and eviction picks the oldest file rather than the coldest one — the quote a
+    /// user opens every morning would be thrown away before one they downloaded once and
+    /// never looked at again.
+    ///
+    /// Returns `false` when no row is recorded under `(kind, reference)`; the caller should
+    /// then [`SyncEngine::record_cached_file`] the blob it just served instead of leaving it
+    /// unaccounted.
+    pub fn touch_cached_file(&self, kind: &str, reference: &str) -> Result<bool> {
+        let conn = self.db()?;
+        retention::touch_cached_file(&conn, kind, reference)
+    }
+
+    // -----------------------------------------------------------------------
+    // Teardown
+    // -----------------------------------------------------------------------
+
+    /// Stop background work and close the local database cleanly.
+    ///
+    /// # Relationship to [`SyncScheduler::stop`]
+    ///
+    /// They are two halves of one teardown, not two ways of doing the same thing:
+    ///
+    /// * [`SyncScheduler::stop`] is the *task* half. It consumes the handle
+    ///   `start_background_sync` returned and aborts the tokio task, which is the only way to
+    ///   cut short a round that is currently awaiting an HTTP response. It knows nothing about
+    ///   the database.
+    /// * `shutdown` is the *engine* half. It cannot abort that task — the engine never owned
+    ///   its handle, the shell does — so it raises the `stopping` flag the loop checks and
+    ///   wakes it, which makes the loop return on its own at its next check point; then it
+    ///   checkpoints and closes the connection.
+    ///
+    /// So `shutdown` alone is enough for an orderly exit (the loop leaves by itself, and any
+    /// round still in flight fails harmlessly on the closed connection — the outbox is
+    /// durable, nothing is lost). Calling `SyncScheduler::stop` as well is the belt-and-braces
+    /// version: it returns the moment the task is aborted instead of at its next check point.
+    /// A shell holding both should stop the scheduler first and then shut the engine down.
+    ///
+    /// # Why the checkpoint
+    ///
+    /// The connection runs in WAL mode (K3), so the file is always accompanied by `-wal` and
+    /// `-shm` siblings. `PRAGMA wal_checkpoint(TRUNCATE)` folds the log back into the main
+    /// database and truncates it to zero, and closing the connection then lets SQLite delete
+    /// both siblings. Without this the process exits leaving a non-empty `-wal` behind: the
+    /// data is not lost — the next open replays it — but the next open *has* to replay it, and
+    /// a backup or a file copy taken between the two runs is incomplete without the sibling.
+    ///
+    /// Idempotent: the second and every later call is a no-op that returns `Ok(())`.
+    pub fn shutdown(&self) -> Result<()> {
+        self.inner.stopping.store(true, Ordering::SeqCst);
+        // `notify_one`, not `notify_waiters`: if the loop happens to be between iterations
+        // rather than parked in its `select!`, `notify_one` leaves a permit that the next
+        // `notified()` consumes immediately, so the loop still leaves at once instead of
+        // sleeping out a backoff delay first.
+        self.inner.wake.notify_one();
+
+        let mut guard = self
+            .inner
+            .db
+            .lock()
+            .map_err(|_| SyncError::Validation("database mutex poisoned".into()))?;
+        let Some(conn) = guard.take() else {
+            return Ok(());
+        };
+
+        // A failed checkpoint must not keep the connection open: the WAL stays on disk and
+        // the next open replays it, which is a slower start and not a loss. Closing is the
+        // part that matters, so it happens either way.
+        let checkpointed = conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()));
+        conn.close().map_err(|(_, err)| SyncError::Db(err))?;
+        checkpointed?;
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -960,6 +1175,11 @@ impl SyncEngine {
             let mut failures: u32 = 0;
             let mut probes: u32 = 0;
             loop {
+                // `SyncEngine::shutdown` raises this; leaving here rather than being aborted
+                // means the loop never dies in the middle of a database write.
+                if engine.inner.stopping.load(Ordering::SeqCst) {
+                    break;
+                }
                 let delay = if engine.inner.halted.load(Ordering::SeqCst) {
                     // A halted engine speaks a protocol this build does not implement. It
                     // does not probe either: reaching the server changes nothing until the
@@ -1046,11 +1266,16 @@ impl SyncEngine {
         true
     }
 
-    fn db(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
-        self.inner
+    fn db(&self) -> Result<DbGuard<'_>> {
+        let guard = self
+            .inner
             .db
             .lock()
-            .map_err(|_| SyncError::Validation("database mutex poisoned".into()))
+            .map_err(|_| SyncError::Validation("database mutex poisoned".into()))?;
+        if guard.is_none() {
+            return Err(SyncError::Validation("engine has been shut down".into()));
+        }
+        Ok(DbGuard(guard))
     }
 
     fn token(&self) -> Option<String> {
@@ -1184,7 +1409,7 @@ impl SyncEngine {
         self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
         {
             let conn = self.db()?;
-            db::wipe(&conn)?;
+            wipe_local(&conn)?;
             db::put_setting(&conn, SETTING_USER_ID, "")?;
             db::put_setting(&conn, SETTING_SESSION, "")?;
         }
@@ -1377,6 +1602,7 @@ mod tests {
             max_db_size_mb: 250,
             max_outbox: 1200,
             clipboard_capture: false,
+            close_to_tray: true,
         };
         engine
             .update_settings(written.clone())

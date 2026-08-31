@@ -3,6 +3,7 @@
 //! (`docs/DESKTOP-SYNC-PROTOCOL.md` §5, `SYNCDESKTOP.md` §5.2 — not touched from this crate).
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use syncra_sync::{sync::SyncScheduler, SyncConfig, SyncEngine, SyncError};
 use tauri::{AppHandle, Manager, Runtime};
@@ -29,23 +30,32 @@ pub struct AppState {
     /// [`crate::commands::storage::clear_local`], which opens a second, short-lived
     /// connection to it (see that command's doc comment for why).
     pub db_path: PathBuf,
-    /// `$APPDATA/syncra/cache` — quote PDF cache etc. (`files::*`, F5-5 scope; not written to
-    /// this turn). Cleared by [`crate::commands::storage::clear_local`].
+    /// `$APPDATA/syncra/cache` — quote PDF cache and the offline attachment queue.
+    /// Written by `commands::files` since F5-5; `commands::files::open_cached` will only
+    /// open a file that canonicalises to somewhere under this directory.
     pub cache_dir: PathBuf,
     /// Shared HTTP client for the account-management calls the engine does not own
     /// (`auth::list_devices`, `auth::revoke_device`).
     pub http: reqwest::Client,
-    /// Keeps the background sync loop alive for the life of the process (O46 B2).
+    /// The background sync loop's handle — and, by being empty or full, the pause flag
+    /// (O46 B2, F5-1).
     ///
-    /// Nothing reads this field yet. `SyncScheduler` wraps the loop's `JoinHandle`, and
-    /// dropping a `JoinHandle` detaches the task rather than cancelling it, so the loop would
-    /// survive being thrown away — but only as something nothing can stop or account for.
-    /// Parking it in the managed state ties its lifetime to the app's explicitly and keeps
-    /// [`SyncScheduler::stop`] reachable for a later phase that wants to pause syncing.
+    /// `SyncScheduler` wraps the loop's `JoinHandle`, and dropping a `JoinHandle` detaches the
+    /// task rather than cancelling it, so the loop would survive being thrown away — but only
+    /// as something nothing can stop or account for. Parking it here ties its lifetime to the
+    /// app's explicitly.
     ///
-    /// `stop` consumes `self`, so calling it means owning the state; no command does, and the
-    /// loop is meant to run until the process exits.
-    pub scheduler: Option<SyncScheduler>,
+    /// **Why a `Mutex<Option<_>>` rather than a plain `Option`:** `SyncScheduler::stop`
+    /// consumes `self`, and everything that needs to call it reaches the state through
+    /// `tauri::State<'_, AppState>` / `AppHandle::state`, which hand out a shared reference.
+    /// Two callers need exactly that: `tray::toggle_pause` ("Pause sync" is stopping the loop,
+    /// resuming is starting a new one) and the `RunEvent::Exit` teardown in `crate::run`.
+    /// `Some` therefore means "the loop is running", `None` means "paused, or torn down" —
+    /// one source of truth instead of a boolean that can disagree with the handle.
+    ///
+    /// The lock is only ever held across synchronous work (`abort`, `tokio::spawn`), never
+    /// across an `.await`, so a `std::sync::Mutex` is the right one.
+    pub scheduler: Mutex<Option<SyncScheduler>>,
 }
 
 impl AppState {
@@ -84,7 +94,7 @@ impl AppState {
             http: reqwest::Client::new(),
             // Started in `.setup()` rather than here: the engine event bridge has to exist
             // before the loop can emit anything, or the first `TablesChanged` is lost.
-            scheduler: None,
+            scheduler: Mutex::new(None),
         })
     }
 }

@@ -63,6 +63,31 @@ const SOURCE_ROOTS = [
   { label: 'desktop/src', dir: DESKTOP_SRC },
 ];
 
+/**
+ * `namespace:prefix` pairs whose real consumer this script structurally cannot see, because it
+ * only scans `.ts`/`.tsx` — treated exactly like a matched template prefix (`isUsed()` below),
+ * so a key here is never reported as dead.
+ *
+ * This is a liveness OWNERSHIP TRANSFER, not a blind spot: each entry names, in its own comment,
+ * the thing that actually keeps it honest — if that key stops being used there, THAT check goes
+ * red, not this one silently. An allowlist entry with no such real check backing it would be a
+ * blind spot; this is the narrow exception where one already exists elsewhere.
+ */
+const EXTERNAL_CONSUMER_PREFIXES = [
+  {
+    ns: 'desktop',
+    prefix: 'tray.',
+    // Real owner of "is this key still used": `desktop/src-tauri/src/tray.rs` `include_str!`s
+    // all four `desktop.json` files and reads `tray.*` through a bespoke serde-ish parser keyed
+    // by Rust field names, not string literals — teaching THIS script to parse Rust for one
+    // small, stable key family would be over-engineering for what it buys. Instead,
+    // `tray.rs`'s `every_language_parses` test loads all four catalogues and asserts every
+    // `tray.*` key `tray.rs` reads resolves in each one; delete or rename a key out from under
+    // it and `cargo test` fails immediately. So this allowlist entry does not stop anyone from
+    // finding out a `tray.*` key died — it points at the check that actually can.
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Dictionary
 // ---------------------------------------------------------------------------
@@ -333,6 +358,10 @@ function main() {
       for (const ref of hoisted.prefixRefs) addTo(usedPrefixes, ref.ns, ref.prefix);
     }
   }
+
+  // Seed the external-consumer allowlist as if it were a matched template prefix — same
+  // shape (`ns -> Set<prefix>`), so `isUsed()` needs no separate code path for it.
+  for (const { ns, prefix } of EXTERNAL_CONSUMER_PREFIXES) addTo(usedPrefixes, ns, prefix);
 
   /** A dictionary key counts as reachable if some call site names it, or indexes into it. */
   function isUsed(ns, key) {

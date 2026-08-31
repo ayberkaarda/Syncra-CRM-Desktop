@@ -1,13 +1,11 @@
 //! Syncra desktop shell — a thin Tauri 2 adapter over the [`syncra_sync`] engine.
 //!
-//! This turn (`SYNCDESKTOP.md` §10 F3, W2-b) wires the plugin set (§6.1), the command
-//! surface (§6.2), capabilities and CSP (§6.3, `docs/DESKTOP-ARCHITECTURE.md` §5.5), and the
-//! close-to-tray window default (D-8). It deliberately stops short of:
+//! This file wires the plugin set (§6.1), the command surface (§6.2), capabilities and CSP
+//! (§6.3, `docs/DESKTOP-ARCHITECTURE.md` §5.5), the close-to-tray window default (D-8), the
+//! tray icon (§6.4, `crate::tray`) and the `RunEvent::Exit` teardown ([`teardown`]).
 //!
-//! * `files::*` / `os::*` commands (F5 scope),
-//! * the tray icon itself and the OS network-event listener (F5-1),
-//! * anything under `desktop/src/**` or `desktop/vite.desktop.config.ts` (a different strand
-//!   is landing `frontend/src/platform`; W1 §E.3 keeps this turn off those files).
+//! Still out of scope here: the OS network-event listener, and anything under
+//! `desktop/src/**` or `desktop/vite.desktop.config.ts`.
 //!
 //! [`syncra_sync::SyncEngine::start_background_sync`] used to be on that list, deferred to
 //! F5-1 alongside the tray. O46 moved it here: `SYNCDESKTOP.md` §5.5 opens its trigger list
@@ -20,8 +18,10 @@ mod commands;
 mod events;
 mod logging;
 mod state;
+mod tray;
 
-use tauri::{Manager, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, Runtime, WindowEvent};
+use tauri_plugin_window_state::StateFlags;
 
 use state::AppState;
 
@@ -68,7 +68,21 @@ pub fn run() {
     }
 
     builder
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // `StateFlags::default()` is `all()`, which includes `VISIBLE` — and that one is a
+        // trap here. D-8 hides the main window instead of closing it, and the plugin writes
+        // its file at exactly one moment, `RunEvent::Exit`; a user who closed to tray and then
+        // quit therefore saves `visible: false`, and `restore_state` skips its `show()` on the
+        // next launch. Today that is invisible because `tauri.conf.json` still declares
+        // `"visible": true`, so the window is shown by the config regardless. The day that
+        // flips — a window created hidden so it can be positioned first, say — the app opens
+        // to nothing at all, with no error anywhere. Geometry is worth persisting; a
+        // visibility bit that D-8 guarantees will read `false` is not.
+        // Locked by `tray::tests::window_state_does_not_persist_visibility`.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
@@ -112,10 +126,22 @@ pub fn run() {
             commands::storage::update_settings,
             commands::storage::storage_settings,
             commands::storage::clear_local,
+            // F5-5 / F5-8 (§6.4 drag-drop, PDF cache, screenshot). All file IO lives in Rust:
+            // `Shell::open`'s Rust path passes no scope, so `open_cached` does its own
+            // containment check rather than leaning on `shell:allow-open` (which only binds JS).
+            commands::files::cache_quote_pdf,
+            commands::files::open_cached,
+            commands::files::attach_from_paths,
+            commands::files::screenshot_to_ticket,
+            // F5-2 / F5-7 (§6.4 notification, badge, autostart). `register_hotkey` is NOT here:
+            // it belongs to F5-3 (quick capture), which needs setup-time registration.
+            commands::os::notify,
+            commands::os::set_badge,
+            commands::os::set_autostart,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
-            let mut state = tauri::async_runtime::block_on(AppState::init(&handle))?;
+            let state = tauri::async_runtime::block_on(AppState::init(&handle))?;
             // Must start before the state is moved into the app: `TablesChanged` is what
             // keeps the UI's query cache honest, and an event emitted before the bridge
             // exists is simply lost (the channel only replays to live subscribers).
@@ -138,15 +164,29 @@ pub fn run() {
             // needs it (a "pause sync" setting, a teardown path).
             let scheduler =
                 tauri::async_runtime::block_on(async { state.engine.start_background_sync() });
-            state.scheduler = Some(scheduler);
+            *state
+                .scheduler
+                .lock()
+                .expect("a freshly built AppState's scheduler mutex cannot be poisoned") =
+                Some(scheduler);
 
             app.manage(state);
 
-            // D-8: closing the main window minimizes to tray by default (the tray icon
-            // itself is F5-1; until it exists this just hides the window — the shell comes
-            // back via the `single-instance` second-instance handler above, or the OS
-            // taskbar entry for the still-running process). Not yet backed by a setting —
-            // that UI is F4/F5 scope.
+            // §6.4: the tray icon, its five item menu and the status picture. After
+            // `app.manage`, because the initial icon, tooltip and language are all read out of
+            // `AppState`.
+            tray::init(&handle)?;
+
+            // D-8: closing the main window minimizes to tray. The window comes back from the
+            // tray's `Open` item, a double click on the icon, or the `single-instance`
+            // second-instance handler above; leaving is the tray's `Quit`, which is the only
+            // caller of `AppHandle::exit` in the app.
+            //
+            // §6.4 writes this as "(ayar)" — a setting. There is none yet, and inventing one
+            // here would mean a `DesktopSettings` field (the engine's API is frozen) plus a
+            // toggle in `desktop/src` (another strand's files). The i18n copy for it already
+            // exists as `desktop.window.closeToTray.*`; the wiring is an open question for the
+            // phase that owns the settings screen.
             if let Some(window) = app.get_webview_window("main") {
                 let hide_target = window.clone();
                 window.on_window_event(move |event| {
@@ -159,6 +199,57 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running the Syncra desktop application");
+        .build(tauri::generate_context!())
+        .expect("error while building the Syncra desktop application")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                teardown(app);
+            }
+        });
+}
+
+/// Orderly shutdown, run once from `RunEvent::Exit`.
+///
+/// **Reaching this function at all is the point of the tray's Quit item.** D-8 turns every
+/// `CloseRequested` into `prevent_close()` + `hide()`, so before F5-1 the only way to end the
+/// process was to kill it — and a killed process emits no `Exit`. Three things were silently
+/// skipped on every single run:
+///
+/// * `tauri-plugin-window-state` writes `.window-state.json` **only** from its own
+///   `RunEvent::Exit` hook, so the file had never once been written on a developer machine;
+/// * the background sync loop was never stopped;
+/// * the SQLCipher connection was never checkpointed, leaving a `-wal`/`-shm` pair behind
+///   after every run (measured: a 4.2 MB `-wal` next to a 659 KB database).
+///
+/// # Why `stop()` before `shutdown()`
+///
+/// They are the two halves of one teardown and `SyncEngine::shutdown`'s own doc comment fixes
+/// the order. `SyncScheduler::stop` is the **task** half: it aborts the tokio task, which is
+/// the only way to cut short a round currently awaiting an HTTP response, and it knows nothing
+/// about the database. `SyncEngine::shutdown` is the **engine** half: it cannot abort that
+/// task (the engine never owned the handle), so it raises the `stopping` flag the loop checks,
+/// then checkpoints the WAL with `PRAGMA wal_checkpoint(TRUNCATE)` and closes the connection.
+///
+/// Stopping first means the checkpoint does not race a round that is still writing; doing it
+/// the other way round would leave `shutdown` waiting for a loop that only leaves at its next
+/// check point. Both are idempotent, and neither loses data — the outbox is durable.
+fn teardown<R: Runtime>(app: &AppHandle<R>) {
+    let Some(state) = app.try_state::<AppState>() else {
+        // `.setup()` failed before the state was managed; there is nothing to tear down.
+        return;
+    };
+
+    match state.scheduler.lock() {
+        Ok(mut slot) => {
+            // `None` here is not an error: "Pause sync" leaves the slot empty on purpose.
+            if let Some(scheduler) = slot.take() {
+                scheduler.stop();
+            }
+        }
+        Err(error) => tracing::warn!(%error, "scheduler mutex poisoned; skipping the task half"),
+    }
+
+    if let Err(error) = state.engine.shutdown() {
+        tracing::warn!(%error, "the sync engine did not shut down cleanly");
+    }
 }

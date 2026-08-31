@@ -45,3 +45,15 @@ Schedule::command('tickets:scan-sla')->everyFiveMinutes();
  * bile (bu zamanlayıcı + elle çalıştırma) veri bozulmaz/duplike olmaz.
  */
 Schedule::command('exchange:fetch-tcmb')->dailyAt('16:00');
+
+/*
+ * D4: `attachments:prune-orphans` — App\Console\Commands\PruneOrphanAttachments
+ * dokümanında açıklanan sahipsiz ek sızıntısını (upload başarılı, sonraki
+ * mesaj POST'u hiç gitmez → attachable_id NULL kalır) günlük olarak temizler.
+ * Komutun KENDİ varsayılan saklama eşiği (config('chat.attachments.
+ * orphan_retention_hours'), varsayılan 24 saat) burada EZİLMEZ — `--hours`
+ * verilmez. `--force`: zamanlanmış çalışma non-interactive'dir, onay
+ * isteyemez. 03:47: diğer günlük işlerle (03:17, 16:00) çakışmayan, düz
+ * olmayan bir dakika.
+ */
+Schedule::command('attachments:prune-orphans --force')->dailyAt('03:47');

@@ -12,6 +12,8 @@
 
 pub mod auth;
 pub mod data;
+pub mod files;
+pub mod os;
 pub mod storage;
 pub mod sync;
 

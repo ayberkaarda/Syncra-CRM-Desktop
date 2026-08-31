@@ -46,6 +46,16 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // deliberate reject probe. A key can exist in all four locales and still be dead if its code is
   // not listed here; that asymmetry is exactly what open item O55 proposes to check statically.
   'INVALID_MUTATION',
+  // F5-2/7: an OS-side failure the user did not cause — autostart refused by the system, the
+  // toast could not be handed to the notification centre, the main window is gone.
+  // `VALIDATION_ERROR` would be the wrong shape: nothing the user typed is at fault.
+  'OS_ERROR',
+  // F5-5 (§6.4 drag-drop): per-file refusals from `commands::files`. They are separate codes
+  // because a bulk drop reports one verdict per file, and "invalid" would not tell the user
+  // which file, why, or whether it is their file or their device that is the problem.
+  'FILE_TYPE_REJECTED',
+  'FILE_TOO_LARGE',
+  'QUEUE_FULL',
 ])
 
 /** `HTTP_403` and friends — `commands/auth.rs` builds this shape from any non-2xx response. */

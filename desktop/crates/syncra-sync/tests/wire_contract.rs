@@ -186,6 +186,13 @@ async fn a_deactivated_account_wipes_the_local_database() {
     assert_eq!(h.row_count(Entity::Company), 2);
     assert_eq!(h.engine.status().pending, 1);
 
+    // O67: the deactivated user's cached quote PDF, recorded like a real cache write would be.
+    let blob = write_blob(&h, "quote-44-1.pdf");
+    h.engine
+        .record_cached_file("quote_pdf", "44-1", &blob, 4096)
+        .expect("record cached file");
+    assert!(blob.exists(), "the fixture must actually write the file");
+
     // From here on the account is gone. `EnsureUserIsActive` sits in front of every sync
     // route, so all three answer the same way — and the bootstrap above warmed the manifest
     // cache, which means the push is what actually goes out first.
@@ -213,6 +220,11 @@ async fn a_deactivated_account_wipes_the_local_database() {
         "A25: the outbox goes with the wipe (unlike a bare 401)"
     );
     assert!(h.engine.session().is_none());
+    assert!(
+        !blob.exists(),
+        "O67: USER_DEACTIVATED must remove cached blobs, not just the ledger rows that named \
+         them"
+    );
 
     let mut saw_auth_lost = false;
     while let Ok(event) = events.try_recv() {

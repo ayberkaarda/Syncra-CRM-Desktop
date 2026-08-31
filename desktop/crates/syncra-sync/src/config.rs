@@ -73,6 +73,18 @@ pub struct DesktopSettings {
     /// Clipboard capture is opt-in and off by default (K10).
     #[serde(default)]
     pub clipboard_capture: bool,
+    /// Whether closing the window sends the app to the tray instead of quitting it (§6.4).
+    ///
+    /// Defaults to `true` because that is today's fixed, non-configurable behavior: a
+    /// settings row persisted before this field existed has no opinion on it, and
+    /// deserializing that row must not silently switch an existing user over to "close
+    /// quits" the first time this build reads their settings back.
+    #[serde(default = "default_close_to_tray")]
+    pub close_to_tray: bool,
+}
+
+fn default_close_to_tray() -> bool {
+    true
 }
 
 impl Default for DesktopSettings {
@@ -82,6 +94,7 @@ impl Default for DesktopSettings {
             max_db_size_mb: DEFAULT_MAX_DB_SIZE_MB,
             max_outbox: DEFAULT_MAX_OUTBOX,
             clipboard_capture: false,
+            close_to_tray: default_close_to_tray(),
         }
     }
 }
@@ -134,5 +147,54 @@ impl Default for ServerPolicy {
             push_bytes_max: default_push_bytes_max(),
             pull_limit_max: default_pull_limit_max(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A settings row persisted by a build before `close_to_tray` existed has no such key.
+    /// Deserializing it must fill in `true` -- today's fixed behavior -- not `false`, which
+    /// `#[serde(default)]` (rather than `#[serde(default = "default_close_to_tray")]`) would
+    /// have produced and which would have silently switched every existing user's window
+    /// close over to "quit" the first time this build read their settings back.
+    #[test]
+    fn deserializing_a_settings_row_without_close_to_tray_defaults_it_to_true() {
+        let old_row = serde_json::json!({
+            "retention_days": 30,
+            "max_db_size_mb": 500,
+            "max_outbox": 5000,
+        });
+
+        let settings: DesktopSettings =
+            serde_json::from_value(old_row).expect("old rows must still deserialize");
+
+        assert!(
+            settings.close_to_tray,
+            "a settings row from before this field existed must read back as close-to-tray"
+        );
+        // `clipboard_capture` predates `close_to_tray` too and already defaults via
+        // `#[serde(default)]`; pinning it here documents that the two fields default
+        // independently and to different values.
+        assert!(!settings.clipboard_capture);
+    }
+
+    /// The constructor default and the serde default must agree, or a freshly constructed
+    /// `DesktopSettings` and one round-tripped through a row that only carries the
+    /// pre-`clipboard_capture` fields would disagree on what "no explicit setting" means.
+    /// (`retention_days`, `max_db_size_mb` and `max_outbox` have no serde default of their
+    /// own -- they are required -- so this pins the numeric defaults explicitly rather than
+    /// omitting them.)
+    #[test]
+    fn the_serde_default_matches_the_constructor_default() {
+        let old_row = serde_json::json!({
+            "retention_days": DEFAULT_RETENTION_DAYS,
+            "max_db_size_mb": DEFAULT_MAX_DB_SIZE_MB,
+            "max_outbox": DEFAULT_MAX_OUTBOX,
+        });
+        let from_old_row: DesktopSettings =
+            serde_json::from_value(old_row).expect("the omitted fields must default");
+        assert_eq!(from_old_row, DesktopSettings::default());
     }
 }

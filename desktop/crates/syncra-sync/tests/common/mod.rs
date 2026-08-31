@@ -150,6 +150,20 @@ impl Harness {
     }
 }
 
+/// Write a small real file under the temp dir of the harness and return its absolute path.
+///
+/// Shared by every suite that has to prove a cached blob is actually gone from disk (defter
+/// O67's wipe tests, and the retention/eviction ones), so the "what does a recorded file look
+/// like on disk" fixture is defined once.
+pub fn write_blob(h: &Harness, name: &str) -> std::path::PathBuf {
+    let dir = h.dir.path().join("cache");
+    std::fs::create_dir_all(&dir).expect("cache dir");
+    let path = dir.join(name);
+    std::fs::write(&path, b"%PDF-1.7 fake").expect("write blob");
+    assert!(path.is_absolute(), "the engine only accepts absolute paths");
+    path
+}
+
 /// A named query that simply lists an entity, for assertions.
 pub fn list_query(entity: Entity) -> syncra_sync::NamedQuery {
     use syncra_sync::NamedQuery as Q;

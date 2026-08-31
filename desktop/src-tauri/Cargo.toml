@@ -40,13 +40,29 @@ tauri-plugin-log = "2"
 # `SYNCDESKTOP.md` K11).
 tauri-plugin-single-instance = "2"
 
+# Screen capture for `commands::files::screenshot_to_ticket` (`SYNCDESKTOP.md` §6.4 item 8 names
+# this crate by name: "hotkey → bölge seç (`screenshots` crate) → PNG → ticket attach"). It also
+# re-exports the `image` crate it encodes with (`screenshots::image`), so no second image
+# dependency is declared here. NOTE for the phase report: 0.8.10 is the last release and its own
+# description says "Move to XCap"; on Linux it pulls `dbus` (vendored), `xcb` and `libwayshot`,
+# which the CI image must have headers for.
+screenshots = "0.8"
+# `screenshots` returns `anyhow::Result`; naming the error type is what lets those failures be
+# mapped onto `CommandError` instead of being unwrapped.
+anyhow = "1"
+
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 # Only needed for `auth::list_devices` / `auth::revoke_device`, which are not `SyncEngine`
 # methods (`docs/DESKTOP-ARCHITECTURE.md` §5.2: they map straight to
 # `GET/DELETE /api/me/devices*`). Same feature set as `syncra-sync` to keep one TLS stack.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+# `multipart` is required by `commands::files::attach_from_paths` /`screenshot_to_ticket`:
+# `POST /api/attachments` is a `multipart/form-data` upload with a `file` part
+# (`backend/app/Http/Requests/StoreAttachmentRequest.php` validates `'file' => ['required','file',...]`,
+# which only matches a real uploaded file part). Without the feature `reqwest::multipart` does
+# not exist and there is no other way to reach that endpoint.
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "gzip"] }
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 url = { version = "2", features = ["serde"] }
 thiserror = "1"

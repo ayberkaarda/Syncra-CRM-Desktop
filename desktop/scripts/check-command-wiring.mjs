@@ -77,14 +77,10 @@ const CONTRACT = {
  * from §6.2 has to land here as a deliberate edit rather than pass unnoticed.
  */
 const DEFERRED_COMMANDS = {
-  cache_quote_pdf: 'files::* — F5 scope (commands/mod.rs says so in as many words)',
-  open_cached: 'files::* — F5 scope',
-  attach_from_paths: 'files::* — F5 scope (§6.4 drag-drop)',
-  screenshot_to_ticket: 'files::* — F5 scope (§6.4 screenshot)',
-  set_badge: 'os::* — F5 scope (§6.4 badge)',
-  register_hotkey: 'os::* — F5 scope (§6.4 global hotkey)',
-  set_autostart: 'os::* — F5 scope (§6.4 autostart)',
-  notify: 'os::* — F5 scope (§6.4 native notification)',
+  // Seven of the original eight landed with F5-2/5/7/8 and were removed from this list. Only
+  // the hotkey is still deferred: it is F5-3 (quick capture), and unlike the others it needs
+  // setup-time registration, not just a command body.
+  register_hotkey: 'os::* — F5-3 scope (§6.4 global hotkey; needs setup-time registration)',
 }
 
 /**

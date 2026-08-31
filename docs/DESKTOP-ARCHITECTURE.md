@@ -571,7 +571,21 @@ motor API'si `docs/DESKTOP-SYNC-PROTOCOL.md` §5'tedir.
 | | `clear_local` | Lokal DB + dosya cache silme | motor + FS |
 | `files` | `cache_quote_pdf` | Teklif PDF'ini cache'e indirme | HTTP + FS |
 | | `open_cached` | Cache'lenmiş dosyayı OS ile açma | `shell:open` |
-| | `attach_from_paths` | Drag-drop dosyayı kuyruğa alma | `mutate` |
+| | `attach_from_paths` | Drag-drop dosyayı kuyruğa alma | **kabuk-sahipli dizin** (`mutate` DEĞİL) |
+
+> **DÜZELTME (2026-09-01, F5-5).** Yukarıdaki satır F0'da `mutate` diyordu; **mümkün değil.**
+> `syncra_sync::Entity` içinde `attachment` **yok** (grep 0) — §12/1 `Attachment``ı kasten
+> senkronlanmayan altı entity'den biri sayıyor, dolayısıyla outbox onu taşıyamaz.
+>
+> Gerçekleşen tasarım: kuyruk **kabuk sahipli bir dizindir** —
+> `$APPDATA/syncra/cache/attachments/{uuid}.{ext}` + `{uuid}.json` sidecar (özgün ad, hedef,
+> boyut, zaman). Kullanıcının dosya adı asla yol bileşeni olmaz; bu,
+> `AttachmentUploadService``in sunucuda uyguladığı kuralın aynısıdır.
+>
+> **İkinci düzeltme:** "ticket attach" diye bir uç **yok**. `AttachmentPolicy.php:54`
+> `Message` dışındaki her `attachable_type``ı fail-closed reddediyor. Ekran görüntüsü →
+> ticket üç adıma çözülür: `POST /api/attachments` → `POST /api/conversations/for-record` →
+> `POST /api/conversations/{id}/messages {attachment_id}`.
 | | `screenshot_to_ticket` | Bölge seçimi → PNG → ticket eki | F5-8 |
 | `os` | `set_badge` | Taskbar/dock rozeti | plugin |
 | | `register_hotkey` | Hotkey kaydı + çakışma tespiti | plugin |
