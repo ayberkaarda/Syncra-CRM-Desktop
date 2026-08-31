@@ -3,6 +3,7 @@
 namespace App\Services\Sync;
 
 use App\Models\User;
+use App\Notifications\Support\NotificationText;
 use App\Sync\SyncableRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -175,7 +176,48 @@ class SyncPullService
             return [];
         }
 
+        if ($table === 'notifications') {
+            $rows = $this->renderNotificationText($rows, $user);
+        }
+
         return $this->attachEmbeds($table, $definition, $rows);
+    }
+
+    /**
+     * DESKTOP-ARCHITECTURE.md EK 3, "BACKEND'E DEVREDİLEN İKİ GERÇEK BOŞLUK" #1: KEY-mode rows
+     * (`data.title_key`/`data.body_key`/`data.params`) carry no sentence at all, and the desktop
+     * client has no PHP translation catalogue to turn a key into one - only
+     * `NotificationResource::toArray()` (web) does, via `NotificationText::resolve()`. Without
+     * this step a newly-created key-mode notification would show its raw key on desktop.
+     *
+     * Reuses `NotificationText::resolve()` - the SAME render path `NotificationResource` and
+     * `CrmNotification::toBroadcast()` already call - rather than reimplementing rendering here
+     * (K7). Rendered `title`/`body` are written INTO `data` alongside the untouched
+     * `title_key`/`body_key`/`params`, mirroring `toBroadcast()`'s `array_merge(...)` shape; a
+     * plain-text (pre-Phase-14) row already carries `data.title`/`data.body` and the merge is a
+     * no-op for it. The desktop mapper (`mapNotification()`) already reads `data.title` before
+     * falling back to `data.title_key`, so this alone closes the gap with no client-side change.
+     *
+     * Locale: `SyncScope::applyRowScope()` restricts the `notifications` query to
+     * `notifiable_id = $user->getKey()` (see `SyncScope`), so every row reaching this method
+     * belongs to the very `$user` who is pulling - there is no second recipient to look up.
+     * `$user->locale` is therefore both correct and free of an N+1.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function renderNotificationText(array $rows, User $user): array
+    {
+        foreach ($rows as $index => $row) {
+            $data = json_decode((string) ($row['data'] ?? '{}'), true);
+            $data = is_array($data) ? $data : [];
+
+            $data = array_merge($data, NotificationText::resolve($data, $user->locale));
+
+            $rows[$index]['data'] = json_encode($data);
+        }
+
+        return $rows;
     }
 
     /**

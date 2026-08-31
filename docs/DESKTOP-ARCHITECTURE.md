@@ -1211,3 +1211,85 @@ Bütünlük `desktop/scripts/check-data-wiring.mjs` ile kilitli. Kontrolün ger�
 - **KARAR A11 uygulanmadı:** `bridge/realtime.ts` + Rust `handle_realtime` yok. Desktop şu an web gibi doğrudan Echo'ya abone; realtime olayı motoru tetiklemiyor, mini-pull yapılmıyor.
 - **Gerçek login/uçtan uca akış denenmedi** — backend `:8000`'de ayakta değil.
 - `boardApi` `DataSource` dışında; `deals_board`/`pipeline_stages` varyantları rezerve bekliyor. Board'un adaptöre alınması `frontend/**` dokunuşu gerektiriyor — F4 kararı.
+
+---
+
+# EK 4 — A11, BACKEND TAKİBİ VE THREAT MODEL
+
+## KARAR A11 UYGULANDI — realtime artık motoru tetikliyor
+
+Masaüstünde Echo olayı **doğrudan `invalidateQueries` çağırmıyor**; `invoke('handle_realtime')` ile motora gidiyor, motor mini-pull yapıyor, `TablesChanged` de EK 3'ün `bridge/events.ts` köprüsünden cache'e dönüyor. `desktop/src` genelinde `invalidateQueries` **tek çağrı yerinde** (`bridge/events.ts`) — yapısal kontrol bunu kilitliyor.
+
+`handle_realtime` üç yerde birden kayıtlı ve isim uyuşması statik olarak doğrulanıyor: TS `invoke` adı · Rust `#[tauri::command] fn` · `lib.rs` `generate_handler!`. Bu üçlünün sessizce ayrışması en olası kırılma noktasıydı.
+
+**Kapsanan:** 7 web kanalı → 4'ü motora yönlendirildi, 3'ü gerekçeli UNMAPPED. 15 olay → 12 binding + 3 UNROUTED.
+- `presence-online` — **A11'in tek istisnası**: kalıcı veri değil, ayna tablosu yok.
+- `private-dashboard`, `private-logs` — §8 online-only yüzeyler, çekilecek ayna satırı yok. (`logs` = Spatie audit log; aynalanan `activities` entity'siyle **aynı şey değil** — bu ayrım kodda yorumlu.)
+- `.user.deactivated` UNROUTED — oturum yıkımı, veri değişimi değil; motor 401 → `AuthLost` yolundan öğreniyor.
+
+### AÇIK RİSK — `Echo.leave()` savaşı (mimari, çözümü `frontend/**`'de)
+
+Web hook'ları unmount'ta `echo.leave()` çağırıyor (`useDealRealtime.ts:153`, `useTicketRealtime.ts:131`, `useTaskReminders.ts:72`, `useRealtimeSession.ts:51`, `useNotificationSocket.ts:96`) ve **`leave` referans saymaz** — kanalı ve üzerindeki *tüm* dinleyicileri, köprününki dahil kapatır.
+
+Bugünkü savunma bir **workaround**: köprü 5 sn'de bir kanal nesnesi kimliğini karşılaştırıp yeniden abone oluyor. Boşluk sınırlı — motorun 60 sn'lik döngüsü satırı zaten çekiyor, yani kaçan bir ipucu **geciktirir, kaybettirmez**.
+
+**Kalıcı çözüm bir `frontend/**` kararıdır:** `useDealRealtime`/`useTicketRealtime`/`useTaskReminders`/`useRealtimeSession` `frontend/src/features/chat/hooks/conversationChannel.ts`'in **zaten uyguladığı** referans sayan registry desenine geçirilirse watchdog tamamen gereksizleşir. Ayrı bir tur olarak açık.
+
+### Bilinçli sınır
+`private-conversation.{id}` yalnız **açık odalarda** motora akıyor (attach modu — kanal id'leri chat registry'sinin malı, köprü kapatılmış bir odayı diriltmemeli). Kapalı odaların mesajları `.chat.unread`'den geliyor, ama `.message.read/.delivered` imleç olayları ulaşmıyor → `conversation_user` imleçleri bir sonraki tam pull'a kadar bayat kalabilir.
+
+### ŞARTNAME DÜZELTMESİ
+`SYNCDESKTOP.md` §6.2 komut listesinde **`handle_realtime` yok** — oysa aynı belgenin §5.2'si ve mimari §6.3 bu akışı zorunlu kılıyor. §6.2'ye eklenmeli.
+
+---
+
+## KARAR A25 — 401 ile deaktivasyon aynı olay DEĞİLDİR
+
+`SYNCDESKTOP.md` kendi içinde çelişiyordu (F6-A buldu, teknik lider doğruladı):
+- `:342` ve `:350` → *"401 → AuthLost (**outbox korunur**, aynı user login → devam; farklı user → wipe)"*
+- `:414` (§9/2) → *"Deaktive/silinen kullanıcı → 401 → lokal DB + keychain **tamamen wipe**"*
+
+Crate `sync/mod.rs:1001` §5.5'i uygulamış: token silinir, şifreli DB kalır.
+
+**Karar — ikisi ayrı sinyale bağlanır:**
+
+| Sinyal | Davranış | Gerekçe |
+|---|---|---|
+| **403 `USER_DEACTIVATED`** | **Wipe** — lokal DB + keychain | `EnsureUserIsActive` bunu açıkça döndürüyor: sunucu-bilgili, kesin sinyal. §9/2'nin kastı budur. |
+| **Genel 401** | **Outbox korunur**, `AuthLost`. Aynı kullanıcı geri girerse devam; **farklı kullanıcı → wipe** | Sebebi belirsiz (süresi dolmuş token, sunucu hıçkırığı). Naif "her 401'de wipe" masum kullanıcının bekleyen işini yok eder. |
+
+Şartname bu iki olayı karıştırmıştı; ayrım sinyale bağlanınca §9/2 de §5.5 de sağlanıyor.
+
+**Artık risk (kabul edildi):** silinmiş bir kullanıcının şifreli DB'si diskte kalır — o kullanıcı bir daha giriş yapamaz, veri retention penceresiyle veya farklı kullanıcı girişindeki wipe ile temizlenir. Anahtar o OS hesabının keychain'inde olduğu için erişim aynı OS hesabıyla sınırlıdır (SINIR 3'ün zaten iddia etmediği alan).
+
+---
+
+## KARAR A26 — SLA alanları sunucuda hesaplanıp pull satırına konur
+
+A23 (`null`/`0` dön) geçici bir çözümdü; kalıcı çözüm netleşti.
+
+**Bulgular (F1-B araştırması):** `sla_remaining_seconds`/`sla_total_seconds`/`sla_target_hours` web'de de **fiziksel kolon değil** — `TicketResource` bunları yanıt üretirken `SlaService::totalSeconds/remainingSeconds/targetHoursForTicket` (`app/Services/Tickets/SlaService.php:311-371`) ile hesaplıyor. Gerekli ham kolonlar (`sla_due_at`, `sla_paused_at`, `sla_paused_seconds`, `resolved_at`, `priority`, `status`) `tickets` tablosunda ve pull `SELECT *` çektiği için **zaten satırda**.
+
+**Karar:** sunucu hesaplayıp pull satırına koyar. **Formül istemciye AÇILMAZ.**
+
+`docs/SLA-DESIGN.md` §1 *"geri sayımı her zaman sunucu hesaplar, istemci yalnızca sunucudan aldığı kalan saniyeyi monoton saatle eritir"* diyor. Ham alanlardan istemcide yeniden hesaplamak bunu **ihlal eder**; sunucunun hesapladığı sayıyı pull satırına koymak **etmez** — pull da bir "sunucudan alma" anıdır, istemci sonra §6'daki mevcut "dondur + monoton saatle erit" davranışını uygular.
+
+Yeni migration gerekmiyor. Uygulama sonraki backend turunda; `Ticket::newFromBuilder()` ile hydrate edilen modelin `SlaService`'in beklediği Carbon cast'lerini doğru taşıdığı **uygulama anında doğrulanmalı** (araştırmada kontrol edilmedi).
+
+---
+
+## BACKEND TAKİBİ KAPANDI (F1-B)
+
+- **Bildirim metni:** `SyncPullService::renderNotificationText()` — `NotificationResource`'un kullandığı **aynı** render yolu (`NotificationText::resolve`) yeniden kullanıldı, kopyalanmadı (K7). Locale kaynağı: `SyncScope::applyRowScope()` `notifications`'ı zaten `notifiable_id = $user` ile kısıtlıyor, yani pull eden her zaman satırın sahibi — ikinci sorgu gerekmedi. `title_key`/`params` yerinde kaldı.
+- **`tag_ids` + `tags` varsayımı DOĞRULANDI:** `StoreCompanyRequest`/`UpdateCompanyRequest` `rules()`'ında `tags` yok, Laravel kuralsız fazladan anahtarı `validated()`'dan sessizce düşürüyor — 422 yok, ek tolerans kodu gerekmedi. İki test kilitledi (update testi `tags`'ı `changed_fields`'a da koyup intersect adımını sınadı).
+- Backend testleri: **1402 → 1407**.
+
+---
+
+## THREAT MODEL — `docs/DESKTOP-THREAT-MODEL.md` (F6-A)
+
+19 satırlık STRIDE tablosu, §9'un 10 maddesi tek tek, 8 bulgu (1 ORTA, 3 DÜŞÜK, 4 BİLGİ). Doküman okumakla yetinilmemiş, **canlı kanıt** toplanmış: `$APPDATA` listelenip token/anahtar dosyası olmadığı, `head -c 16 syncra.db | od -c` ile başlığın `SQLite format 3` **olmadığı** gösterilmiş.
+
+**§9 durumu:** madde 1, 3, 4, 7 KAPALI · madde 2 A25 ile kapandı · madde 5, 6 DEĞERLENDİRİLEMEZ-F5 · madde 8 DEĞERLENDİRİLEMEZ-F7 (bugün fail-closed) · madde 9 **AÇIK** · madde 10 bu teslimat.
+
+**§9/9 (tracing PII filtresi) F5'i bekleyemez.** Log plugin'i F3'ten beri **filtresiz DEBUG seviyesinde** diske yazıyor (`lib.rs:78`; canlı `Syncra.log`'da keyring DEBUG satırları var — girdi *adları* görünüyor, sır *değerleri* görünmüyor). Bugün sır sızmıyor ama bunu garanti eden bir katman yok. Bir sonraki turun adayı.

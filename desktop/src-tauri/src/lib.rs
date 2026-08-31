@@ -91,6 +91,7 @@ pub fn run() {
             commands::sync::conflicts,
             commands::sync::resolve_conflict,
             commands::sync::download_archive,
+            commands::sync::handle_realtime,
             commands::storage::stats,
             commands::storage::update_settings,
             commands::storage::clear_local,

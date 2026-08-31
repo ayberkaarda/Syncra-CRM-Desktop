@@ -24,6 +24,12 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// The realtime bridge's own integrity check (KARAR A11). Imported rather than chained in
+// `package.json` so that running THIS file directly — which is what the regression gate in
+// `docs/ENGINEERING-RULES.md` §2 does — still covers it. It runs its checks on import and hands back the two
+// lists; `check:data` prints both reports and fails on either.
+import { runRealtimeWiringCheck } from './check-realtime-wiring.mjs'
+
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DESKTOP = join(HERE, '..')
 const REPO = join(DESKTOP, '..')
@@ -397,14 +403,23 @@ notes.push(`reserved variants           : ${reservedSeen.join(', ') || '-'}`)
 notes.push(`NOT_IMPLEMENTED occurrences : 0`)
 notes.push(`Entity -> queryKey rows     : ${mappedEntities.length} / ${entities.length} entities mapped`)
 
+const realtime = runRealtimeWiringCheck()
+
 console.log('data wiring check')
 console.log('-'.repeat(52))
 for (const note of notes) console.log(note)
 
-if (problems.length > 0) {
+console.log('')
+console.log('realtime wiring check')
+console.log('-'.repeat(52))
+for (const note of realtime.notes) console.log(note)
+
+const allProblems = [...problems, ...realtime.problems]
+
+if (allProblems.length > 0) {
   console.error('')
-  console.error(`FAILED — ${problems.length} problem(s):`)
-  for (const problem of problems) console.error(`  - ${problem}`)
+  console.error(`FAILED — ${allProblems.length} problem(s):`)
+  for (const problem of allProblems) console.error(`  - ${problem}`)
   process.exit(1)
 }
 

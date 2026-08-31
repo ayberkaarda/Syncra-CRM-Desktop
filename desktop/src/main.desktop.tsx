@@ -20,6 +20,7 @@ import { PlatformProvider, setPlatform } from '@/platform'
 import { queryClient } from '@/lib/queryClient'
 import { applyEngineStatus, desktopPlatform, primeDesktopPlatform } from './platform/desktop'
 import { subscribeToEngineEvents } from './bridge/events'
+import { startRealtimeBridge } from './bridge/realtime'
 import App from '@/App'
 
 // Before the first render, and before anything can call `getPlatform()` from a React tree.
@@ -35,6 +36,15 @@ primeDesktopPlatform()
 void subscribeToEngineEvents(queryClient, {
   onStatusChanged: applyEngineStatus,
 })
+
+// The other half of the same rule, for the OTHER event source (KARAR A11). A Reverb frame is
+// translated into a `RealtimeEvent` and handed to the engine, which mini-pulls and emits the
+// `tables_changed` the subscription above is waiting for — the socket never touches the query
+// cache on the desktop. Armed here, before the first render, for exactly the reason above: a
+// frame that arrives while nothing is bound is gone, pusher-js does not replay it. Echo itself
+// only exists after login (`connectEcho()` in `features/auth/hooks/useAuth.ts`), so this call
+// arms the listeners that subscribe the moment it does.
+startRealtimeBridge()
 
 // OPENING GATE — mirrors `frontend/src/main.tsx:19-25` deliberately and must keep mirroring it
 // (KARAR A7). `tr` is eager, `en/de/fr` are lazy chunks; rendering before the selected locale's

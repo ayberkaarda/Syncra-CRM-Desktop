@@ -3,7 +3,7 @@
 use tauri::State;
 use uuid::Uuid;
 
-use syncra_sync::{Conflict, Resolution, SyncReport, SyncStatus};
+use syncra_sync::{Conflict, RealtimeEvent, Resolution, SyncReport, SyncStatus};
 
 use super::{CommandError, CommandResult};
 use crate::state::AppState;
@@ -46,4 +46,25 @@ pub async fn download_archive(state: State<'_, AppState>, extra_days: u32) -> Co
         .download_archive(extra_days)
         .await
         .map_err(CommandError::from)
+}
+
+/// Route one Reverb frame into the engine (`SYNCDESKTOP.md` §5.2, KARAR A11).
+///
+/// The webview never refreshes its own cache from a socket frame. It translates the frame into
+/// a [`RealtimeEvent`] (`desktop/src/bridge/realtime.ts` owns that hand-written table) and hands
+/// it here; the engine pulls just those tables and emits `TablesChanged`, which
+/// `desktop/src/bridge/events.ts` turns into query invalidations. The local mirror therefore
+/// stays the single source the UI reads — a direct invalidation would send the UI to the server
+/// for a row the engine has never seen, which is the offline-first contract broken in one line.
+///
+/// Infallible by design: [`SyncEngine::handle_realtime`](syncra_sync::SyncEngine::handle_realtime)
+/// returns `()`. A hint that arrives while offline, names no granted table, or races a failing
+/// pull is dropped inside the engine — it is a *hint*, and the 60 second loop plus the next
+/// `sync_now` are the guarantees. `CommandResult<()>` is still the return type because an async
+/// command taking `State<'_, _>` must return a `Result` for Tauri to generate the handler.
+#[tauri::command]
+pub async fn handle_realtime(state: State<'_, AppState>, event: RealtimeEvent) -> CommandResult<()> {
+    let engine = state.engine.clone();
+    engine.handle_realtime(event).await;
+    Ok(())
 }

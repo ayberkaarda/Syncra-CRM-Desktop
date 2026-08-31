@@ -14,7 +14,6 @@ import {
   connectEcho,
   disconnectEcho,
   getConnectionState,
-  getEcho,
 } from '@/lib/echo'
 import { api } from '@/lib/axios'
 import { toast } from '@/components/ui'
@@ -24,10 +23,10 @@ import type {
   ConnState,
   OnlineOnlyError,
   Platform,
-  RealtimeChannel,
 } from '@/platform/types'
 
 import { invokeCommand } from '../bridge/invoke'
+import { realtimeChannel, startRealtimeBridge, stopRealtimeBridge } from '../bridge/realtime'
 import { desktopData } from './data'
 import { http } from './http'
 
@@ -129,29 +128,24 @@ const connectivity: Platform['connectivity'] = {
   },
 }
 
-function wrapChannel(name: string): RealtimeChannel {
-  const echoChannel = getEcho()?.channel(name)
-  const wrapped: RealtimeChannel = {
-    listen(event, callback) {
-      echoChannel?.listen(event, callback)
-      return wrapped
-    },
-    stopListening(event) {
-      echoChannel?.stopListening(event)
-      return wrapped
-    },
-  }
-  return wrapped
-}
-
-// Echo runs unchanged, only re-authorised (bearer). KARAR A11 — routing realtime events
-// through `handle_realtime` so the ENGINE, not the UI cache, stays the single source of truth
-// — needs `bridge/realtime.ts` plus a `handle_realtime` command, and is a separate turn by
-// decision. Until then the desktop subscribes exactly the way the web does.
+// Echo runs unchanged, only re-authorised (bearer) — the socket, the reconnect logic and the
+// channel names are the web's. What changed with KARAR A11 is where a frame GOES: not into the
+// query cache but into `bridge/realtime.ts`, which translates it and invokes `handle_realtime`
+// so the ENGINE refreshes the mirror and the cache is invalidated from `TablesChanged`. This
+// module owns none of that mapping; it only makes sure the bridge is armed with the connection
+// lifecycle it already controlled.
 const realtime: Platform['realtime'] = {
-  connect: () => void connectEcho(),
-  disconnect: disconnectEcho,
-  channel: wrapChannel,
+  connect: () => {
+    connectEcho()
+    startRealtimeBridge()
+  },
+  disconnect: () => {
+    // Order matters: unbind before the instance is nulled, or the handlers are unreachable and
+    // the next `connectEcho()` binds a second set on the new instance.
+    stopRealtimeBridge()
+    disconnectEcho()
+  },
+  channel: realtimeChannel,
   state: (): ConnState => (getConnectionState() === 'connected' ? 'online' : 'offline'),
 }
 

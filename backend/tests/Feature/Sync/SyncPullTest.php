@@ -9,6 +9,7 @@ use App\Models\PriceList;
 use App\Models\Product;
 use App\Models\Quote;
 use App\Models\Tag;
+use App\Notifications\DealAssignedNotification;
 use App\Repositories\DealRepository;
 use App\Repositories\PriceListRepository;
 use App\Repositories\QuoteRepository;
@@ -18,6 +19,7 @@ use Database\Seeders\PipelineStageSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -318,6 +320,99 @@ class SyncPullTest extends TestCase
         ])->json('tables.companies.rows');
 
         $this->assertSame(100, count($body['rows']) + count($rest));
+    }
+
+    /**
+     * DESKTOP-ARCHITECTURE.md EK 3, "BACKEND'E DEVREDİLEN İKİ GERÇEK BOŞLUK" #1:
+     * a KEY-mode notification (`data.title_key`/`data.body_key`/`data.params`,
+     * protocol §5.1) carries no sentence at all - only NotificationResource's
+     * render path (Laravel's PHP translation catalogue) can turn a key into
+     * one, and the desktop has no such catalogue. The pull row must therefore
+     * carry a server-rendered `title`/`body` too, produced through the SAME
+     * `NotificationText::resolve()` NotificationResource uses (K7).
+     *
+     * `title_key`/`body_key`/`params` must survive UNCHANGED alongside them so
+     * a future client can still render for itself.
+     */
+    public function test_a_key_mode_notification_carries_a_server_rendered_title_and_body(): void
+    {
+        [$user, $token] = $this->deviceUser('Admin', ['locale' => 'en']);
+
+        $deal = Deal::factory()->create(['owner_id' => $user->id]);
+
+        $user->notify(DealAssignedNotification::make($deal, null));
+
+        $row = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['notifications' => 0],
+        ])->json('tables.notifications.rows.0');
+
+        $data = json_decode((string) $row['data'], true);
+
+        $this->assertSame(
+            'A deal was assigned to you',
+            $data['title'] ?? null,
+            'Anahtar modundaki bildirim pull satırında render EDİLMİŞ title taşımıyor.'
+        );
+        $this->assertNotNull($data['body'] ?? null);
+        $this->assertStringContainsString($deal->title, (string) $data['body']);
+
+        // Additive, not destructive: title_key/body_key/params kalmalı.
+        $this->assertSame('notifications.deal_assigned.title', $data['title_key'] ?? null);
+        $this->assertSame('notifications.deal_assigned.body', $data['body_key'] ?? null);
+        $this->assertArrayHasKey('params', $data);
+    }
+
+    /**
+     * The recipient's locale, not the puller's request locale, decides the
+     * render - and SyncScope already scopes the `notifications` table to
+     * `notifiable_id = $user`, so the puller IS the recipient.
+     */
+    public function test_notification_text_renders_in_the_recipients_locale(): void
+    {
+        [$user, $token] = $this->deviceUser('Admin', ['locale' => 'tr']);
+
+        $deal = Deal::factory()->create(['owner_id' => $user->id]);
+
+        $user->notify(DealAssignedNotification::make($deal, null));
+
+        $row = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['notifications' => 0],
+        ])->json('tables.notifications.rows.0');
+
+        $data = json_decode((string) $row['data'], true);
+
+        $this->assertSame('Size bir fırsat atandı', $data['title'] ?? null);
+    }
+
+    /**
+     * Backward compatibility (protocol §5.1's fallback path, NotificationText
+     * doc block): a pre-Phase-14 plain-text row has no `title_key` and must
+     * pass through with its stored title/body untouched, not blanked.
+     */
+    public function test_a_plain_text_legacy_notification_keeps_its_stored_title_and_body(): void
+    {
+        [$user, $token] = $this->deviceUser('Admin');
+
+        DB::table('notifications')->insert([
+            'id' => (string) Str::uuid(),
+            'type' => 'App\\Notifications\\Legacy',
+            'notifiable_type' => $user->getMorphClass(),
+            'notifiable_id' => $user->id,
+            'data' => json_encode(['type' => 'legacy', 'title' => 'Eski başlık', 'body' => 'Eski gövde']),
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+            'sync_version' => SyncCounter::next(),
+        ]);
+
+        $row = $this->withToken($token)->postJson('/api/sync/pull', [
+            'cursors' => ['notifications' => 0],
+        ])->json('tables.notifications.rows.0');
+
+        $data = json_decode((string) $row['data'], true);
+
+        $this->assertSame('Eski başlık', $data['title'] ?? null);
+        $this->assertSame('Eski gövde', $data['body'] ?? null);
     }
 
     public function test_an_unpermitted_table_is_absent_from_the_pull_response(): void

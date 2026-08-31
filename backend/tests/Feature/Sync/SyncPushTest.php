@@ -8,6 +8,7 @@ use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\PipelineStage;
 use App\Models\Quote;
+use App\Models\Tag;
 use App\Models\Task;
 use App\Models\Ticket;
 use App\Models\User;
@@ -782,5 +783,79 @@ class SyncPushTest extends TestCase
 
         $this->assertSame('desktop', $decoded['channel'] ?? null);
         $this->assertSame($batchId, $decoded['batch_id'] ?? null);
+    }
+
+    /**
+     * DESKTOP-ARCHITECTURE.md EK 3, "DOĞRULANMASI GEREKEN VARSAYIM": the desktop
+     * client's outbox carries `tag_ids` (the REST field `StoreCompanyRequest`/
+     * `UpdateCompanyRequest` validates) AND `tags` (the mirror key the SAME
+     * row's payload carries on the way DOWN, protocol §1.4/§1.5's embed). The
+     * claim under test is that a FormRequest with no `tags` rule simply drops
+     * the unvalidated key rather than 422-ing the whole mutation - Laravel's
+     * default `Validator` behaviour, but never previously exercised here.
+     *
+     * If this goes RED, the assumption is false and every offline company
+     * create/update with a tag on it would 422 in production.
+     */
+    public function test_create_tolerates_the_tags_mirror_key_alongside_tag_ids(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $tag = Tag::factory()->create();
+
+        $response = $this->push($token, [$this->mutation([
+            'op' => 'create',
+            'entity' => 'company',
+            'client_id' => (string) Str::uuid(),
+            'payload' => [
+                'name' => 'Tagged Ltd',
+                // The REST field the FormRequest validates:
+                'tag_ids' => [$tag->id],
+                // The mirror column echoed back on pull (protocol §1.4) - NOT a
+                // rule in StoreCompanyRequest, sent anyway because the client's
+                // outbox does not strip it.
+                'tags' => [$tag->id],
+            ],
+        ])]);
+
+        $response->assertOk()->assertJsonPath('results.0.status', 'applied');
+
+        $company = Company::find($response->json('results.0.server_id'));
+
+        $this->assertSame(
+            [$tag->id],
+            $company->tags()->pluck('tags.id')->all(),
+            'tag_ids bağlanmadı — tags anahtarı fazladan gönderilince push kırıldı.'
+        );
+    }
+
+    public function test_update_tolerates_the_tags_mirror_key_alongside_tag_ids(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $company = Company::factory()->create();
+        $tag = Tag::factory()->create();
+
+        $response = $this->push($token, [$this->mutation([
+            'op' => 'update',
+            'entity' => 'company',
+            'server_id' => $company->id,
+            'base_sync_version' => $company->sync_version,
+            // The client's outbox treats `tag_ids` and its mirror `tags` as one
+            // logical change, so both travel in `changed_fields` too.
+            'changed_fields' => ['tag_ids', 'tags'],
+            'payload' => [
+                'tag_ids' => [$tag->id],
+                'tags' => [$tag->id],
+            ],
+        ])]);
+
+        $response->assertOk()->assertJsonPath('results.0.status', 'applied');
+
+        $this->assertSame(
+            [$tag->id],
+            $company->fresh()->tags()->pluck('tags.id')->all(),
+            'tag_ids bağlanmadı — tags anahtarı fazladan gönderilince push kırıldı.'
+        );
     }
 }
