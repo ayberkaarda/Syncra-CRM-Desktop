@@ -7,10 +7,12 @@
   "scripts": {
     "dev:desktop": "vite --config vite.desktop.config.ts",
     "build:desktop": "tsc -b && vite build --config vite.desktop.config.ts",
+    "test": "vitest run",
     "check:data": "node scripts/check-data-wiring.mjs",
     "check:realtime": "node scripts/check-realtime-wiring.mjs",
     "check:commands": "node scripts/check-command-wiring.mjs",
     "check:identifier": "node scripts/check-identifier.mjs",
+    "check:errors": "node scripts/check-error-codes.mjs",
     "tauri": "node scripts/tauri.mjs",
     "dev": "node scripts/tauri.mjs dev"
   },
@@ -28,6 +30,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "vitest": "^4.1.11"
   }
 }

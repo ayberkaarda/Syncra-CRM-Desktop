@@ -36,9 +36,11 @@ pub async fn bootstrap<R: Runtime>(
         .map_err(CommandError::from)
 }
 
-/// One manual push-then-pull round. The background loop (`SyncEngine::start_background_sync`,
-/// `SYNCDESKTOP.md` §5.5) is not started by this shell yet — F5 wires the OS-integration
-/// triggers (tray, network events); this turn only exposes the manual path.
+/// One manual push-then-pull round. `SyncEngine::start_background_sync` (`SYNCDESKTOP.md` §5.5)
+/// already runs on its own timer, started from `lib.rs`'s `.setup()` at launch, and probes for
+/// connectivity on the offline branch — this command is still the separate, immediately-awaited
+/// single round the UI triggers by hand (a manual "sync now" click, or right after resolving a
+/// conflict), not a way to start or stop that loop.
 #[tauri::command]
 pub async fn sync_now(state: State<'_, AppState>) -> CommandResult<SyncReport> {
     let engine = state.engine.clone();

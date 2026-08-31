@@ -223,6 +223,22 @@ jobs:
       - name: Web bundle build (must stay unaffected by desktop work)
         run: npm run build
 
+      # The third wire-fixture consumer. `wire-fixtures/` is read by three suites: the crate
+      # (does `to_wire()` produce this?), PHPUnit (does the server accept this?), and these
+      # vitest specs (does the TypeScript composer build this?). Only the third one catches the
+      # class where the crate serialises correctly but the composer hands it an empty payload —
+      # open item O47 was exactly that, and the crate<->PHP pair could not have seen it.
+      # Runs from `desktop/` (its own package.json and lockfile), not `frontend/`.
+      - name: Install desktop workspace deps
+        working-directory: desktop
+        run: npm ci
+      - name: Desktop unit tests (wire-fixture composer + mappers)
+        working-directory: desktop
+        run: npm test
+      - name: Error code symmetry (errors.ts <-> desktop.json)
+        working-directory: desktop
+        run: npm run check:errors
+
   # ---------------------------------------------------------------------------
   # backend: php artisan test — Linux job only is sufficient per task brief
   # ---------------------------------------------------------------------------

@@ -1,0 +1,60 @@
+{
+  "id": "push/task.action.complete",
+  "why": "Whitelist 3/12. `completed` is REQUIRED and boolean - an empty payload is a 422 (CompleteTaskRequest). Un-completing has no action; it is a plain field update.",
+  "op": "action",
+  "entity": "task",
+  "action": "complete",
+  "local_mutation": {
+    "entity": "task",
+    "op": "action",
+    "action": "complete",
+    "client_id": "c1000000-0000-4000-8000-000000000006",
+    "payload": {
+      "completed": true
+    }
+  },
+  "outbox": {
+    "seq": 6,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000006",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 6301,
+    "base_sync_version": 185003,
+    "scope": null
+  },
+  "wire": {
+    "seq": 6,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000006",
+    "op": "action",
+    "entity": "task",
+    "server_id": 6301,
+    "action": "complete",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "completed": true
+    }
+  },
+  "composer": {
+    "domain": "tasks",
+    "method": "complete",
+    "args": [
+      6301,
+      true
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000006",
+      "server_id": 6301,
+      "local_rowid": 6,
+      "title": "Fixture görevi",
+      "status": "pending",
+      "priority": "medium",
+      "sync_version": 185003
+    }
+  },
+  "server": {
+    "scenario": "task",
+    "bind": {
+      "server_id": "task.id"
+    },
+    "expect": "applied"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "errors/push_batch_too_large",
+  "why": "Case 2 of the four: `ApiErrorBody` derived `Deserialize` on the FLAT shape while every Laravel handler in this backend nests the code one level down, under `errors`. The result was `code: None` on every single real refusal. This fixture is the nested envelope, recorded from the one refusal a test can trigger deterministically and cheaply.",
+  "http_status": 422,
+  "body": {
+    "errors": {
+      "message": "Push toplu istegi izin verilen sinirin uzerinde.",
+      "code": "PUSH_BATCH_TOO_LARGE"
+    }
+  },
+  "expect": {
+    "code": "PUSH_BATCH_TOO_LARGE",
+    "retry_after": null,
+    "message_present": true
+  },
+  "server": {
+    "scenario": "oversized_push_batch",
+    "note": "The backend consumer posts MAX_BATCH + 1 mutations and asserts the shape of what comes back: HTTP 422, an `errors` object, and `errors.code` equal to the value above. The MESSAGE is not compared - it is a translated string and pinning it here would turn a locale edit into a red wire test."
+  }
+}

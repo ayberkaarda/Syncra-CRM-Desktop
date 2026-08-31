@@ -1,0 +1,64 @@
+{
+  "id": "push/conversation.action.read",
+  "why": "Whitelist 9/12. The body field is `message_id`, NOT `last_read_message_id`: the server ignores an unknown key and marks the WHOLE thread read, which is silent data loss.",
+  "op": "action",
+  "entity": "conversation",
+  "action": "read",
+  "local_mutation": {
+    "entity": "conversation",
+    "op": "action",
+    "action": "read",
+    "client_id": "c1000000-0000-4000-8000-000000000012",
+    "payload": {
+      "message_id": 55
+    }
+  },
+  "outbox": {
+    "seq": 12,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000012",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 10701,
+    "base_sync_version": 185007,
+    "scope": null
+  },
+  "wire": {
+    "seq": 12,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000012",
+    "op": "action",
+    "entity": "conversation",
+    "server_id": 10701,
+    "action": "read",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "message_id": 55
+    }
+  },
+  "composer": {
+    "domain": "chat",
+    "method": "markRead",
+    "args": [
+      10701,
+      55
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000012",
+      "server_id": 10701,
+      "local_rowid": 12,
+      "conversation_id": 10701,
+      "type": "group",
+      "name": "Fixture kanalı",
+      "unread_count": 0,
+      "last_read_message_id": 55,
+      "is_muted": 0,
+      "sync_version": 185007
+    }
+  },
+  "server": {
+    "scenario": "conversation",
+    "bind": {
+      "server_id": "conversation.id",
+      "payload.message_id": "message.id"
+    },
+    "expect": "applied"
+  }
+}

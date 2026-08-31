@@ -10,14 +10,13 @@
 // `null` ("no SLA / clock stopped") and `0` ("clock still running, deadline reached") into each
 // other. A naive `?? 0` or truthy check would do exactly that.
 //
-// Uses Node's built-in `node:test` / `node:assert` — this repo has no TS test runner wired up
-// yet (no vitest/jest in either `desktop/package.json` or `frontend/package.json`), so no new
-// dependency is introduced. See the lane report for how this was actually executed
-// (Node's native ESM resolver needs explicit extensions on relative specifiers, which this
-// project's Vite-style imports omit; a scratchpad-only loader shim, not part of the repo, was
-// used to run this file for verification).
+// Runner: `vitest` (`desktop/vitest.config.ts`, `npm test` in `desktop/`) — defter O53. The
+// file previously declared `node:test` and was executed by hand through a scratchpad loader
+// shim, so a break in it reached nobody. `describe`/`it` now come from the runner that the
+// gate actually invokes; the assertions stay on `node:assert/strict`, which vitest runs
+// unchanged.
 import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
+import { describe, it } from 'vitest'
 
 import { mapTicket } from './mappers'
 import { EMPTY_REFS } from './refs'

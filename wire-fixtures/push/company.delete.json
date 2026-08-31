@@ -1,0 +1,50 @@
+{
+  "id": "push/company.delete",
+  "why": "op=delete. The ONE op that carries neither payload nor occurred_at (SYNCDESKTOP 4.4's own example); PushRequest makes both optional for exactly this reason.",
+  "op": "delete",
+  "entity": "company",
+  "action": null,
+  "local_mutation": {
+    "entity": "company",
+    "op": "delete",
+    "client_id": "c1000000-0000-4000-8000-000000000003"
+  },
+  "outbox": {
+    "seq": 3,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000003",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 4101,
+    "base_sync_version": 185001,
+    "scope": null
+  },
+  "wire": {
+    "seq": 3,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000003",
+    "op": "delete",
+    "entity": "company",
+    "server_id": 4101,
+    "base_sync_version": 185001
+  },
+  "composer": {
+    "domain": "companies",
+    "method": "delete",
+    "args": [
+      4101
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000003",
+      "server_id": 4101,
+      "local_rowid": 3,
+      "name": "Fixture Holding A.Ş.",
+      "sync_version": 185001
+    }
+  },
+  "server": {
+    "scenario": "company",
+    "bind": {
+      "server_id": "company.id",
+      "base_sync_version": "company.sync_version"
+    },
+    "expect": "applied"
+  }
+}

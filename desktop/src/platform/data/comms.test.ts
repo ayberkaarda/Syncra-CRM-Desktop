@@ -20,14 +20,13 @@
 // calls, and `desktop/scripts/check-data-wiring.mjs` asserts that both are really reached
 // (the `hybrid` kind).
 //
-// Uses Node's built-in `node:test` / `node:assert` — this repo has no TS test runner wired up
-// (no vitest/jest in either `desktop/package.json` or `frontend/package.json`), so no new
-// dependency is introduced. See `mappers.test.ts` for the same arrangement, and the lane
-// report for how this file was actually executed (Node's ESM resolver needs explicit
-// extensions on relative specifiers, and `../http` / `../session` reach `import.meta.env` and
-// the auth store; a scratchpad-only resolver shim, NOT part of the repo, supplies both).
+// Runner: `vitest` (`desktop/vitest.config.ts`, `npm test` in `desktop/`) — defter O53. The
+// file previously declared `node:test` and was executed by hand through a scratchpad loader
+// shim, so a break in it reached nobody. `describe`/`it` now come from the runner that the
+// gate actually invokes; the assertions stay on `node:assert/strict`, which vitest runs
+// unchanged, so not one assertion in this file was rewritten to fit the move.
 import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
+import { describe, it } from 'vitest'
 
 import { mergeSearchGroups, unifiedSearch } from './comms'
 import type { SearchResponse, SearchResultItem, SearchResultType } from '@/features/search/types'

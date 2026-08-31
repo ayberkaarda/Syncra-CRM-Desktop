@@ -1,0 +1,62 @@
+{
+  "id": "push/lead.action.assign",
+  "why": "Whitelist 7/12. `lead.assign` is whitelisted; `lead.convert` is NOT - it answers ONLINE_ONLY, which is why only one of the two appears in this directory.",
+  "op": "action",
+  "entity": "lead",
+  "action": "assign",
+  "local_mutation": {
+    "entity": "lead",
+    "op": "action",
+    "action": "assign",
+    "client_id": "c1000000-0000-4000-8000-000000000010",
+    "payload": {
+      "owner_id": 9
+    }
+  },
+  "outbox": {
+    "seq": 10,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000010",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 8501,
+    "base_sync_version": 185005,
+    "scope": null
+  },
+  "wire": {
+    "seq": 10,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000010",
+    "op": "action",
+    "entity": "lead",
+    "server_id": 8501,
+    "action": "assign",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "owner_id": 9
+    }
+  },
+  "composer": {
+    "domain": "leads",
+    "method": "assign",
+    "args": [
+      8501,
+      9
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000010",
+      "server_id": 8501,
+      "local_rowid": 10,
+      "first_name": "Ada",
+      "last_name": "Lovelace",
+      "status": "new",
+      "score": 10,
+      "sync_version": 185005
+    }
+  },
+  "server": {
+    "scenario": "lead",
+    "bind": {
+      "server_id": "lead.id",
+      "payload.owner_id": "user.id"
+    },
+    "expect": "applied"
+  }
+}

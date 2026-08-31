@@ -37,6 +37,29 @@ doğrulanmış olanlar açık referans taşır.
 
 ---
 
+<a id="k-stale-map"></a>
+## 0.1 GÖVDE BAYATLIK HARİTASI (2026-08-31)
+
+> **Bu belge append-only büyüdü.** Gövde (§1–13) F0 keşfinde yazıldı; EK 1–5 sonraki fazların
+> kararlarını ekledi ve **gövdenin bazı iddialarını geçersiz kıldı** — ama gövde olduğu yerde
+> kaldı. Bir şerit §4.2'yi okuyup EK 2'yi okumazsa **yanlış değeri alır**. Bu tam olarak P20
+> vakasının doğuş biçimidir ve F5 sekiz ayrı mini-şerit demektir.
+>
+> Aşağıdaki tablo **bağlayıcıdır**: çakışma hâlinde sağdaki kazanır. Gövdedeki ilgili satırlar
+> bu turda yerinde düzeltildi; tablo, düzeltmenin nereden geldiğini gösterir.
+
+| Gövde yeri | Bayat iddia | Geçerli olan | Kaynak |
+|---|---|---|---|
+| §4.2 `server.watch.ignored` | tek glob: `['**/src-tauri/**']` | **üç glob** — `target` ve `.tauri` de gerekli; eksikliği **ölçülmüş bir HMR çökmesi** üretti | EK 2 "§4.2 DÜZELTMESİ"; kodda `vite.desktop.config.ts:84` |
+| §3.7 dokunuş listesi | "3 yeni + 5 mevcut = **8 dosya**" | A19 `DataSource` dikişi listeyi büyüttü; güncel sayım **6 + 26 + 3** | EK 5 / E.5.1 |
+| §11 "Açık Kararlar" (D-1…D-8) | sekizi de **açık** | **sekizinin sekizi de kapandı** — §11'in başındaki çözüm tablosuna bak | §11 (bu turda güncellendi) |
+
+> **Kural:** gövdeye yeni bir olgusal iddia eklenirken, onu geçersiz kılan bir EK varsa **gövde
+> düzeltilir**; EK'e "şunu da düzelttik" satırı eklemek yetmez. EK'ler *karar tutanağıdır*,
+> gövde *bugünkü gerçektir*.
+
+---
+
 ## 1. Amaç ve Kapsam
 
 ### 1.1 Bu doküman ne bağlar
@@ -334,7 +357,12 @@ invalidation'a gerek yoktur ve `TablesChanged` zaten tablo granülerliğindedir.
 | `AuthLost` | Mevcut 401 yoluyla aynı davranış: auth store temizlenir → `/login` (`router.tsx:317-320`) |
 | `ProtocolMismatch` | Tam ekran "güncelleme gerekli" kapısı; sync durur |
 
-### 3.7 Minimum dokunuş listesi — 3 yeni + 5 mevcut = **8 dosya**
+### 3.7 Minimum dokunuş listesi — F0'da 8 dosya, bugün **6 + 26 + 3**
+
+> **BAYATLIK DÜZELTMESİ (2026-08-31).** Aşağıdaki "8 dosya" sayımı F0 keşfinde, `DataSource`
+> dikişi (KARAR A19) verilmeden önce yapılmıştı. A19 veriyi `getPlatform().data.<domain>.<fiil>`
+> üzerinden geçirince liste büyüdü; güncel sayım **6 + 26 + 3** (EK 5 / E.5.1). Aşağıdaki metin
+> F0'ın gerekçesini gösterdiği için korunuyor — **sayıyı oradan alma.**
 
 `SYNCDESKTOP.md` §7.1 hedefi ≤15 dosyadır; liste bunun **çok altında** kaldı. Sebebi §3.1'de
 doğrulandı: `fetch()` kullanımı sıfır, tek axios instance, bileşenlerin API bypass'ı yok.
@@ -426,7 +454,7 @@ uyumluluk katmanı mevcut). `frontend/vite.config.ts` 8 satırdır ve `rollupOpt
 | `server.port` | `1420` | Tauri `devUrl`'i **yoklar**; sabit port zorunlu |
 | `server.strictPort` | `true` | ⚠️ Vite portu kaydırırsa Tauri **yanlış URL'e** bağlanır ve boş pencere açılır. Kaymak yerine hata vermek doğru davranıştır |
 | `server.fs.allow` | `['..']` | Kaynaklar config root'unun **dışında** (`../frontend/src`); Vite varsayılan olarak root dışına servis etmez |
-| `server.watch.ignored` | `['**/src-tauri/**']` | Rust derleme çıktıları HMR döngüsü tetiklemesin |
+| `server.watch.ignored` | `['**/src-tauri/**', '**/target/**', '**/.tauri/**']` | Rust derleme çıktıları HMR döngüsü tetiklemesin. **Üç glob da zorunlu** — tek glob yetmiyor, `target/` ve `.tauri/` ölçülmüş bir HMR çökmesi üretti (EK 2 §4.2 DÜZELTMESİ). Kodda: `vite.desktop.config.ts:84` |
 | `clearScreen` | `false` | `tauri dev` Rust derleyici çıktısını basar; Vite ekranı silerse hata mesajları kaybolur |
 | `envPrefix` | `['VITE_', 'TAURI_ENV_*']` | Tauri'nin hedef platform/arch değişkenleri istemciye geçebilsin |
 | `envDir` | §4.5 — **AÇIK (D-2)** | Varsayılanı config root'udur → `.env` `desktop/` içinde aranır |
@@ -925,7 +953,25 @@ koyar ama script'i tanımlamaz. **KARAR A18** — `desktop/package.json`:
 
 ---
 
-## 11. Açık Kararlar
+## 11. Açık Kararlar — **SEKİZİ DE KAPANDI** (2026-08-31)
+
+> Aşağıdaki tablo F0'da açılan sekiz kararın **bugünkü durumudur**. Altındaki özgün tablo
+> tarihçe olarak korunuyor; **karar arıyorsan buraya bak, oraya değil.**
+
+| # | Konu | Karar | Kanıt |
+|---|---|---|---|
+| **D-1** | `__PLATFORM__` define'ı | (a) — hiç kullanılmıyor, seçim entry'de | `vite.desktop.config.ts:99` define'ın **bilerek yok** olduğunu yazıyor; kodda başka geçiş yok |
+| **D-2** | `envDir` | (a) — tek `.env`, frontend'inki | `scripts/tauri.mjs` CSP ve `SYNCRA_API_URL`'i **aynı** dosyadan türetiyor (O27) |
+| **D-3** | API host build-time mi | (a) — build-time sabit | `state.rs` `option_env!("SYNCRA_API_URL")`; `build.rs` `rerun-if-env-changed` (O27) |
+| **D-4** | `localStorage` kalıcılığı | Kalıcı — **Windows ve Linux'ta ölçüldü** | EK 2 (WebView2) + 2026-08-31 WSLg/WebKitGTK 2.52.3, süreç ağacı `SIGKILL`'i dahil |
+| **D-5** | `Entity` → query key eşlemesi | Tamamlandı | `check-data-wiring` → **22 / 22 entities mapped** |
+| **D-6** | `check-i18n-bootstrap` masaüstünü kapsıyor mu | (a) — genişletildi | Betikte `main.desktop` geçişleri; `npm run i18n:check-bootstrap` masaüstü alt kontrollerini koşuyor |
+| **D-7** | `desktop` namespace alt ağaçları | F4'te açıldı | `tr/desktop.json` **14 alt ağaç** |
+| **D-8** | Pencere kapatma varsayılanı | Tray'e küçült | `desktop.window.closeToTray.*` dört dilde; **davranışın kendisi F5-1** |
+
+---
+
+### 11.1 Özgün tablo (F0, tarihçe)
 
 | # | Konu | Seçenekler | Neden şimdi karar gerekiyor | Kim |
 |---|---|---|---|---|

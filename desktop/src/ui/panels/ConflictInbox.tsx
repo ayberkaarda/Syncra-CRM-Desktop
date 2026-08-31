@@ -31,6 +31,7 @@ import { listConflicts, resolveConflict } from '../commands'
 import { errorCodeOf, errorMessage } from '../errors'
 import { formatDateTime } from '../format'
 import { CheckIcon, InboxIcon } from '../icons'
+import { useEngineStatus } from '../useEngineStatus'
 import { useIntlLocale, useT } from '../useT'
 
 /** A true two-sided conflict; every other code is a one-sided rejection. */
@@ -127,6 +128,15 @@ export function ConflictInbox() {
   const [busy, setBusy] = useState(false)
   const [mergeOpen, setMergeOpen] = useState<string | null>(null)
 
+  // The engine's own count, not a poll: `EngineEvent::StatusChanged` (`refresh_status` in
+  // `syncra_sync::sync::mod`) recomputes `conflicts` on every push and every resolution and
+  // publishes it, and `DesktopPanel`'s tab badge already renders it live through this same hook.
+  // Reloading the list whenever this number changes reuses that existing feed instead of opening
+  // a second one: previously `load()` only ran once on mount, so a conflict that arrived while
+  // this panel was already open bumped the badge (subscribed to the live feed) without the list
+  // ever re-fetching (subscribed to nothing after its first render).
+  const conflictCount = useEngineStatus().conflicts
+
   const load = useCallback(async () => {
     try {
       const rows = await listConflicts()
@@ -144,7 +154,11 @@ export function ConflictInbox() {
 
   useEffect(() => {
     void load()
-  }, [load])
+    // `conflictCount` is intentionally in the dependency list: it is the signal, not just a
+    // value read inside `load`. Without it this effect only re-runs when `load` itself changes
+    // (i.e. never, since `load` only depends on `t`), so a conflict that arrives while the panel
+    // is already open updates the badge but never re-fetches this list.
+  }, [load, conflictCount])
 
   const groups = useMemo(() => groupByCode(conflicts ?? []), [conflicts])
 

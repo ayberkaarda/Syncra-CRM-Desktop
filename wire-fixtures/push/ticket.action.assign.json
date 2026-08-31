@@ -1,0 +1,63 @@
+{
+  "id": "push/ticket.action.assign",
+  "why": "Whitelist 6/12. `assigned_to` is `present|nullable`: the KEY must be in the body, and null means 'return it to the pool'. A body without the key is a 422, not an unassign.",
+  "op": "action",
+  "entity": "ticket",
+  "action": "assign",
+  "local_mutation": {
+    "entity": "ticket",
+    "op": "action",
+    "action": "assign",
+    "client_id": "c1000000-0000-4000-8000-000000000009",
+    "payload": {
+      "assigned_to": 9
+    }
+  },
+  "outbox": {
+    "seq": 9,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000009",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 7401,
+    "base_sync_version": 185004,
+    "scope": null
+  },
+  "wire": {
+    "seq": 9,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000009",
+    "op": "action",
+    "entity": "ticket",
+    "server_id": 7401,
+    "action": "assign",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "assigned_to": 9
+    }
+  },
+  "composer": {
+    "domain": "tickets",
+    "method": "assign",
+    "args": [
+      7401,
+      9
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000009",
+      "server_id": 7401,
+      "local_rowid": 9,
+      "ticket_number": "T-0001",
+      "subject": "Fixture talebi",
+      "status": "open",
+      "priority": "high",
+      "sla_paused_seconds": 0,
+      "sync_version": 185004
+    }
+  },
+  "server": {
+    "scenario": "ticket",
+    "bind": {
+      "server_id": "ticket.id",
+      "payload.assigned_to": "user.id"
+    },
+    "expect": "applied"
+  }
+}
