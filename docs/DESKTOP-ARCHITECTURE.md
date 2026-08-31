@@ -1058,3 +1058,60 @@ Hepsi ya "uygulama çalışmaz" sınıfı teknik zorunluluk ya da şartnamedeki 
 **KARAR A19 — F3b'nin 1. maddesi.** `DataSource` fiil-bazlı yeniden tanımlanır (`list/get/create/update/delete` + alana özgü `assign`, `move`, `convert`, `timeline`, `status`…) ve ~15 feature modülünde düz fonksiyonlar export edilir. **Bu bir kapsam genişletmesi DEĞİLDİR** — A4'ün zaten gerektirdiği iştir, yalnızca tahmin yanlıştı. §3.7'nin dokunuş listesi bu sayıyla güncellenir.
 
 **Bugün kırılan bir şey yok:** `platform/*` hiçbir entry noktasından import edilmediği için çıktı inert; JS bundle'a girmediği doğrulandı (hash karşılaştırmasıyla). Risk, `desktop.ts` bu temelin üstüne kurulursa yeniden yazılmasıdır.
+
+### E.5.1 A19 SONUCU — dokunuş listesi ikiye ayrılıyor
+
+A19 uygulandı ve doğrulandı (W2-a). Sonuçlar:
+
+- **`DataSource` artık fiil-bazlı:** 16 domain, **124 metot**, hepsi mevcut bir düz fonksiyonun 1:1 karşılığı. `typeof import(...)` tiplemesi tamamen kalktı; hook / `Keys` factory'si / `queryClient` sözleşmeye girmiyor. Uydurma metot yok — uç nokta casusu ile 124/124 metodun beklenen fiil+URL'e istek attığı kanıtlandı.
+- **KARAR A4 fiilen uygulandı:** hook'ların `queryFn`/`mutationFn`'i `getPlatform().data.<domain>.<metot>()` çağırıyor. Query key, hook adı, imza, dönüş tipi ve `enabled`/`staleTime`/`retry` opsiyonları değişmedi.
+
+**§3.7'nin "8 dosyalık dokunuş listesi" güncelleniyor.** Gerçek yüzey ikiye ayrılır:
+
+| Katman | Dosya | İçerik |
+|---|---|---|
+| **Adaptör çekirdeği** | **6** | `platform/{types,web,index}.ts` + `lib/axios.ts` + `lib/echo.ts` + `index.css` |
+| **A19 delegasyon geçişi** | **26** | 14 feature `api/*.ts` + 12 feature `hooks/*.ts` |
+| **W1'de ertelenen (D-4'e bağlı)** | **3** | `stores/themeStore.ts`, `i18n/index.ts`, `components/layout/AppLayout.tsx` |
+
+F0'ın "≤15 dosya" hedefi **adaptör çekirdeği için** tutmuştur (6). A4'ün gerektirdiği delegasyon geçişi ayrı bir kalemdir ve F0 tahmininde yoktu (bkz. §E.5 kök neden). Bileşen ve sayfa dosyaları **hiç değişmedi** — K1 korundu.
+
+**Yeni bulgu — ESM döngüsü (ölçüldü, zararsız).** Hook'lar `platform`'u, `platform/web.ts` de api modüllerini import ettiği için gerçek bir modül döngüsü doğdu. Üç farklı değerlendirme sırasıyla (platform önce / api modülü önce / hook önce) gerçek kaynak modüller çalıştırıldı, üçünde de 16 domain / 124 metot çağrılabilir geldi. Döngüyü zararsız kılan iki şey **korunmalıdır**:
+1. `web.ts`'in üyeleri çıplak fonksiyon referansı değil **ok sarmalayıcıdır** (çözüm çağrı anında olur).
+2. `index.ts`'teki `getPlatform` **hoist edilen bir `function` bildirimidir** (arrow const değil).
+
+**AÇIK — F3'te kapatılacak:** `platform/web.ts` artık web bundle'ında çalışıyor (bundle 1741.74 → 1749.45 kB). `configureHttp()` ve `configureRealtimeAuth()` ilk kez gerçekten yürütülüyor. Kod incelemesi davranış-nötr diyor (aynı `baseURL`, aynı `withCredentials/withXSRFToken`, `defaultReverbAuthorizer` eski gövdenin kopyası) ama **tarayıcıda duman testi yapılmadı** — `frontend`'de test koşucusu yok. F3'ün ilk maddelerinden biri olmalı.
+
+**AÇIK — kapsam dışı kalan api modülleri:** `boardApi`, `importApi`, `catalogApi`, `productsShared`, `logsApi`, `presenceApi`, `authApi`, `settings/api`, `dashboard/api`, `reports/api` `DataSource`'a girmedi. Bunların desktop'ta online-only HTTP olarak mı kalacağı F3'te açıkça karara bağlanmalı (§8 online-only listesi çoğunu zaten kapsıyor, ama `boardApi` — Kanban — kapsamıyor ve F4'te offline move isteniyor).
+
+### E.5.2 W2-b SONUCU — açık kalan üç madde
+
+`desktop/src-tauri` iskeleti kuruldu ve doğrulandı (workspace clippy `-D warnings` temiz, crate 83/83). CSP'nin S1/S2 düzeltmeleri **uygulandı** ve fazlası yapıldı:
+
+```
+default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://localhost:8000 ws://localhost:8080;
+img-src 'self' data: http://localhost:8000; style-src 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline';
+font-src 'self' data:; object-src 'none'; frame-ancestors 'none'
+```
+
+**AÇIK 1 — CSP host'ları sabit kodlanmış (F3/F7 engeli).** `http://localhost:8000` ve `ws://localhost:8080` geliştirme host'larıdır ve şu an **üretim CSP'sinde** duruyor. KARAR D-3 API host'unu build-time sabit yapıyor; dolayısıyla CSP de build parametresinden (`VITE_API_URL` ile aynı kaynaktan) üretilmelidir. Bugünkü hâliyle üretim paketi yalnızca `localhost`'a bağlanabilir. F7'nin release job'ı bunu parametrize etmeden imzalı paket üretmemeli.
+
+**AÇIK 2 — `desktop/.cargo/config.toml` yerel önbelleğe bağlı.** Dosya `build.target-dir`'ı `crates/syncra-sync/target`'a yönlendiriyor. Gerekçesi, o dizindeki sıcak OpenSSL derlemesini yeniden kullanmaktı — ama **çift derleme sorununu asıl çözen workspace'in kendisidir**; temiz bir checkout'ta o dizin zaten boştur ve yönlendirme hiçbir şey kazandırmaz. Yan etkisi: workspace çıktısı bir üye crate'in dizinine yazılıyor, bu da CI'da ve yeni katkıcılar için kafa karıştırıcı. **Öneri: dosya kaldırılsın, varsayılan `desktop/target` kullanılsın.** MAX_PATH ihtiyacı varsa `CARGO_TARGET_DIR` ortam değişkeniyle (CI'da olduğu gibi) çözülmeli, commit'li config ile değil.
+
+**AÇIK 3 — `desktop/package.json` henüz yok.** W2-c'nin `desktop-ci.yml`'i `npm run tauri -- build --debug` varsayıyor. Vite/desktop entry işi (F3) bu dosyayı oluşturunca script adı CI ile hizalanmalı.
+
+Ayrıca: `desktop/src-tauri/target` (996 MB) workspace öncesinden kalma ölü dizin — gitignore'lu, zararsız, ama diskte duruyor.
+
+### E.5.3 W2-b — DÜZELTMELER ve BİR MAYIN
+
+**⚠️ MAYIN — `tauri dev` / `tauri build` şu an PANİKLER.** `desktop/src-tauri/tauri.conf.json`'da `plugins` bloğu **hiç yok** (`plugins: null`, doğrulandı), dolayısıyla `plugins.updater.{endpoints, pubkey}` tanımsız. Tauri'nin updater Config'inde `pubkey: String` **zorunlu ve default'suz** → plugin `.setup()`'ta panikler. F7 gerçek pubkey/manifest'i getirene kadar **kimse `tauri dev` çalıştırmamalı**; F7'nin ilk maddesi bu olmalı. (Şerit sahte değer yazmamayı bilinçli tercih etti — doğru karar, ama mayın kayıt altına alınmalı.)
+
+**Düzeltme 1 — clipboard capability'si zaten doğru.** `capabilities/default.json` `clipboard-manager:allow-read-text` iznini **vermiyor**; kelime yalnız `description` alanında "deliberately ABSENT… K10, default off" gerekçesiyle geçiyor. Verilen izinler dar: blanket `fs:allow-*` yok (yalnız `fs:scope`), `shell` yalnız `allow-open`.
+
+**Düzeltme 2 — makinede çalışan bir Perl VAR.** Strawberry Perl kurulu değil, ama `C:\xampp\perl\bin\perl.exe` (5.32) hem `ExtUtils::MakeMaker` hem `Locale::Maketext::Simple` taşıyor. Sorun kurulum eksikliği değil, **PATH sırası**: Git-Bash'in `/usr/bin/perl`'i önce geliyor. `desktop-ci.yml`'deki "Strawberry Perl" adımı yerel geliştirme için de `PATH`'e XAMPP perl'ini önceleyerek çözülebilir.
+
+**Düzeltme 3 — `custom-protocol` feature'ı bilinçli olarak default değil.** Bu sayede `desktop/dist` yokken bile `cargo check` panic'lemeden geçiyor (Tauri kod üretimi o durumda `frontendDist`'i gömmeyi atlıyor). F3 `vite.desktop.config.ts`'i yazıp `dist` üretmeye başlayınca `tauri build --features custom-protocol` yolu devreye girecek.
+
+**Kayda geçen üç implementasyon kararı (şartnamede adı geçmiyordu):** bundle identifier `com.syncra.desktop`, productName `Syncra`, veri yerleşimi `$APPDATA/syncra/{syncra.db,cache}` (capability scope'uyla tutarlı). Ayrıca Rust tarafı API host'u için `SYNCRA_API_URL` env adı seçildi — D-3 yalnız frontend'in `VITE_API_URL`'ini adlandırıyordu, bu isim F7'de build parametrizasyonuyla birlikte gözden geçirilmeli.
+
+**Küçük açık:** `storage::clear_local` motorun önbelleğe alınmış `SyncStatus`'unu yenilemiyor (`refresh_status()` dondurulmuş API'de private). Sonraki `mutate`/`sync_now` kendiliğinden düzeltiyor; `storage.rs`'te belgeli.
