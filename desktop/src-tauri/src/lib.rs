@@ -12,6 +12,7 @@
 
 mod commands;
 mod events;
+mod logging;
 mod state;
 
 use tauri::{Manager, WindowEvent};
@@ -75,7 +76,15 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_log::Builder::new().build())
+        // Level and format are not the plugin's defaults (`Trace`, unmasked) — see
+        // `logging.rs` (SYNCDESKTOP §9/9): release must not write DEBUG to disk, and no
+        // record — ours or a dependency's — reaches any sink without the PII mask applied.
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(logging::level_for_build())
+                .format(logging::masking_format)
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             commands::auth::login,
             commands::auth::restore,

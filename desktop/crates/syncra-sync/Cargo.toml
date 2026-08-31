@@ -19,7 +19,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
 thiserror = "1"
-tracing = "0.1"
+# `features = ["log"]`: same reasoning as `desktop/src-tauri/Cargo.toml` — this crate declares
+# `tracing` but does not call it anywhere yet (SYNCDESKTOP §9/9 inventory, 2026-08-31: zero call
+# sites in `src/`). Without the "log" feature, a `tracing::debug!` added here later would be a
+# silent no-op unless a `tracing::Subscriber` is also wired up — which would make the PII mask
+# on the `log`-facade pipe (`desktop/src-tauri/src/logging.rs`) blind to it. Setting the feature
+# now means any future call is masked-by-default from the moment it's written, not from the
+# moment someone remembers to also fix the Cargo.toml.
+tracing = { version = "0.1", features = ["log"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 chrono = { version = "0.4", features = ["serde"] }
 url = { version = "2", features = ["serde"] }

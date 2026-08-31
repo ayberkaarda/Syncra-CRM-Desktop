@@ -48,6 +48,22 @@ const DYNAMIC_CHANNEL_CALLERS = {
 }
 
 /**
+ * Library files that IMPLEMENT the `acquireChannel`/`acquire*Channel` indirection rather than
+ * calling it as a subscriber. `lib/echo.ts` gets this treatment for free — nothing imports
+ * itself, so it never matches the caller filter below. `lib/channelRegistry.ts` is the same:
+ * its own import (`./echo`) never matches `lib/(echo|channelRegistry)`, so it is already out.
+ * `conversationChannel.ts` is the one file that both DEFINES a wrapper (`acquireConversationChannel`)
+ * AND imports `lib/channelRegistry` (to build that wrapper), so it would otherwise match the
+ * caller filter and have its own definition counted as a second, redundant subscription site for
+ * `private-conversation.{id}` — harmless in outcome, but it muddies `source` provenance for real
+ * callers (`useChatSocket.ts`, `useTyping.ts`) for no benefit, so it is excluded explicitly.
+ */
+const CHANNEL_LIBRARY_FILES = new Set(['features/chat/hooks/conversationChannel.ts'])
+
+/** `'private' | 'presence'` -> the Echo wire prefix, for identities resolved through the registry. */
+const REGISTRY_KIND_PREFIX = { private: 'private-', presence: 'presence-' }
+
+/**
  * The single sanctioned `invalidateQueries` site in `desktop/src`: the ENGINE's side of the
  * bridge, fed by `EngineEvent::TablesChanged`. Everything else in the desktop tree — and the
  * realtime path above all — must reach the cache through it, never around it.
@@ -94,43 +110,176 @@ function normaliseTemplate(body) {
 }
 
 /**
- * Resolve a channel-name expression to its literal shape.
- *
- * Handles the four forms the web actually uses: a literal, a template, a `const` in the same
- * file holding either, and a same-file helper that returns a template
- * (`conversationChannel.ts:conversationChannelName`). Anything else returns `null`, which is a
- * failure rather than a skip — a resolver that quietly gives up would make this whole check
- * vacuous exactly where the naming is most dynamic.
+ * Split a balanced-paren argument list (the inside of `f(...)`, no outer parens) into its
+ * top-level arguments — commas nested inside `()`/`[]`/`{}` or a quoted/templated string do not
+ * split. Good enough for call sites in this codebase; it does not need to understand full TS.
  */
-function resolveChannelExpression(expression, source, depth = 0) {
-  if (depth > 4) return null
+function splitTopLevelArgs(text) {
+  const parts = []
+  let depth = 0
+  let quote = null
+  let current = ''
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i]
+    if (quote) {
+      current += char
+      if (char === quote && text[i - 1] !== '\\') quote = null
+      continue
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char
+      current += char
+      continue
+    }
+    if (char === '(' || char === '[' || char === '{') depth += 1
+    if (char === ')' || char === ']' || char === '}') depth -= 1
+    if (char === ',' && depth === 0) {
+      parts.push(current.trim())
+      current = ''
+      continue
+    }
+    current += char
+  }
+  if (current.trim().length > 0) parts.push(current.trim())
+  return parts
+}
+
+/** The top-level arguments of the FIRST call in `text` (which must start `name(...)`), or `null`. */
+function argsOf(text) {
+  const start = text.indexOf('(')
+  if (start === -1) return null
+  let depth = 0
+  for (let i = start; i < text.length; i += 1) {
+    if (text[i] === '(') depth += 1
+    else if (text[i] === ')') {
+      depth -= 1
+      if (depth === 0) return splitTopLevelArgs(text.slice(start + 1, i))
+    }
+  }
+  return null
+}
+
+/**
+ * Full call text (`name(...)`, balanced) starting at `nameStart` in `source` — `nameStart` is
+ * the index of the FIRST character of the function name, not of the `(`.
+ */
+function extractCallText(source, nameStart) {
+  const openIndex = source.indexOf('(', nameStart)
+  if (openIndex === -1) return null
+  let depth = 0
+  for (let i = openIndex; i < source.length; i += 1) {
+    if (source[i] === '(') depth += 1
+    else if (source[i] === ')') {
+      depth -= 1
+      if (depth === 0) return source.slice(nameStart, i + 1)
+    }
+  }
+  return null
+}
+
+/**
+ * Follow a same-directory relative import (`from './foo'`) to the file it names, trying the
+ * extensions/`index` shapes this codebase actually uses. `null` when `name` is not imported this
+ * way (built-in, `node_modules`, or simply not present) or none of the candidates exist.
+ */
+function resolveImportedSource(name, source, filePath) {
+  const importMatch = source.match(
+    new RegExp(`import\\s*(?:type\\s*)?\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*['"](\\.[^'"]+)['"]`)
+  )
+  if (!importMatch) return null
+
+  const baseDir = dirname(filePath)
+  const candidates = ['.ts', '.tsx', '/index.ts', '/index.tsx'].map((suffix) => join(baseDir, `${importMatch[1]}${suffix}`))
+  for (const candidate of candidates) {
+    try {
+      return { source: read(candidate), filePath: candidate }
+    } catch {
+      // try the next extension/shape
+    }
+  }
+  return null
+}
+
+/**
+ * Resolve a channel-name expression to `{ name, kind }` (`kind` is `'private' | 'presence'`,
+ * defaulted where nothing decides it).
+ *
+ * Handles the forms the web actually uses: a literal, a template, a `const` in the same file
+ * holding either, a same-file (or, since the registry, cross-file-via-import) helper that
+ * returns one of the above, and the two `channelRegistry.ts` entry points:
+ *
+ *   - `acquireChannel(nameExpr[, 'presence'])` — the registry itself. `nameExpr` IS the channel
+ *     name; this does not chase into `acquireChannel`'s own body (which branches on cache state
+ *     and returns `null`/`existing.channel`/`channel`, none of which is the name).
+ *   - anything else that resolves, directly or through one or more of these forms, to a call
+ *     `acquireChannel(...)` — e.g. `conversationChannel.ts`'s `acquireConversationChannel(id)`,
+ *     whose body is `return acquireChannel(conversationChannelName(id)) as ConversationChannel | null`.
+ *     A generic function call is resolved by finding `function <name>` (locally, or by following
+ *     a relative import) and recursing on its `return` expression.
+ *
+ * Anything else returns `null`, which is a failure rather than a skip — a resolver that quietly
+ * gives up would make this whole check vacuous exactly where the naming is most dynamic.
+ */
+function resolveChannelExpression(expression, source, filePath, depth = 0) {
+  if (depth > 8) return null
   // A `const CHANNEL_NAME = 'deals' // -> private-deals` declaration is the norm in these hooks,
-  // so the trailing comment is cut before anything else is attempted.
-  const text = expression.split('//')[0].trim().replace(/[,;]$/, '')
+  // so the trailing comment is cut before anything else is attempted. A trailing `as Type`
+  // assertion (`acquireChannel(...) as ConversationChannel | null`) is cut the same way — it is
+  // TypeScript syntax around the expression, not part of it.
+  const text = expression
+    .split('//')[0]
+    .trim()
+    .replace(/[,;]$/, '')
+    .replace(/\s+as\s+.+$/, '')
+    .trim()
 
   const literal = text.match(/^['"]([^'"]*)['"]$/)
-  if (literal) return literal[1]
+  if (literal) return { name: literal[1], kind: 'private' }
 
   const template = text.match(/^`([^`]*)`$/)
-  if (template) return normaliseTemplate(template[1])
+  if (template) return { name: normaliseTemplate(template[1]), kind: 'private' }
 
   const identifier = text.match(/^(\w+)$/)
   if (identifier) {
     const declaration = source.match(new RegExp(`\\bconst ${identifier[1]}\\s*=\\s*([^\\n]+)`))
-    return declaration ? resolveChannelExpression(declaration[1], source, depth + 1) : null
+    return declaration ? resolveChannelExpression(declaration[1], source, filePath, depth + 1) : null
   }
 
   const call = text.match(/^(\w+)\(/)
   if (call) {
-    const body = source.match(new RegExp(`function ${call[1]}\\b[^{]*\\{([\\s\\S]*?)\\n\\}`))
+    const name = call[1]
+
+    if (name === 'acquireChannel') {
+      const args = argsOf(text)
+      if (!args || args[0] === undefined) return null
+      const resolved = resolveChannelExpression(args[0], source, filePath, depth + 1)
+      if (!resolved) return null
+      const kindArg = args[1]?.match(/^['"](\w+)['"]$/)
+      return { name: resolved.name, kind: kindArg?.[1] === 'presence' ? 'presence' : 'private' }
+    }
+
+    let bodySource = source
+    let bodyFilePath = filePath
+    let body = source.match(new RegExp(`function ${name}\\b[^{]*\\{([\\s\\S]*?)\\n\\}`))
+    if (!body) {
+      const imported = resolveImportedSource(name, source, filePath)
+      if (imported) {
+        bodySource = imported.source
+        bodyFilePath = imported.filePath
+        body = bodySource.match(new RegExp(`function ${name}\\b[^{]*\\{([\\s\\S]*?)\\n\\}`))
+      }
+    }
     const returned = body?.[1].match(/return\s+([^\n]+)/)
-    return returned ? resolveChannelExpression(returned[1], source, depth + 1) : null
+    return returned ? resolveChannelExpression(returned[1], bodySource, bodyFilePath, depth + 1) : null
   }
 
   return null
 }
 
 const CHANNEL_CALL = /(?:\becho|getEcho\(\)\??)\s*\??\.(private|join|channel)\(\s*([^)]+?)\s*\)/g
+/** `acquireChannel(...)` (the registry itself) or a wrapper named by the same convention, e.g.
+ *  `acquireConversationChannel(...)` — the indirected form of a private/presence subscription. */
+const ACQUIRE_CALL = /\bacquire\w*Channel(?=\()/g
 const PREFIX = { private: 'private-', join: 'presence-', channel: '' }
 
 /** Every Echo event name a hook listens for. Broadcast aliases always start with a dot. */
@@ -143,27 +292,53 @@ function lineOf(source, index) {
   return source.slice(0, index).split('\n').length
 }
 
+/** Record one resolved channel identity with its call site. */
+function recordChannel(identity, where) {
+  const seen = webChannels.get(identity)
+  if (seen) seen.push(where)
+  else webChannels.set(identity, [where])
+}
+
+/** Report a channel expression the resolver could not follow, unless the site is allow-listed. */
+function reportUnresolved(where, rel, exprText) {
+  if (rel in DYNAMIC_CHANNEL_CALLERS) return
+  fail(`${where}: channel name \`${exprText}\` could not be resolved — the check cannot see what this subscribes to`)
+}
+
 for (const path of sourceFiles(FRONTEND_SRC)) {
   const source = read(path)
-  // Only files that actually talk to Echo. `lib/echo.ts` itself owns the connection, not a
-  // subscription, so it is excluded — it would otherwise resolve nothing and fail the resolver.
-  if (!/from\s+['"][^'"]*lib\/echo['"]/.test(source)) continue
   const rel = relative(FRONTEND_SRC, path).replace(/\\/g, '/')
+  if (CHANNEL_LIBRARY_FILES.has(rel)) continue
+  // Only files that actually talk to Echo, directly (`lib/echo`) or through the shared
+  // reference-counting registry (`lib/channelRegistry` — `acquireChannel`/`acquireXxxChannel`).
+  // `lib/echo.ts` itself owns the connection, not a subscription, so it is excluded — it would
+  // otherwise resolve nothing and fail the resolver. `lib/channelRegistry.ts` is excluded the
+  // same way: its own import is `./echo`, which matches neither branch below.
+  if (!/from\s+['"][^'"]*lib\/(echo|channelRegistry)['"]/.test(source)) continue
 
   for (const match of source.matchAll(CHANNEL_CALL)) {
     const [, kind, expression] = match
     const where = `${rel}:${lineOf(source, match.index)}`
-    const name = resolveChannelExpression(expression, source)
-    if (name === null) {
-      if (!(rel in DYNAMIC_CHANNEL_CALLERS)) {
-        fail(`${where}: channel name \`${expression}\` could not be resolved — the check cannot see what this subscribes to`)
-      }
+    const resolved = resolveChannelExpression(expression, source, path)
+    if (!resolved) {
+      reportUnresolved(where, rel, expression)
       continue
     }
-    const identity = `${PREFIX[kind]}${name}`
-    const seen = webChannels.get(identity)
-    if (seen) seen.push(where)
-    else webChannels.set(identity, [where])
+    recordChannel(`${PREFIX[kind]}${resolved.name}`, where)
+  }
+
+  // The registry indirection: `acquireChannel(...)` directly, or a wrapper around it
+  // (`acquireConversationChannel(...)`) whose own body — same file or, since the wrapper lives in
+  // `conversationChannel.ts`, a relative import away — resolves back to one.
+  for (const match of source.matchAll(ACQUIRE_CALL)) {
+    const where = `${rel}:${lineOf(source, match.index)}`
+    const callText = extractCallText(source, match.index)
+    const resolved = callText ? resolveChannelExpression(callText, source, path) : null
+    if (!resolved) {
+      reportUnresolved(where, rel, callText ?? match[0])
+      continue
+    }
+    recordChannel(`${REGISTRY_KIND_PREFIX[resolved.kind]}${resolved.name}`, where)
   }
 
   for (const match of source.matchAll(EVENT_LITERAL)) {

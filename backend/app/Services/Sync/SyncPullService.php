@@ -2,8 +2,10 @@
 
 namespace App\Services\Sync;
 
+use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\Support\NotificationText;
+use App\Services\Tickets\SlaService;
 use App\Sync\SyncableRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -180,6 +182,10 @@ class SyncPullService
             $rows = $this->renderNotificationText($rows, $user);
         }
 
+        if ($table === 'tickets') {
+            $rows = $this->attachTicketSla($rows);
+        }
+
         return $this->attachEmbeds($table, $definition, $rows);
     }
 
@@ -215,6 +221,55 @@ class SyncPullService
             $data = array_merge($data, NotificationText::resolve($data, $user->locale));
 
             $rows[$index]['data'] = json_encode($data);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * DESKTOP-ARCHITECTURE.md EK 4, KARAR A26: the desktop client gets the
+     * SLA countdown as four SERVER-COMPUTED fields on the `tickets` pull row
+     * - `sla_remaining_seconds`, `sla_total_seconds`, `sla_target_hours`,
+     * `sla_breached` - never the raw formula. This mirrors exactly what
+     * `TicketResource::toArray()` already sends the web client (K7: the two
+     * response shapes must never diverge), by calling the SAME
+     * `SlaService` methods rather than re-deriving the arithmetic here.
+     *
+     * `sla_due_at`, `sla_paused_at`, `sla_paused_seconds`, `resolved_at`,
+     * `priority` and `status` are plain columns already present in `$row`
+     * (the pull query is `SELECT *`), so no migration and no extra query are
+     * needed - only a hydration step, because `SlaService` expects Carbon
+     * instances and this row is still raw strings from the query builder.
+     *
+     * `Ticket::newFromBuilder()` is used instead of `new Ticket($row)` /
+     * `Ticket::make($row)` for two reasons: it marks the model `exists =
+     * true` (this is a real persisted row, not a draft - `SlaService` must
+     * never accidentally be handed something that looks unsaved), and it
+     * goes through `setRawAttributes()`, which bypasses mass-assignment
+     * guarding entirely - irrelevant for reads, but the correct primitive
+     * for "this is exactly what the database returned". Carbon casting for
+     * `sla_due_at` / `sla_paused_at` / `resolved_at` still applies on
+     * ATTRIBUTE ACCESS (via `casts()` and, for `created_at`, Eloquent's
+     * automatic timestamp casting) because that happens in the model's
+     * attribute accessor, independent of how the raw attributes were set -
+     * verified in SyncPullTicketSlaTest by asserting the four computed
+     * fields equal what `TicketResource` produces for the identical ticket.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachTicketSla(array $rows): array
+    {
+        $sla = app(SlaService::class);
+        $prototype = new Ticket;
+
+        foreach ($rows as $index => $row) {
+            $ticket = $prototype->newFromBuilder($row);
+
+            $rows[$index]['sla_remaining_seconds'] = $sla->remainingSeconds($ticket);
+            $rows[$index]['sla_total_seconds'] = $sla->totalSeconds($ticket);
+            $rows[$index]['sla_target_hours'] = $sla->targetHoursForTicket($ticket);
+            $rows[$index]['sla_breached'] = $sla->isBreached($ticket);
         }
 
         return $rows;

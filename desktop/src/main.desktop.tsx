@@ -21,6 +21,7 @@ import { queryClient } from '@/lib/queryClient'
 import { applyEngineStatus, desktopPlatform, primeDesktopPlatform } from './platform/desktop'
 import { subscribeToEngineEvents } from './bridge/events'
 import { startRealtimeBridge } from './bridge/realtime'
+import { DesktopShell } from './ui/DesktopShell'
 import App from '@/App'
 
 // Before the first render, and before anything can call `getPlatform()` from a React tree.
@@ -56,9 +57,15 @@ startRealtimeBridge()
 // With `tr` selected this is an already-resolved promise: one microtask, no network wait.
 void i18nReady.then(() => {
   createRoot(document.getElementById('root')!).render(
+    // `DesktopShell` is the F4 chrome (`SYNCDESKTOP.md` §7.2): the connectivity bar and the
+    // panel that carries the Conflict Inbox, storage settings and the device list. It wraps
+    // `App` instead of living inside it because `frontend/src/router.tsx` and `AppLayout` stay
+    // byte-for-byte the web's (K1) — the reasoning is recorded in `ui/DesktopPanel.tsx`.
     <StrictMode>
       <PlatformProvider>
-        <App />
+        <DesktopShell>
+          <App />
+        </DesktopShell>
       </PlatformProvider>
     </StrictMode>,
   )

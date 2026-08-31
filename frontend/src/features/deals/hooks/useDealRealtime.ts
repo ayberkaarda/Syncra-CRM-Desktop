@@ -1,8 +1,12 @@
 // Panonun gerçek zamanlı senkronu — `private-deals` kanalı, `.deal.moved` olayı.
 //
-// Abonelik/temizlik deseni `src/features/logs/hooks/useActivityStream.ts` ile aynıdır:
-// `src/lib/echo.ts`ye DOKUNULMAZ, yalnızca `getEcho()` / `onConnectionStateChange()`
-// kullanılır ve bileşen unmount olduğunda `echo.leave()` çağrılır.
+// Abonelik/temizlik: `src/lib/echo.ts`ye DOKUNULMAZ, yalnızca `getEcho()` /
+// `onConnectionStateChange()` kullanılır. Kanal aboneliği artık PAYLAŞILAN, referans sayan
+// `src/lib/channelRegistry.ts` üzerinden alınır — doğrudan `echo.leave()` ÇAĞRILMAZ, çünkü o
+// referans saymaz ve aynı kanalı dinleyen başka bir abone (ör. masaüstü köprüsü) varsa onun
+// dinleyicilerini de düşürürdü. Bu yüzden unmount'ta yalnızca KENDİ dinleyicimiz
+// `channel.stopListening()` ile bırakılır ve `releaseChannel()` çağrılır; kanalın kendisi
+// yalnızca sayaç sıfıra inince gerçekten bırakılır.
 //
 // ============================================================================
 // YÜK TAM KART DEĞİL
@@ -25,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getEcho, onConnectionStateChange } from '../../../lib/echo'
 import type { EchoConnectionState } from '../../../lib/echo'
+import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { useAuthStore } from '../../auth/store'
 import { applyMovedEvent, boardKeys } from '../api/boardApi'
 import type { BoardFilters, BoardResponse, DealMovedEvent } from '../types'
@@ -126,12 +131,10 @@ export function useDealRealtime(filters: BoardFilters): UseDealRealtimeResult {
 
   useEffect(() => {
     if (!echoAvailable) return
-    const echo = getEcho()
-    if (!echo) return
+    const channel = acquireChannel(CHANNEL_NAME)
+    if (!channel) return
 
-    const channel = echo.private(CHANNEL_NAME)
-
-    channel.listen(EVENT_NAME, (payload: DealMovedEvent) => {
+    const handleMoved = (payload: DealMovedEvent) => {
       const userId = currentUserIdRef.current
       if (userId !== null && payload.moved_by_id === userId) return
 
@@ -147,10 +150,13 @@ export function useDealRealtime(filters: BoardFilters): UseDealRealtimeResult {
       }
 
       highlight(payload.deal_id, payload.moved_by_name)
-    })
+    }
+
+    channel.listen(EVENT_NAME, handleMoved)
 
     return () => {
-      echo.leave(CHANNEL_NAME)
+      channel.stopListening(EVENT_NAME, handleMoved)
+      releaseChannel(CHANNEL_NAME)
     }
   }, [echoAvailable, highlight, queryClient])
 

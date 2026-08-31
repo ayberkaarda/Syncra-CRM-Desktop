@@ -50,7 +50,24 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 url = { version = "2", features = ["serde"] }
 thiserror = "1"
-tracing = "0.1"
+# `features = ["log"]`: SYNCDESKTOP §9/9. With no `tracing::Subscriber` installed anywhere in
+# this app (confirmed: no `tracing-subscriber` / `tracing-log` in Cargo.lock), a plain
+# `tracing = "0.1"` dependency makes every `tracing::warn!`/`debug!`/... call in `events.rs` a
+# silent no-op — they never reach `tauri-plugin-log` or anything else. The "log" feature makes
+# `tracing` emit a `log::Record` for each event whenever no subscriber is active, which is
+# exactly this app's situation; that routes `tracing` output into the same `log`-facade pipe
+# (and therefore the same PII-masking format, `src/logging.rs`) as every other crate already
+# writing through `log` (e.g. `keyring`, `reqwest`).
+tracing = { version = "0.1", features = ["log"] }
+# PII masking layer for the log plugin (`src/logging.rs`) and its own tests. `log` and `fern`
+# are already pulled in transitively by `tauri-plugin-log` (which re-exports both); declared
+# directly here too because `logging.rs` names them by path and a transitive dependency isn't
+# usable that way. Versions match what `tauri-plugin-log 2.9.0` already resolves to in
+# `Cargo.lock` (`log 0.4.34`, `fern 0.7.1`) so this pins nothing new.
+regex = "1"
+time = { version = "0.3", features = ["formatting", "macros"] }
+log = "0.4"
+fern = "0.7"
 
 [features]
 # Empty on purpose: `custom-protocol` must stay OUT of `default`. `tauri-macros`'

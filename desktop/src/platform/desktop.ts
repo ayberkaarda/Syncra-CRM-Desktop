@@ -27,6 +27,7 @@ import type {
 
 import { invokeCommand } from '../bridge/invoke'
 import { realtimeChannel, startRealtimeBridge, stopRealtimeBridge } from '../bridge/realtime'
+import type { SyncStatus as EngineSyncStatus } from '../ui/commands'
 import { desktopData } from './data'
 import { http } from './http'
 
@@ -36,15 +37,11 @@ export { setDeviceToken } from './http'
 // Engine status
 // ------------------------------------------------------------------------------------------------
 
-/** Wire shape of `syncra_sync::types::SyncStatus` (serde keeps the Rust field names). */
-interface SyncStatus {
-  online: boolean
-  syncing: boolean
-  pending: number
-  conflicts: number
-  last_sync_at: string | null
-  write_blocked: string | null
-}
+/**
+ * Wire shape of `syncra_sync::types::SyncStatus` (serde keeps the Rust field names).
+ * Declared once in `ui/commands.ts` alongside the other command wire types.
+ */
+type SyncStatus = EngineSyncStatus
 
 /**
  * How often `connectivity.subscribe` re-reads the engine's status.
@@ -73,16 +70,52 @@ let lastStatus: SyncStatus = {
   write_blocked: null,
 }
 
+/**
+ * Everything that wants to RENDER the engine's status, as opposed to the `connectivity`
+ * adapter's coarse online/offline callback.
+ *
+ * The desktop chrome (`ui/ConnectivityBar.tsx`) needs `syncing`, `pending`, `conflicts`,
+ * `last_sync_at` and `write_blocked`, not just a `ConnState`. It subscribes HERE rather than
+ * opening its own `invoke('status')` poll, because a second poller would drift out of step
+ * with this one and the two would disagree on screen — the authoritative feed is
+ * `EngineEvent::StatusChanged`, which lands in `applyEngineStatus` below, and there is exactly
+ * one place it can be observed from.
+ */
+const statusListeners = new Set<(status: SyncStatus) => void>()
+
+function publishStatus(next: SyncStatus): void {
+  lastStatus = next
+  for (const listener of statusListeners) listener(next)
+}
+
 async function readStatus(): Promise<SyncStatus> {
-  lastStatus = await invokeCommand<SyncStatus>('status')
+  publishStatus(await invokeCommand<SyncStatus>('status'))
   return lastStatus
 }
 
 /** Adopt a status the engine pushed, so the poll and the event feed agree. */
 export function applyEngineStatus(status: unknown): void {
   if (status && typeof status === 'object' && 'online' in status) {
-    lastStatus = status as SyncStatus
+    publishStatus(status as SyncStatus)
   }
+}
+
+/** Last known engine status. Never `null`: the optimistic default stands until the first read. */
+export function getEngineStatus(): SyncStatus {
+  return lastStatus
+}
+
+/** Observe {@link getEngineStatus}. Returns the unsubscribe handle. */
+export function subscribeToEngineStatus(listener: (status: SyncStatus) => void): () => void {
+  statusListeners.add(listener)
+  return () => {
+    statusListeners.delete(listener)
+  }
+}
+
+/** Force one status read — after a manual sync, or when a screen that shows it opens. */
+export function refreshEngineStatus(): Promise<SyncStatus> {
+  return readStatus()
 }
 
 // Reverb over a bearer token. `/api/broadcasting/auth` (note the `/api` prefix) is the

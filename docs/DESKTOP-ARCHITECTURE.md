@@ -1293,3 +1293,91 @@ Yeni migration gerekmiyor. Uygulama sonraki backend turunda; `Ticket::newFromBui
 **§9 durumu:** madde 1, 3, 4, 7 KAPALI · madde 2 A25 ile kapandı · madde 5, 6 DEĞERLENDİRİLEMEZ-F5 · madde 8 DEĞERLENDİRİLEMEZ-F7 (bugün fail-closed) · madde 9 **AÇIK** · madde 10 bu teslimat.
 
 **§9/9 (tracing PII filtresi) F5'i bekleyemez.** Log plugin'i F3'ten beri **filtresiz DEBUG seviyesinde** diske yazıyor (`lib.rs:78`; canlı `Syncra.log`'da keyring DEBUG satırları var — girdi *adları* görünüyor, sır *değerleri* görünmüyor). Bugün sır sızmıyor ama bunu garanti eden bir katman yok. Bir sonraki turun adayı.
+
+---
+
+# EK 5 — F4 EKRANLARI, REFCOUNT REFACTORU, A26, LOG FİLTRESİ
+
+## KARAR A27 — Masaüstü yüzeyi ROUTE değil, KABUK KROMASIDIR
+
+F4-A routing sorusunu `frontend/**` içine hiç dokunmadan çözdü; DUR gerekmedi.
+
+**Neden route eklenemiyor (araştırıldı):** `frontend/src/router.tsx` modül seviyesinde `createBrowserRouter([...])` kurup bitmiş router'ı export ediyor. React Router **7.18.2**'de kurulmuş bir data router'a route eklemenin desteklenen yolu yok — `patchRoutesOnNavigation` yalnızca *oluşturma* seçeneği (router nesnesinin yüzeyinde değil, typings ile doğrulandı), tek runtime kancası `router._internalSetRoutes` alt çizgili ve yayınlanan typings'te yok. Route eklense bile **gezinme** `Sidebar.tsx` içinde, o da yasak.
+
+**Karar:** `main.desktop.tsx` artık `<PlatformProvider><DesktopShell><App/></DesktopShell></PlatformProvider>` render ediyor. Masaüstü ekranları bir panel olarak `App`'i sarıyor, route ağacına girmiyor.
+
+Kazanç: sıfır `frontend/**` düzenlemesi · `/login` dahil **her route'ta** çalışıyor · `router.tsx` web'in byte-byte aynısı (K1 korundu).
+
+## KARAR A28 — `desktop/src` üçüncü parti React kütüphanelerini çözemez
+
+KARAR A1/A2 iki bağımlılık ağacını ayırdığı için `desktop/src` `@tanstack/react-query`, `react-i18next` ve `lucide-react`'i çözemiyor.
+
+**Kalıcı sonuçları (F5 ve sonrası için de geçerli):**
+- Masaüstü ekranları react-query değil düz `useState` + `invoke` kullanır.
+- Çeviri, `@/i18n` **singleton'ına** bağlanan yerel bir `useT()` hook'undan gelir. İkinci bir i18next kurmak sözlüğü boş bırakırdı.
+- İkonlar inline SVG.
+- `desktop/package.json` içine bu iş için **hiç bağımlılık eklenmedi**.
+
+## F4 durumu — §7.2'nin 5 maddesinden 4'ü tam
+
+| # | Madde | Durum |
+|---|---|---|
+| 1 | Connectivity bar | TAM. Sabit sol-alt (akışa giremez: `AppLayout` `h-screen overflow-hidden` ve ona yazma izni yok). Durum önceliği `offline > syncing > conflict > online`. **İkinci poll açılmadı** — `subscribeToEngineStatus` store'u tek otorite olarak `EngineEvent::StatusChanged` dinliyor. |
+| 2 | Kayıt rozetleri | **KISMİ.** `SyncStateBadge` bileşeni ve `PendingRecords` paneli (11 yazılabilir entity, outbox topolojik sırasında) hazır. Rozetin **kayıt satırlarına inmesi** `frontend/src/features/*/pages/*` düzenlemesi gerektiriyor — ayrı bir şerit. |
+| 3 | Conflict Inbox | TAM. Diff tablosu, KeepMine/TakeServer/alan bazlı Merge, toplu çözüm. |
+| 4 | Storage | TAM. Kullanım çubuğu (%80 warning / %100 danger), retention + MB tavanı (K8 alt sınırları UI'da da), Arşivi indir (offline disabled), Yerel veriyi temizle (geri alınamaz uyarısı + onay). |
+| 5 | Devices | TAM. `list_devices`/`revoke_device`, `is_current` → "Bu cihaz". |
+
+**A22'nin bedeli ele alındı:** `sync::conflicts` iki farklı şeyi tek listede döndürüyor — gerçek `FIELD_CONFLICT` (merge anlamlı) ve **reddedilenler** (`ONLINE_ONLY`, `UNRESOLVED_REFERENCE`, `ABILITY_REQUIRED`, `HTTP_403`, `RECORD_DELETED` — tek taraflı, merge edilecek şey yok). Liste **`code` alanına göre gruplanıyor**, her grubun başlığı o kodun `desktop.errors.*` cümlesi: kullanıcı "neden olmadı" sorusunun cevabını kendi dilinde başlıkta okuyor. Ayrım hem görsel (warning/danger) hem fonksiyonel (merge yalnız `conflicting_fields` doluyken). Yeni anahtar gerekmedi.
+
+### F4 devamı için açık kalanlar
+
+1. **Motorun settings getter'ı yok.** `update_settings` var, okuyanı yok; `StorageStats` iki tavanı taşıyor ama **`retention_days` taşımıyor**. UI şimdilik cihaz-lokal `localStorage` aynası + K8 varsayılanı (30) kullanıyor — yeniden kurulum sonrası bayat olabilir. **Kalıcı çözüm crate içinde bir `storage::settings` getter komutu.**
+2. **Komut adı sözleşmeden farklı:** `generate_handler!` komutları **fonksiyon adıyla** kaydediyor, yani `storage_stats` değil `stats` (`src-tauri/src/lib.rs:95`). `src-tauri` şeridi adı değiştirirse `ui/commands.ts` sessizce kırılır.
+3. **Dolu Conflict Inbox görsel olarak doğrulanmadı** — backend yok, çakışma üretilemedi, **sahte veri uydurulmadı**. Boş durum gerçek `conflicts` çağrısıyla doğrulandı; gruplama/diff/merge yolları yalnız `tsc` + kod incelemesi seviyesinde.
+4. **`confirmSuffix` çevirileri kendi içinde tutarsız** (F3-B çıktısı): `tr` "kalın-isim + suffix" desenine göre yazılmış (repo emsali `AutomationRulesTab.tsx:179`), `en/de/fr` ise "Are you sure you want to..." gibi bir **giriş cümlesi** varsayıyor — o cümlenin anahtarı yok. Ya `desktop.confirm.lead` eklenmeli ya da üç dilin suffix metni yeniden yazılmalı.
+5. **Eksik i18n anahtarları** (yazılmadı, `frontend/**` sahipliğinde): `desktop.entities.<entity>` (22 — şu an ham tablo adı basılıyor: `deal`, `company`...), `desktop.fields.<column>` (merge diff'inde ham kolon adı), `desktop.recordBadge.{pending,conflict}`, `desktop.conflicts.{rejected.title,rejected.description,retry,discard}`, `desktop.storage.{outbox.label,downloadArchive.description}`, `desktop.confirm.lead`.
+6. **Arşivi indir ne kadar geçmiş indiriyor belirsiz** — `extra_days` olarak mevcut retention penceresi gönderiliyor. Sözleşmede adım tanımı yok.
+
+## Echo.leave() REFCOUNT REFACTORU (FE-A)
+
+`frontend/src/lib/channelRegistry.ts` eklendi (`acquireChannel`/`releaseChannel`, sayaç sıfırlanınca `leave`); `conversationChannel.ts` onun üstüne taşındı (dışa açık imzalar değişmedi, `useChatSocket`/`useTyping` dokunulmadı); **altı hook** geçirildi. Hiçbir `.tsx` değişmedi.
+
+**Kanıt yöntemi örnek alınmalı:** prod mantığının `diff` ile doğrulanmış birebir kopyası sahte bir Echo'ya karşı koşuldu — `hookA` unmount olurken `hookB` dinleyicisi **yaşadı** (`hookBEvents=2`), `leave` yalnız **son** bırakışta tetiklendi. Üstüne **negatif kontrol**: eski referans-saymayan desen aynı mock'a karşı `hookBEvents=0` ile orijinal hatayı yeniden üretti.
+
+Şerit kendi işinde bir hata yakalayıp düzeltti: `useNotificationSocket`/`useChatUnread` içinde `releaseChannel` yalnız kendi dedup sayacı sıfırlanınca çağrılıyordu — bu, registry sayacının **hiç sıfıra inmemesine** yol açıp bir sızıntıyı başkasıyla değiştirecekti.
+
+**LATENT TUZAK (kayda geçti):** üç hook içinde ham `echo.leave()` duruyor — `useDashboardSocket.ts:61`, `useActivityStream.ts:61`, `usePresence.ts:59`. **Bugün zararsız**: köprü bu üç kanala abone değil, `bridge/realtime.ts` UNMAPPED tablosunda kayıtlı (doğrulandı). Ama köprü ileride bunlardan birine abone olursa hata geri döner.
+
+## PLANLAMA HATASI — dosya sahipliği kesişimi yetmedi
+
+Dört şeridi ayrık dosya kümelerine böldüm, ama **bir şeritteki doğrulama script'inin başka şeridin kaynağını taradığını** hesaba katmadım. FE-A hook'ları `acquireChannel`'a taşıyınca `desktop/scripts/check-realtime-wiring.mjs` (F3-F'in yazdığı, literal `echo.private('deals')` arayan) haksız yere 5 hata verdi — eşleme doğruydu, tarayıcının sezgisi kırıktı.
+
+**Ders:** paralel şerit sınırı çizerken yalnız "kim hangi dosyaya yazıyor" değil, **"kimin kontrolü hangi dosyayı okuyor"** da sorulmalı.
+
+## A26 UYGULANDI (F1-C)
+
+`SyncPullService::attachTicketSla()` — dört alan (`sla_remaining_seconds`, `sla_total_seconds`, `sla_target_hours`, `sla_breached`) pull satırında; `SlaService` metotları çağrıldı, aritmetik kopyalanmadı. Migration gerekmedi.
+
+**F1-B'nin işaretlediği doğrulanmamış nokta gerçek bir hata çıktı:** `Ticket::newFromBuilder()` **static değil**, instance metodu; ilk deneme `Non-static method cannot be called statically` ile patladı, `(new Ticket)->newFromBuilder($row)` ile düzeltildi. Varsayılıp geçilseydi sessizce yanlış tip geçirilecekti.
+
+Testler dört senaryoyu (açık / duraklamış / çözülmüş / SLA'sız) **gerçek `GET /api/tickets/{id}` çağrısının `TicketResource` çıktısıyla** karşılaştırıyor, saat `travelTo()` ile dondurulmuş — "iki yol ayrışmıyor" iddiası kanıta bağlı. Backend testleri **1407 → 1411**.
+
+## §9/9 LOG PII FİLTRESİ (F6-B) — kök neden tahminden farklı çıktı
+
+Görev tarifim "`tracing` filtresiz DEBUG yazıyor" diyordu. **Gerçek mekanizma başkaydı:**
+
+1. Uygulamada hiçbir yerde **`tracing::Subscriber` kurulmuyor** (`Cargo.lock` içinde `tracing-subscriber` yok). Subscriber olmadan `tracing::warn!` çağrıları **tamamen no-op** — `events.rs:36,40` fiilen sessizdi.
+2. Diskteki gerçek DEBUG satırları `tracing`'den değil, **`log` fasadından** geliyordu: üçüncü parti crate'ler (`keyring`, `reqwest`, `hyper`, tauri dahili) → `tauri_plugin_log::Builder::new().build()` filtresiz varsayılanı (`LevelFilter::Trace`).
+3. `syncra-sync/Cargo.toml` `tracing` bağımlılığını bildiriyor ama **hiç kullanmıyordu** — ölü bağımlılık, üstelik ileride eklenecek her `tracing::*!` çağrısı sessizce yutulacaktı.
+
+**Çözüm üç katmanlı:**
+- `tracing = { features = ["log"] }` — her `tracing` olayı `log::Record` olarak da yayılıyor; artık mevcut ve gelecekteki `tracing` çağrıları tek maskeleme hattından geçiyor. **Sessiz no-op riski kapandı.**
+- `logging::level_for_build()` — debug build `Debug`, release `Info`. Plugin varsayılanı `Trace` idi.
+- `logging::masking_format` — `Builder::format(...)` ile **tüm** fern hedeflerinden (stdout, dosya, webview relay) önce tek noktada e-posta ve E.164 telefon maskeleme. **Çağrı yerinde değil, yazım katmanında** — biri unutsa da tutuyor.
+
+E.164 deseninde `+` zorunlu tutulmuş; gerekçesi sahte pozitif: `+`'sız rakam dizileri bu uygulamanın kendi loglarında zararsız ve sık (outbox sayaçları, byte toplamları, cursor'lar).
+
+**Negatif test gerçek:** maskeleme bypass edilince test `email reached disk: ... jane@example.com, +14155552671` ile patladı, geri alınınca 4/4 yeşil. Release cfg doğrulaması `cargo test --release` ile yapıldı (`level_for_build() == Info`); **gerçek `.exe`'nin ürettiği log dosyası incelenemedi** — updater pubkey engeli `tauri build --release`'i bloklamaya devam ediyor (F7).
+
+**Kalan kapsam sınırı:** regex yalnız e-posta ve E.164 telefon yakalıyor. Serbest metin mesaj gövdesi veya tam ad taşıyan bir `Debug` değeri maskelenmez — görev kapsamı bu ikisiydi, genişletme F6 birleştirmesinde değerlendirilmeli.
