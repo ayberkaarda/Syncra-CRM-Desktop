@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import type { TimelineItem } from '../../../components/shared/Timeline'
+import { getPlatform } from '../../../platform'
 import type {
   CompanyOption,
   Contact,
@@ -56,7 +57,7 @@ export const userOptionsKeys = {
   all: ['user-options'] as const,
 }
 
-async function fetchContacts(query: ContactsQuery): Promise<ContactsListResponse> {
+export async function fetchContacts(query: ContactsQuery): Promise<ContactsListResponse> {
   const { data } = await api.get<ContactsListResponse>('/api/contacts', {
     params: {
       page: query.page,
@@ -75,59 +76,59 @@ async function fetchContacts(query: ContactsQuery): Promise<ContactsListResponse
   return data
 }
 
-async function fetchContactById(id: number): Promise<Contact> {
+export async function fetchContactById(id: number): Promise<Contact> {
   const { data } = await api.get<{ data: Contact }>(`/api/contacts/${id}`)
   return data.data
 }
 
-async function fetchContactTimeline(id: number, page: number): Promise<TimelineListResponse> {
+export async function fetchContactTimeline(id: number, page: number): Promise<TimelineListResponse> {
   const { data } = await api.get<TimelineListResponse>(`/api/contacts/${id}/timeline`, {
     params: { page },
   })
   return data
 }
 
-async function createContactRequest(payload: ContactPayload): Promise<Contact> {
+export async function createContactRequest(payload: ContactPayload): Promise<Contact> {
   const { data } = await api.post<{ data: Contact }>('/api/contacts', payload)
   return data.data
 }
 
-async function updateContactRequest(id: number, payload: Partial<ContactPayload>): Promise<Contact> {
+export async function updateContactRequest(id: number, payload: Partial<ContactPayload>): Promise<Contact> {
   const { data } = await api.patch<{ data: Contact }>(`/api/contacts/${id}`, payload)
   return data.data
 }
 
-async function deleteContactRequest(id: number): Promise<void> {
+export async function deleteContactRequest(id: number): Promise<void> {
   await api.delete(`/api/contacts/${id}`)
 }
 
-async function fetchTags(): Promise<Tag[]> {
+export async function fetchTags(): Promise<Tag[]> {
   const { data } = await api.get<{ data: Tag[] }>('/api/tags')
   return data.data
 }
 
-async function fetchCustomFields(): Promise<CustomFieldDef[]> {
+export async function fetchCustomFields(): Promise<CustomFieldDef[]> {
   const { data } = await api.get<{ data: CustomFieldDef[] }>('/api/custom-fields', {
     params: { entity_type: 'contacts' },
   })
   return data.data
 }
 
-async function fetchCompanyOptions(search: string): Promise<CompanyOption[]> {
+export async function fetchCompanyOptions(search: string): Promise<CompanyOption[]> {
   const { data } = await api.get<{ data: CompanyOption[] }>('/api/companies', {
     params: { q: search || undefined, per_page: 20, sort: 'name' },
   })
   return data.data
 }
 
-async function fetchAllCompanyOptions(): Promise<CompanyOption[]> {
+export async function fetchAllCompanyOptions(): Promise<CompanyOption[]> {
   const { data } = await api.get<{ data: CompanyOption[] }>('/api/companies', {
     params: { per_page: 100, sort: 'name' },
   })
   return data.data
 }
 
-async function fetchUserOptions(): Promise<UserOption[]> {
+export async function fetchUserOptions(): Promise<UserOption[]> {
   const { data } = await api.get<{ data: UserOption[] }>('/api/users', {
     params: { per_page: 100, sort: 'name' },
   })
@@ -138,7 +139,7 @@ async function fetchUserOptions(): Promise<UserOption[]> {
 export function useContacts(query: ContactsQuery) {
   return useQuery({
     queryKey: contactsKeys.list(query),
-    queryFn: () => fetchContacts(query),
+    queryFn: () => getPlatform().data.contacts.list(query),
     // Filtre/sayfa değişirken tablo boşalıp titremesin diye önceki veri korunur.
     placeholderData: keepPreviousData,
   })
@@ -147,7 +148,7 @@ export function useContacts(query: ContactsQuery) {
 export function useContact(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: contactsKeys.detail(id ?? -1),
-    queryFn: () => fetchContactById(id as number),
+    queryFn: () => getPlatform().data.contacts.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -159,7 +160,7 @@ export function useContact(id: number | undefined, options?: { enabled?: boolean
 export function useContactTimeline(id: number | undefined) {
   return useInfiniteQuery({
     queryKey: contactsKeys.timeline(id ?? -1),
-    queryFn: ({ pageParam }) => fetchContactTimeline(id as number, pageParam),
+    queryFn: ({ pageParam }) => getPlatform().data.contacts.timeline(id as number, pageParam),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.meta.pagination.current_page < lastPage.meta.pagination.last_page
@@ -172,7 +173,7 @@ export function useContactTimeline(id: number | undefined) {
 export function useTags() {
   return useQuery({
     queryKey: tagsKeys.all,
-    queryFn: fetchTags,
+    queryFn: () => getPlatform().data.contacts.tags(),
     staleTime: 5 * 60_000,
   })
 }
@@ -180,7 +181,7 @@ export function useTags() {
 export function useCustomFields() {
   return useQuery({
     queryKey: customFieldsKeys.contacts,
-    queryFn: fetchCustomFields,
+    queryFn: () => getPlatform().data.contacts.customFields(),
     staleTime: 5 * 60_000,
   })
 }
@@ -189,7 +190,7 @@ export function useCustomFields() {
 export function useCompanyOptions(search: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: companyOptionsKeys.search(search),
-    queryFn: () => fetchCompanyOptions(search),
+    queryFn: () => getPlatform().data.contacts.companyOptions(search),
     enabled: options?.enabled ?? true,
     placeholderData: keepPreviousData,
   })
@@ -199,7 +200,7 @@ export function useCompanyOptions(search: string, options?: { enabled?: boolean 
 export function useAllCompanyOptions() {
   return useQuery({
     queryKey: companyOptionsKeys.all,
-    queryFn: fetchAllCompanyOptions,
+    queryFn: () => getPlatform().data.contacts.allCompanyOptions(),
     staleTime: 60_000,
   })
 }
@@ -208,7 +209,7 @@ export function useAllCompanyOptions() {
 export function useUserOptions(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: userOptionsKeys.all,
-    queryFn: fetchUserOptions,
+    queryFn: () => getPlatform().data.contacts.userOptions(),
     enabled: options?.enabled ?? true,
     staleTime: 60_000,
   })
@@ -218,7 +219,7 @@ export function useCreateContact() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('contacts')
   return useMutation({
-    mutationFn: createContactRequest,
+    mutationFn: (payload: ContactPayload) => getPlatform().data.contacts.create(payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: contactsKeys.all })
       toast.success(t('toast.created'))
@@ -233,7 +234,7 @@ export function useUpdateContact() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('contacts')
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<ContactPayload> }) => updateContactRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<ContactPayload> }) => getPlatform().data.contacts.update(id, payload),
     onSuccess: (updatedContact) => {
       void queryClient.invalidateQueries({ queryKey: contactsKeys.all })
       void queryClient.invalidateQueries({ queryKey: contactsKeys.detail(updatedContact.id) })
@@ -249,7 +250,7 @@ export function useDeleteContact() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('contacts')
   return useMutation({
-    mutationFn: (id: number) => deleteContactRequest(id),
+    mutationFn: (id: number) => getPlatform().data.contacts.delete(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: contactsKeys.all })
       toast.success(t('toast.deleted'))

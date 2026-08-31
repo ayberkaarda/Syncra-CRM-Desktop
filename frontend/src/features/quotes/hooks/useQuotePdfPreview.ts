@@ -20,7 +20,8 @@
 // bir şey yok), gerçek blob URL yalnızca kalıcı kalan ikinci mount'ta üretilir ve YALNIZCA o
 // effect'in kendi cleanup'ında (unmount veya `quoteId` değişince) serbest bırakılır.
 import { useEffect, useState } from 'react'
-import { fetchQuotePdfBlob, getQuotePdfErrorMessage } from '../api/quotesApi'
+import { getQuotePdfErrorMessage } from '../api/quotesApi'
+import { getPlatform } from '../../../platform'
 
 export type QuotePdfPreviewState =
   | { status: 'loading' }
@@ -53,7 +54,7 @@ export function useQuotePdfPreview(quoteId: number | undefined): QuotePdfPreview
     let cancelled = false
     let objectUrl: string | null = null
 
-    fetchQuotePdfBlob(quoteId)
+    getPlatform().data.quotes.pdfBlob(quoteId)
       .then((blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)

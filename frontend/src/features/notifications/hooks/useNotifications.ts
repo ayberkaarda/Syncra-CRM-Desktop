@@ -5,14 +5,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
-import {
-  deleteNotificationRequest,
-  fetchNotifications,
-  fetchUnreadCount,
-  markAllNotificationsReadRequest,
-  markNotificationReadRequest,
-} from '../api'
 import type { NotificationsQuery } from '../types'
+import { getPlatform } from '../../../platform'
 
 export const notificationsKeys = {
   all: ['notifications'] as const,
@@ -24,7 +18,7 @@ export const notificationsKeys = {
 export function useNotifications(query: NotificationsQuery) {
   return useQuery({
     queryKey: notificationsKeys.list(query),
-    queryFn: () => fetchNotifications(query),
+    queryFn: () => getPlatform().data.notifications.list(query),
     placeholderData: keepPreviousData,
   })
 }
@@ -37,7 +31,7 @@ export function useNotifications(query: NotificationsQuery) {
 export function useUnreadCount() {
   return useQuery({
     queryKey: notificationsKeys.unreadCount,
-    queryFn: fetchUnreadCount,
+    queryFn: () => getPlatform().data.notifications.unreadCount(),
   })
 }
 
@@ -51,7 +45,7 @@ function invalidateNotificationCaches(queryClient: ReturnType<typeof useQueryCli
 export function useMarkRead() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => markNotificationReadRequest(id),
+    mutationFn: (id: string) => getPlatform().data.notifications.markRead(id),
     onSuccess: () => invalidateNotificationCaches(queryClient),
     onError: (error) => toast.error(getErrorMessage(error)),
   })
@@ -60,7 +54,7 @@ export function useMarkRead() {
 export function useMarkAllRead() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: markAllNotificationsReadRequest,
+    mutationFn: () => getPlatform().data.notifications.markAllRead(),
     onSuccess: () => {
       invalidateNotificationCaches(queryClient)
       toast.success(i18n.t('notifications:toast.markAllReadSuccess'))
@@ -72,7 +66,7 @@ export function useMarkAllRead() {
 export function useDeleteNotification() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => deleteNotificationRequest(id),
+    mutationFn: (id: string) => getPlatform().data.notifications.delete(id),
     onSuccess: () => {
       invalidateNotificationCaches(queryClient)
       toast.success(i18n.t('notifications:toast.deleteSuccess'))

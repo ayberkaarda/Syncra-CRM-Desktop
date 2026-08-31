@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import type { Product, ResolvedProductPrice } from '../types'
+import { getPlatform } from '../../../platform'
 
 export const productsKeys = {
   all: ['products'] as const,
@@ -57,7 +58,7 @@ export type ProductPayload = {
   custom_fields?: Record<string, string>
 }
 
-async function fetchProducts(query: ProductsQuery): Promise<ProductsListResponse> {
+export async function fetchProducts(query: ProductsQuery): Promise<ProductsListResponse> {
   const { data } = await api.get<ProductsListResponse>('/api/products', {
     params: {
       page: query.page,
@@ -75,41 +76,41 @@ async function fetchProducts(query: ProductsQuery): Promise<ProductsListResponse
   return data
 }
 
-async function fetchProduct(id: number): Promise<Product> {
+export async function fetchProduct(id: number): Promise<Product> {
   const { data } = await api.get<{ data: Product }>(`/api/products/${id}`)
   return data.data
 }
 
-async function fetchProductCategories(): Promise<string[]> {
+export async function fetchProductCategories(): Promise<string[]> {
   const { data } = await api.get<{ data: string[] }>('/api/products/categories')
   return data.data
 }
 
-async function fetchProductPrice(productId: number, priceListId: number | undefined): Promise<ResolvedProductPrice> {
+export async function fetchProductPrice(productId: number, priceListId: number | undefined): Promise<ResolvedProductPrice> {
   const { data } = await api.get<{ data: ResolvedProductPrice }>(`/api/products/${productId}/price`, {
     params: { price_list_id: priceListId },
   })
   return data.data
 }
 
-async function createProductRequest(payload: ProductPayload): Promise<Product> {
+export async function createProductRequest(payload: ProductPayload): Promise<Product> {
   const { data } = await api.post<{ data: Product }>('/api/products', payload)
   return data.data
 }
 
-async function updateProductRequest(id: number, payload: Partial<ProductPayload>): Promise<Product> {
+export async function updateProductRequest(id: number, payload: Partial<ProductPayload>): Promise<Product> {
   const { data } = await api.patch<{ data: Product }>(`/api/products/${id}`, payload)
   return data.data
 }
 
-async function deleteProductRequest(id: number): Promise<void> {
+export async function deleteProductRequest(id: number): Promise<void> {
   await api.delete(`/api/products/${id}`)
 }
 
 export function useProducts(query: ProductsQuery) {
   return useQuery({
     queryKey: productsKeys.list(query),
-    queryFn: () => fetchProducts(query),
+    queryFn: () => getPlatform().data.products.list(query),
     placeholderData: keepPreviousData,
   })
 }
@@ -117,7 +118,7 @@ export function useProducts(query: ProductsQuery) {
 export function useProduct(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: productsKeys.detail(id ?? -1),
-    queryFn: () => fetchProduct(id as number),
+    queryFn: () => getPlatform().data.products.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -125,7 +126,7 @@ export function useProduct(id: number | undefined, options?: { enabled?: boolean
 export function useProductCategories() {
   return useQuery({
     queryKey: productsKeys.categories,
-    queryFn: fetchProductCategories,
+    queryFn: () => getPlatform().data.products.categories(),
     staleTime: 5 * 60_000,
   })
 }
@@ -138,7 +139,7 @@ export function useProductPrice(
 ) {
   return useQuery({
     queryKey: productsKeys.price(productId ?? -1, priceListId),
-    queryFn: () => fetchProductPrice(productId as number, priceListId),
+    queryFn: () => getPlatform().data.products.price(productId as number, priceListId),
     enabled: (options?.enabled ?? true) && productId !== undefined,
   })
 }
@@ -155,7 +156,7 @@ export function useCreateProduct() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('products')
   return useMutation({
-    mutationFn: createProductRequest,
+    mutationFn: (payload: ProductPayload) => getPlatform().data.products.create(payload),
     onSuccess: (product) => {
       invalidateProductCaches(queryClient, product.id)
       toast.success(t('toast.created'))
@@ -168,7 +169,7 @@ export function useUpdateProduct() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('products')
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<ProductPayload> }) => updateProductRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<ProductPayload> }) => getPlatform().data.products.update(id, payload),
     onSuccess: (product) => {
       invalidateProductCaches(queryClient, product.id)
       toast.success(t('toast.updated'))
@@ -181,7 +182,7 @@ export function useDeleteProduct() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('products')
   return useMutation({
-    mutationFn: (id: number) => deleteProductRequest(id),
+    mutationFn: (id: number) => getPlatform().data.products.delete(id),
     onSuccess: () => {
       invalidateProductCaches(queryClient)
       toast.success(t('toast.deleted'))

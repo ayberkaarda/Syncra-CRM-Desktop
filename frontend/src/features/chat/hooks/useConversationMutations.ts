@@ -5,20 +5,12 @@ import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '../../../components/ui'
 import { getErrorMessage } from '../../../lib/axios'
 import i18n from '../../../i18n'
-import {
-  addConversationMembersRequest,
-  chatKeys,
-  createConversationRequest,
-  deleteConversationRequest,
-  leaveConversationRequest,
-  muteConversationRequest,
-  removeConversationMemberRequest,
-  renameConversationRequest,
-} from '../api'
+import { chatKeys } from '../api'
 import { syncConversationCaches } from './chatCache'
 import { useConversation } from './useConversations'
 import { useChatStore } from '../store'
 import type { ChatUser, Conversation, CreateConversationPayload } from '../types'
+import { getPlatform } from '../../../platform'
 
 /**
  * Detayı + tüm liste önbelleklerini sunucu yanıtıyla yazar (`chatCache.syncConversationCaches`)
@@ -45,7 +37,7 @@ function forgetConversation(queryClient: QueryClient, conversationId: number) {
 export function useCreateConversation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (payload: CreateConversationPayload) => createConversationRequest(payload),
+    mutationFn: (payload: CreateConversationPayload) => getPlatform().data.chat.createConversation(payload),
     onSuccess: (conversation) => {
       syncConversation(queryClient, conversation)
       toast.success(i18n.t('chat:toast.created'))
@@ -88,7 +80,7 @@ export function useConversationMembers(conversationId: number | null): UseConver
   const onError = useCallback((error: unknown) => toast.error(getErrorMessage(error)), [])
 
   const addMembersMutation = useMutation({
-    mutationFn: (userIds: number[]) => addConversationMembersRequest(conversationId as number, userIds),
+    mutationFn: (userIds: number[]) => getPlatform().data.chat.addMembers(conversationId as number, userIds),
     onSuccess: (updated) => {
       syncConversation(queryClient, updated)
       toast.success(i18n.t('chat:toast.memberAdded'))
@@ -97,7 +89,7 @@ export function useConversationMembers(conversationId: number | null): UseConver
   })
 
   const removeMemberMutation = useMutation({
-    mutationFn: (userId: number) => removeConversationMemberRequest(conversationId as number, userId),
+    mutationFn: (userId: number) => getPlatform().data.chat.removeMember(conversationId as number, userId),
     onSuccess: () => {
       if (conversationId !== null) {
         void queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) })
@@ -109,7 +101,7 @@ export function useConversationMembers(conversationId: number | null): UseConver
   })
 
   const leaveMutation = useMutation({
-    mutationFn: () => leaveConversationRequest(conversationId as number),
+    mutationFn: () => getPlatform().data.chat.leaveConversation(conversationId as number),
     onSuccess: () => {
       if (conversationId !== null) {
         clearConversationUnread(conversationId)
@@ -121,7 +113,7 @@ export function useConversationMembers(conversationId: number | null): UseConver
   })
 
   const renameMutation = useMutation({
-    mutationFn: (name: string) => renameConversationRequest(conversationId as number, name),
+    mutationFn: (name: string) => getPlatform().data.chat.renameConversation(conversationId as number, name),
     onSuccess: (updated) => {
       syncConversation(queryClient, updated)
       toast.success(i18n.t('chat:toast.renamed'))
@@ -130,7 +122,7 @@ export function useConversationMembers(conversationId: number | null): UseConver
   })
 
   const removeMutation = useMutation({
-    mutationFn: () => deleteConversationRequest(conversationId as number),
+    mutationFn: () => getPlatform().data.chat.deleteConversation(conversationId as number),
     onSuccess: () => {
       if (conversationId !== null) {
         clearConversationUnread(conversationId)
@@ -142,7 +134,7 @@ export function useConversationMembers(conversationId: number | null): UseConver
   })
 
   const muteMutation = useMutation({
-    mutationFn: (isMuted: boolean) => muteConversationRequest(conversationId as number, isMuted),
+    mutationFn: (isMuted: boolean) => getPlatform().data.chat.muteConversation(conversationId as number, isMuted),
     onSuccess: (updated) => {
       syncConversation(queryClient, updated)
       toast.success(updated.is_muted ? i18n.t('chat:toast.muted') : i18n.t('chat:toast.unmuted'))

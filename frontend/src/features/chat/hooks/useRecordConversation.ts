@@ -1,8 +1,9 @@
 // Bir kayda (deal/ticket) bağlı sohbet — `POST /api/conversations/for-record`.
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { chatKeys, fetchOrCreateRecordConversation } from '../api'
+import { chatKeys } from '../api'
 import type { Conversation, RecordConversableType } from '../types'
+import { getPlatform } from '../../../platform'
 
 /**
  * Sunucuda GET-OR-CREATE olduğu için POST olmasına rağmen MUTASYON değil SORGU olarak
@@ -24,7 +25,7 @@ export function useRecordConversation(
 
   const query = useQuery({
     queryKey: chatKeys.recordConversation(recordType, recordId ?? -1),
-    queryFn: () => fetchOrCreateRecordConversation(recordType, recordId as number),
+    queryFn: () => getPlatform().data.chat.recordConversation(recordType, recordId as number),
     enabled,
     // Bir kez çözüldükten sonra sonuç neredeyse hiç değişmez; gereksiz tekrar POST atmamak
     // için uzun süre taze sayılır (detay realtime olaylarla zaten güncelleniyor).

@@ -8,6 +8,12 @@
 
 @import './styles/tokens.css';
 
+/* Tailwind v4 içerik taraması çalışma dizini bazlı; desktop/ kökünden çalışan build
+   ../frontend/src'i kaçırıp bazı utility sınıflarını sessizce düşürebilir. Bu direktif taramayı
+   bu dosyanın kendi konumuna göre sabitler — web build'i için davranış-nötrdür
+   (docs/DESKTOP-ARCHITECTURE.md §4.4, karar A9). */
+@source "./";
+
 body {
   background-color: var(--color-surface-0);
   color: var(--color-fg);

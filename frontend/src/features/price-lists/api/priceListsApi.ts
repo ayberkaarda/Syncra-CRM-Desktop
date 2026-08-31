@@ -14,6 +14,7 @@ import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
 import type { PriceList, PriceListItem } from '../types'
+import { getPlatform } from '../../../platform'
 
 export const priceListsKeys = {
   all: ['price-lists'] as const,
@@ -58,7 +59,7 @@ export type PriceListPayload = {
   valid_until?: string | null
 }
 
-async function fetchPriceLists(query: PriceListsQuery): Promise<PriceListsListResponse> {
+export async function fetchPriceLists(query: PriceListsQuery): Promise<PriceListsListResponse> {
   const { data } = await api.get<PriceListsListResponse>('/api/price-lists', {
     params: {
       page: query.page,
@@ -72,47 +73,47 @@ async function fetchPriceLists(query: PriceListsQuery): Promise<PriceListsListRe
   return data
 }
 
-async function fetchPriceList(id: number): Promise<PriceList> {
+export async function fetchPriceList(id: number): Promise<PriceList> {
   const { data } = await api.get<{ data: PriceList }>(`/api/price-lists/${id}`)
   return data.data
 }
 
-async function fetchPriceListItems(id: number, page: number, perPage = 25): Promise<PriceListItemsResponse> {
+export async function fetchPriceListItems(id: number, page: number, perPage = 25): Promise<PriceListItemsResponse> {
   const { data } = await api.get<PriceListItemsResponse>(`/api/price-lists/${id}/products`, {
     params: { page, per_page: perPage },
   })
   return data
 }
 
-async function createPriceListRequest(payload: PriceListPayload): Promise<PriceList> {
+export async function createPriceListRequest(payload: PriceListPayload): Promise<PriceList> {
   const { data } = await api.post<{ data: PriceList }>('/api/price-lists', payload)
   return data.data
 }
 
-async function updatePriceListRequest(id: number, payload: Partial<PriceListPayload>): Promise<PriceList> {
+export async function updatePriceListRequest(id: number, payload: Partial<PriceListPayload>): Promise<PriceList> {
   const { data } = await api.patch<{ data: PriceList }>(`/api/price-lists/${id}`, payload)
   return data.data
 }
 
-async function deletePriceListRequest(id: number): Promise<void> {
+export async function deletePriceListRequest(id: number): Promise<void> {
   await api.delete(`/api/price-lists/${id}`)
 }
 
-async function setPriceRequest(priceListId: number, productId: number, unitPrice: number): Promise<PriceListItem> {
+export async function setPriceRequest(priceListId: number, productId: number, unitPrice: number): Promise<PriceListItem> {
   const { data } = await api.put<{ data: PriceListItem }>(`/api/price-lists/${priceListId}/products/${productId}`, {
     unit_price: unitPrice,
   })
   return data.data
 }
 
-async function removePriceRequest(priceListId: number, productId: number): Promise<void> {
+export async function removePriceRequest(priceListId: number, productId: number): Promise<void> {
   await api.delete(`/api/price-lists/${priceListId}/products/${productId}`)
 }
 
 export function usePriceLists(query: PriceListsQuery) {
   return useQuery({
     queryKey: priceListsKeys.list(query),
-    queryFn: () => fetchPriceLists(query),
+    queryFn: () => getPlatform().data.priceLists.list(query),
     placeholderData: keepPreviousData,
   })
 }
@@ -120,7 +121,7 @@ export function usePriceLists(query: PriceListsQuery) {
 export function usePriceList(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: priceListsKeys.detail(id ?? -1),
-    queryFn: () => fetchPriceList(id as number),
+    queryFn: () => getPlatform().data.priceLists.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -128,7 +129,7 @@ export function usePriceList(id: number | undefined, options?: { enabled?: boole
 export function usePriceListItems(id: number | undefined, page: number, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: priceListsKeys.items(id ?? -1, page),
-    queryFn: () => fetchPriceListItems(id as number, page),
+    queryFn: () => getPlatform().data.priceLists.items(id as number, page),
     enabled: (options?.enabled ?? true) && id !== undefined,
     placeholderData: keepPreviousData,
   })
@@ -145,7 +146,7 @@ function invalidatePriceListCaches(queryClient: ReturnType<typeof useQueryClient
 export function useCreatePriceList() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: createPriceListRequest,
+    mutationFn: (payload: PriceListPayload) => getPlatform().data.priceLists.create(payload),
     onSuccess: (priceList) => {
       invalidatePriceListCaches(queryClient, priceList.id)
       toast.success(i18n.t('priceLists:toast.created'))
@@ -157,7 +158,7 @@ export function useCreatePriceList() {
 export function useUpdatePriceList() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<PriceListPayload> }) => updatePriceListRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<PriceListPayload> }) => getPlatform().data.priceLists.update(id, payload),
     onSuccess: (priceList) => {
       invalidatePriceListCaches(queryClient, priceList.id)
       toast.success(i18n.t('priceLists:toast.updated'))
@@ -169,7 +170,7 @@ export function useUpdatePriceList() {
 export function useDeletePriceList() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deletePriceListRequest(id),
+    mutationFn: (id: number) => getPlatform().data.priceLists.delete(id),
     onSuccess: () => {
       invalidatePriceListCaches(queryClient)
       toast.success(i18n.t('priceLists:toast.deleted'))
@@ -182,7 +183,7 @@ export function useSetPrice(priceListId: number) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ productId, unitPrice }: { productId: number; unitPrice: number }) =>
-      setPriceRequest(priceListId, productId, unitPrice),
+      getPlatform().data.priceLists.setPrice(priceListId, productId, unitPrice),
     onSuccess: () => {
       invalidatePriceListCaches(queryClient, priceListId)
       toast.success(i18n.t('priceLists:toast.priceSaved'))
@@ -194,7 +195,7 @@ export function useSetPrice(priceListId: number) {
 export function useRemovePrice(priceListId: number) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (productId: number) => removePriceRequest(priceListId, productId),
+    mutationFn: (productId: number) => getPlatform().data.priceLists.removePrice(priceListId, productId),
     onSuccess: () => {
       invalidatePriceListCaches(queryClient, priceListId)
       toast.success(i18n.t('priceLists:toast.priceRemoved'))

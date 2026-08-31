@@ -23,6 +23,55 @@ export type EchoConnectionState = 'connecting' | 'connected' | 'unavailable' | '
 
 type StateListener = (state: EchoConnectionState) => void
 
+/** What `createEcho()` needs to open a connection and authorize private/presence channels. */
+export interface RealtimeAuthConfig {
+  key: string
+  wsHost: string
+  wsPort: number
+  forceTLS: boolean
+  authorizer: (channel: Channel) => { authorize(socketId: string, callback: ChannelAuthorizationCallback): void }
+}
+
+/** Posts to `/broadcasting/auth` via the Sanctum-aware `api` instance — today's (web) behavior. */
+export function defaultReverbAuthorizer(channel: Channel) {
+  return {
+    authorize(socketId: string, callback: ChannelAuthorizationCallback) {
+      api
+        .post('/broadcasting/auth', {
+          socket_id: socketId,
+          channel_name: channel.name,
+        })
+        .then((response) => callback(null, response.data))
+        .catch((error) => callback(error, null))
+    },
+  }
+}
+
+/**
+ * Default matches today's (pre-platform-adapter) behavior exactly, so `connectEcho()` works
+ * unchanged for any caller that never imports `platform/`. `platform/web.ts` calls
+ * `configureRealtimeAuth()` with the same values, making the platform module — not this file —
+ * the declared single source (`SYNCDESKTOP.md` §7.1: "VITE_REVERB_* okuması ... platform'dan
+ * gelsin").
+ */
+let realtimeConfig: RealtimeAuthConfig = {
+  key: import.meta.env.VITE_REVERB_APP_KEY,
+  wsHost: import.meta.env.VITE_REVERB_HOST,
+  wsPort: Number(import.meta.env.VITE_REVERB_PORT),
+  forceTLS: import.meta.env.VITE_REVERB_SCHEME === 'https',
+  authorizer: defaultReverbAuthorizer,
+}
+
+/**
+ * Lets a platform adapter supply the Reverb connection params and channel authorizer instead of
+ * this module resolving them itself. Only takes effect on the NEXT `createEcho()` — an
+ * already-open instance is not migrated live, so call this before the first `connectEcho()`/
+ * `getEcho()`.
+ */
+export function configureRealtimeAuth(config: RealtimeAuthConfig) {
+  realtimeConfig = config
+}
+
 let echoInstance: SyncraEcho | null = null
 let connectionState: EchoConnectionState = 'unavailable'
 const stateListeners = new Set<StateListener>()
@@ -65,26 +114,16 @@ function createEcho(): SyncraEcho {
 
   echoInstance = new Echo({
     broadcaster: 'reverb',
-    key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: Number(import.meta.env.VITE_REVERB_PORT),
-    wssPort: Number(import.meta.env.VITE_REVERB_PORT),
-    forceTLS: import.meta.env.VITE_REVERB_SCHEME === 'https',
+    key: realtimeConfig.key,
+    wsHost: realtimeConfig.wsHost,
+    wsPort: realtimeConfig.wsPort,
+    wssPort: realtimeConfig.wsPort,
+    forceTLS: realtimeConfig.forceTLS,
     enabledTransports: ['ws', 'wss'],
-    // Authorize private/presence channels through our Sanctum-aware axios
-    // instance so the session cookie + XSRF header (and the 419 CSRF retry)
-    // ride along automatically.
-    authorizer: (channel: Channel) => ({
-      authorize(socketId: string, callback: ChannelAuthorizationCallback) {
-        api
-          .post('/broadcasting/auth', {
-            socket_id: socketId,
-            channel_name: channel.name,
-          })
-          .then((response) => callback(null, response.data))
-          .catch((error) => callback(error, null))
-      },
-    }),
+    // Authorize private/presence channels — default (web) posts through our Sanctum-aware axios
+    // instance so the session cookie + XSRF header (and the 419 CSRF retry) ride along
+    // automatically; see `defaultReverbAuthorizer` / `configureRealtimeAuth`.
+    authorizer: realtimeConfig.authorizer,
   })
 
   // pusher-js is the source of truth for connection state; forward its
@@ -126,6 +165,11 @@ export function disconnectEcho() {
  */
 export function getEcho(): SyncraEcho | null {
   return echoInstance
+}
+
+/** Returns the current connection state without subscribing. */
+export function getConnectionState(): EchoConnectionState {
+  return connectionState
 }
 
 /**

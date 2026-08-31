@@ -9,8 +9,8 @@ import { useMutation } from '@tanstack/react-query'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { toast } from '../../../components/ui'
 import { getErrorMessage } from '../../../lib/axios'
-import { uploadAttachmentRequest } from '../api'
 import type { Attachment } from '../types'
+import { getPlatform } from '../../../platform'
 
 export type UseUploadAttachmentResult = UseMutationResult<Attachment, Error, File> & {
   /** 0–100. Sunucu `Content-Length` vermezse 0'da kalır — UI belirsiz gösterge çizmelidir. */
@@ -30,7 +30,7 @@ export function useUploadAttachment(): UseUploadAttachmentResult {
       const controller = new AbortController()
       abortRef.current = controller
       setProgress(0)
-      return uploadAttachmentRequest(file, setProgress, controller.signal)
+      return getPlatform().data.chat.uploadAttachment(file, setProgress, controller.signal)
     },
     onSuccess: () => setProgress(100),
     onError: (error) => {
