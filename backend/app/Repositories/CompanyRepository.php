@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\CustomField;
+use App\Services\Sync\TagSyncService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -199,11 +200,16 @@ class CompanyRepository
     }
 
     /**
+     * Routed through TagSyncService so the owner's `sync_version` moves with
+     * the pivot write - `->tags()->sync()` fires no model event at all, so
+     * without it a tag-only edit never reaches a desktop client (protocol
+     * §1.4).
+     *
      * @param  array<int, int>  $tagIds
      */
     public function syncTags(Company $company, array $tagIds): void
     {
-        $company->tags()->sync($tagIds);
+        TagSyncService::apply($company, $tagIds);
     }
 
     /**

@@ -6,6 +6,8 @@ use App\Models\CustomField;
 use App\Models\CustomFieldValue;
 use App\Models\Deal;
 use App\Models\PipelineStage;
+use App\Services\Sync\TagSyncService;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -234,11 +236,16 @@ class DealRepository
     }
 
     /**
+     * Routed through TagSyncService so the owner's `sync_version` moves with
+     * the pivot write - `->tags()->sync()` fires no model event at all, so
+     * without it a tag-only edit never reaches a desktop client (protocol
+     * §1.4).
+     *
      * @param  array<int, int>  $tagIds
      */
     public function syncTags(Deal $deal, array $tagIds): void
     {
-        $deal->tags()->sync($tagIds);
+        TagSyncService::apply($deal, $tagIds);
     }
 
     /**
@@ -260,6 +267,8 @@ class DealRepository
             ->get()
             ->keyBy('key');
 
+        $changed = false;
+
         foreach ($customFields as $key => $value) {
             $field = $fields->get($key);
 
@@ -267,7 +276,7 @@ class DealRepository
                 continue;
             }
 
-            CustomFieldValue::updateOrCreate(
+            $row = CustomFieldValue::updateOrCreate(
                 [
                     'custom_field_id' => $field->id,
                     'customizable_type' => Deal::class,
@@ -275,6 +284,18 @@ class DealRepository
                 ],
                 ['value' => is_array($value) ? json_encode($value) : (string) $value]
             );
+
+            $changed = $changed || $row->wasRecentlyCreated || $row->wasChanged();
+        }
+
+        // Embedded child (protocol §1.5): `custom_field_values` is not a pull
+        // table - its rows ride inside the owner's `custom_fields` payload.
+        // When ONLY a custom field changed, the owner row itself is clean, no
+        // observer fires, and the edit would never cross a client's cursor.
+        // Bumped only when something actually changed, so a no-op upsert does
+        // not manufacture a phantom delta.
+        if ($changed) {
+            SyncVersionBumper::bump($deal);
         }
     }
 

@@ -18,8 +18,19 @@ use Illuminate\Http\Response;
  * Sanctum SPA (cookie session) authentication.
  *
  * The SPA calls GET /sanctum/csrf-cookie first, then posts here with the
- * X-XSRF-TOKEN header. No API tokens are issued anywhere in this application -
- * the User model deliberately does NOT use HasApiTokens.
+ * X-XSRF-TOKEN header.
+ *
+ * UPDATED IN F1: API tokens DO exist now. User uses HasApiTokens, and the
+ * desktop client obtains a personal access token from
+ * App\Http\Controllers\Api\Auth\DeviceTokenController
+ * (POST /api/auth/device, single ability `desktop`). This controller is still
+ * cookie-only: none of its endpoints issue, read or revoke a token, and the
+ * SPA's flow through them is unchanged.
+ *
+ * ONE EXCEPTION, and it is in the service rather than here: changePassword()
+ * now deletes the caller's OTHER device tokens (AuthService::changePassword(),
+ * protocol §3.6). A password change has to invalidate credentials on machines
+ * the user is not holding.
  */
 class AuthController extends Controller
 {

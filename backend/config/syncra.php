@@ -16,6 +16,16 @@ return [
         'page_visits' => (int) env('LOG_RETENTION_PAGE_VISITS_DAYS', 90),
         'sessions' => (int) env('LOG_RETENTION_SESSIONS_DAYS', 365),
         'activities' => (int) env('LOG_RETENTION_ACTIVITIES_DAYS', 365),
+
+        /*
+         * Faz F1 — masaüstü senkron tabloları (SYNCDESKTOP §4.2). Kept in the
+         * SAME block as the log retentions because `logs:prune` is the single
+         * command that owns time-based pruning in this application; a second
+         * scheduler entry with its own semantics would be a second thing to
+         * forget.
+         */
+        'sync_deletions' => (int) env('LOG_RETENTION_SYNC_DELETIONS_DAYS', 90),
+        'sync_idempotency' => (int) env('LOG_RETENTION_SYNC_IDEMPOTENCY_DAYS', 7),
     ],
 
     /*

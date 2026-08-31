@@ -9,11 +9,37 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasFactory, HasRoles, LogsCrmActivity, Notifiable, SoftDeletes;
+    /**
+     * `HasApiTokens` (Faz F1 — SYNCDESKTOP K4 / §4.3).
+     *
+     * The desktop client cannot use the SPA cookie flow: it has no browser
+     * origin, no CSRF cookie and needs a credential that survives restarts.
+     * It authenticates once through POST /api/auth/device and carries a
+     * Sanctum personal access token whose only ability is `desktop`.
+     *
+     * The web flow is UNCHANGED. Sanctum still authenticates the SPA from the
+     * session (config/sanctum.php `guard => ['web']` is tried first), and
+     * `/api/me` keeps its exact shape because UserResource is an explicit
+     * whitelist rather than `toArray()`. The trait adds only tokens(),
+     * tokenCan(), tokenCant(), createToken(), generateTokenString(),
+     * currentAccessToken() and withAccessToken() - checked against Notifiable,
+     * HasRoles/HasPermissions, LogsCrmActivity and SoftDeletes, nothing
+     * collides, and `tokens()` is a relation that only serialises when eager
+     * loaded (it never is).
+     *
+     * ONE CONSEQUENCE IS NOT OBVIOUS: from this line on, every cookie session
+     * also satisfies `ability:desktop`. Sanctum's Guard hands a session user a
+     * TransientToken whose can() returns an unconditional true, so
+     * CheckForAnyAbility passes for the SPA as well. That is why the sync
+     * routes carry `device.token` (App\Http\Middleware\EnsureDeviceToken) on
+     * top of `ability:desktop` - see that class and protocol §3.3/K-A.
+     */
+    use HasApiTokens, HasFactory, HasRoles, LogsCrmActivity, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.

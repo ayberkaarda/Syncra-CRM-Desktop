@@ -61,7 +61,7 @@ class PasswordChangeGateTest extends TestCase
      * "METOD(LAR) URI" imzası kullanılır — isimsiz bir rotayı da kümeye
      * sokabilmek için.
      */
-    public function test_password_changed_middleware_whitelist_is_exactly_the_four_expected_endpoints(): void
+    public function test_password_changed_middleware_whitelist_is_exactly_the_five_expected_endpoints(): void
     {
         $exempt = [];
 
@@ -84,13 +84,39 @@ class PasswordChangeGateTest extends TestCase
 
         $this->assertSame(
             [
+                /*
+                 * Faz F1 — BEŞİNCİ ELEMAN, BİLİNÇLİ EKLENDİ (protokol §3.7/§7.1).
+                 *
+                 * `api/broadcasting/auth` is the desktop client's channel
+                 * authorisation route, registered from routes/api.php with
+                 * ['auth:sanctum','active'] so it can be reached with a bearer
+                 * token. It is exempt from `password.changed` for EXACTLY the
+                 * reason the cookie route below it is (see the DELIBERATELY
+                 * ABSENT paragraph in bootstrap/app.php): a user under a forced
+                 * password change still needs a live socket - that is the very
+                 * session in which UserDeactivated has to reach them - and no
+                 * channel callback grants data beyond identity plus permissions
+                 * the user already holds.
+                 *
+                 * It is registered at `api/broadcasting/auth` rather than
+                 * through a second withBroadcasting() call because that helper
+                 * hard-codes the URI: the second registration would collide
+                 * with the first and, having no route name, would SILENTLY
+                 * never run (protokol §3.7/D9).
+                 *
+                 * `/api/me/devices*` is NOT in this list and must not be: those
+                 * two routes are declared INSIDE the `password.changed` group,
+                 * because a user who still owes a password change should not be
+                 * enrolling long-lived device tokens with a temporary password.
+                 */
                 'GET api/me',
+                'GET|POST api/broadcasting/auth',
                 'GET|POST broadcasting/auth',
                 'POST api/logout',
                 'POST api/password/change',
             ],
             $exempt,
-            'auth:sanctum taşıyan ama password.changed taşımayan uç kümesi beklenen 4 beyaz liste '.
+            'auth:sanctum taşıyan ama password.changed taşımayan uç kümesi beklenen 5 beyaz liste '.
             'ucundan SAPTI — yeni eklenen bir veri ucu zorunlu şifre değişimini atlıyor olabilir (R11).'
         );
     }

@@ -14,20 +14,38 @@ use App\Listeners\Notifications\SendDealStageChangedNotification;
 use App\Listeners\Notifications\SendTaskReminderNotification;
 use App\Listeners\Notifications\SendTicketSlaBreachedNotification;
 use App\Listeners\Notifications\SendTicketSlaWarningNotification;
+use App\Models\Activity;
+use App\Models\Company;
+use App\Models\Contact;
+use App\Models\Conversation;
+use App\Models\CustomField;
 use App\Models\Deal;
+use App\Models\ExchangeRate;
 use App\Models\Lead;
+use App\Models\Message;
+use App\Models\PipelineStage;
+use App\Models\PriceList;
+use App\Models\PriceListItem;
+use App\Models\Product;
 use App\Models\Quote;
+use App\Models\SavedView;
+use App\Models\Setting;
+use App\Models\Tag;
 use App\Models\Task;
 use App\Models\Ticket;
+use App\Models\User;
 use App\Observers\ActivityLogObserver;
 use App\Observers\Notifications\DealNotificationObserver;
 use App\Observers\Notifications\LeadNotificationObserver;
 use App\Observers\Notifications\QuoteNotificationObserver;
 use App\Observers\Notifications\TaskNotificationObserver;
 use App\Observers\Notifications\TicketNotificationObserver;
+use App\Observers\SyncDeletionObserver;
+use App\Observers\SyncVersionObserver;
 use App\Services\Auth\AuthService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -55,6 +73,74 @@ class AppServiceProvider extends ServiceProvider
         $this->registerNotificationObservers();
         $this->registerNotificationListeners();
         $this->registerAutomationRuleListeners();
+        $this->registerSyncObservers();
+    }
+
+    /**
+     * Faz F1 — masaüstü senkron sürüm damgası (SYNCDESKTOP §4.2, protokol §2.2).
+     *
+     * Every table listed here has an Eloquent write surface, so an observer is
+     * enough. `conversation_user` is DELIBERATELY ABSENT: its writes are raw
+     * SQL and pivot calls that produce no model event, so it carries database
+     * triggers instead (2026_09_01_100009). Observer and trigger are never
+     * combined on one table - the trigger's `SET NEW.sync_version` would
+     * overwrite the observer's value, spending two counter values per write and
+     * tearing holes in the version space that a keyset cursor cannot see past.
+     *
+     * `taggables`, `quote_items` and `custom_field_values` are absent for a
+     * different reason: they are not sync tables at all (protocol §1.4/§1.5),
+     * they travel inside their owner's payload, and their owner is bumped by
+     * App\Services\Sync\TagSyncService / App\Sync\SyncVersionBumper.
+     *
+     * DatabaseNotification is observed the same way ActivityLogObserver
+     * observes spatie's Activity model (registerActivityLogObserver() above):
+     * the class is not ours, so it cannot carry an $observers attribute, and
+     * registration has to happen here.
+     */
+    protected function registerSyncObservers(): void
+    {
+        $versioned = [
+            Company::class, Contact::class, Lead::class, Deal::class,
+            Task::class, Activity::class, Ticket::class, Quote::class,
+            Conversation::class, Message::class, Tag::class,
+            PipelineStage::class, CustomField::class, Product::class,
+            PriceList::class, PriceListItem::class, ExchangeRate::class,
+            SavedView::class, Setting::class, User::class,
+            DatabaseNotification::class,
+        ];
+
+        foreach ($versioned as $model) {
+            $model::observe(SyncVersionObserver::class);
+        }
+
+        /*
+         * Tombstones (protocol §2.7). Only hard-delete tables need one: a soft
+         * delete already returns the row itself through the delta with
+         * `deleted_at` set and a fresh version, which is strictly more
+         * information than a tombstone carries.
+         *
+         * `conversation_user`, the third tombstone table, is covered by the
+         * AFTER DELETE trigger - `detach()` issues a query-builder DELETE that
+         * never reaches PHP.
+         */
+        Tag::observe(SyncDeletionObserver::class);
+        DatabaseNotification::observe(SyncDeletionObserver::class);
+
+        /*
+         * KARAR P19 (teknik lider, F1 kapanisi) — `price_list_items` de tombstone
+         * yazar.
+         *
+         * Protokol §2.7'nin uc tablosu (tags/notifications/conversation_user) RW
+         * tarafi dusunulerek sayilmisti; RO tarafindaki tek HARD-DELETE yuzeyi
+         * atlanmisti. `price_list_items` softDeletes TASIMAZ ve
+         * `DELETE /api/price-lists/{list}/products/{product}` gercek bir DELETE
+         * atar - tombstone olmadan istemcinin lokal aynasi HIC KUCULEMEZ ve
+         * silinen bir fiyat satiri sonsuza dek yanlis fiyat gosterirdi.
+         *
+         * Hesaplama riski yok (`quotes.calculate` §8'de online-only), ama liste
+         * ve detay ekranlari bayat fiyati gosterirdi.
+         */
+        PriceListItem::observe(SyncDeletionObserver::class);
     }
 
     /*

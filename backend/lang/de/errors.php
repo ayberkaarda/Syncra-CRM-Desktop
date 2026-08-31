@@ -61,4 +61,20 @@ return [
     'saved_view' => [
         'invalid_query' => 'Die Abfrage der gespeicherten Ansicht enthält nicht zulässige Feld(er): :fields.',
     ],
+
+    /*
+     * Phase F1 - Desktop-Synchronisationsschicht (SYNCDESKTOP §4.3-§4.5).
+     *
+     * Diese Sätze gelten nur für Ablehnungen auf HTTP-Ebene. Ergebnisse
+     * einzelner Mutationen (`applied`/`conflict`/`rejected`/`duplicate`) werden
+     * als maschinenlesbarer `code` übertragen und vom Client aus
+     * `desktop.errors.*` übersetzt.
+     */
+    'sync' => [
+        'device_token_required' => 'Dieser Endpunkt erfordert ein Desktop-Gerätetoken.',
+        'protocol_version_mismatch' => 'Die Desktop-Anwendung ist veraltet; die Synchronisierung wurde gestoppt.',
+        'push_batch_too_large' => 'Das übermittelte Änderungspaket überschreitet das zulässige Limit.',
+        'invalid_credentials' => 'E-Mail oder Passwort ist falsch.',
+        'user_inactive' => 'Ihr Konto wurde deaktiviert. Bitte wenden Sie sich an Ihren Systemadministrator.',
+    ],
 ];

@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Quotes\QuoteCalculator;
+use App\Sync\SyncVersionBackfill;
 use Carbon\CarbonImmutable;
 use Faker\Factory as FakerFactory;
 use Faker\Generator;
@@ -251,6 +252,29 @@ class DemoDataSeeder extends Seeder
                 $this->seedConversations();
                 $this->seedCustomFieldValues();
                 $this->seedLogs();
+
+                /*
+                 * Faz F1 — masaüstü senkron sürüm damgası (protokol §2.2/§2.6).
+                 *
+                 * Bu seeder BİLEREK `bulkInsert()` kullanıyor (bkz. :31 —
+                 * performans için factory yerine toplu insert). Toplu insert
+                 * HİÇBİR Eloquent model event'i üretmez, dolayısıyla
+                 * SyncVersionObserver bu ~600 satırın hiçbirini görmez ve
+                 * hepsi `sync_version = 0` ile kalır. Sıfır, bootstrap
+                 * cursor'ının kendisidir ve pull sorgusu `> cursor` olduğu için
+                 * o satırlar bir masaüstü istemciye ASLA gitmezdi: demo veriyle
+                 * kurulmuş bir sistem, masaüstünde bomboş görünürdü.
+                 *
+                 * Seeder'ı Eloquent'e çevirmek REDDEDİLDİ (protokol §2.2):
+                 * bu dosyanın kendi tasarım kararını bozar. Tek seferlik
+                 * backfill hem daha ucuz hem de sonradan eklenen bir tablo
+                 * için unutulması imkânsız.
+                 *
+                 * Transaction'ın İÇİNDE: yarım versiyonlanmış bir demo veri
+                 * seti, hiç versiyonlanmamış olandan daha kötüdür.
+                 */
+                SyncVersionBackfill::run();
+
                 $this->assertConsistency();
             });
         });

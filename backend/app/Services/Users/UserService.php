@@ -185,6 +185,23 @@ class UserService
                 $user->setRememberToken(Str::random(60));
                 $user->save();
 
+                /*
+                 * Faz F1 — cihaz belirteçleri de anında iptal edilir
+                 * (SYNCDESKTOP §4.3, protokol §3.6).
+                 *
+                 * The existing instant-revoke story covers the SPA only:
+                 * UserDeactivated tears down sockets and EnsureUserIsActive
+                 * rejects the next stateful request. A bearer token passes
+                 * neither gate the same way - `active` would still catch it on
+                 * the next call, but the credential itself would survive
+                 * indefinitely on a machine the company just cut off. Deleting
+                 * the rows is the only revocation a stateless token has.
+                 *
+                 * Inside the same transaction as the flag: an account can never
+                 * be marked inactive while its device credentials still exist.
+                 */
+                $user->tokens()->delete();
+
                 event(new UserDeactivated($user->id));
             }
 
@@ -192,6 +209,16 @@ class UserService
         });
     }
 
+    /**
+     * Faz F1 — yönetici şifre sıfırlaması TÜM cihaz belirteçlerini siler
+     * (protokol §3.6/D7 — SYNCDESKTOP §4.3'te atlanmış bir noktaydı).
+     *
+     * An administrator resetting somebody's password is, in practice, the
+     * "this account may be compromised" procedure. Rotating the password and
+     * the remember-me cookie while leaving long-lived device tokens alive would
+     * leave every already-installed desktop client fully authenticated - the
+     * one credential the reset was meant to invalidate.
+     */
     public function resetPassword(User $user, string $password): User
     {
         return DB::transaction(function () use ($user, $password) {
@@ -199,6 +226,9 @@ class UserService
             $user->password = $password;
             $user->must_change_password = true;
             $user->setRememberToken(Str::random(60));
+
+            $user->tokens()->delete();
+
             $user->save();
 
             return $user->load('roles');
@@ -209,6 +239,17 @@ class UserService
     {
         DB::transaction(function () use ($user) {
             $user->setRememberToken(Str::random(60));
+
+            /*
+             * Faz F1 (protokol §3.6). Soft delete alone already fails a bearer
+             * request closed - Sanctum's Guard resolves `tokenable` through the
+             * SoftDeletes global scope and gets null, which is a 401 - but
+             * leaving the rows behind means restoring the user would silently
+             * reactivate every device credential they ever had. Deletion is
+             * explicit.
+             */
+            $user->tokens()->delete();
+
             $user->save();
 
             $this->users->delete($user);

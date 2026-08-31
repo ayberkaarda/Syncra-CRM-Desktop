@@ -62,4 +62,20 @@ return [
     'saved_view' => [
         'invalid_query' => 'La requête de la vue enregistrée contient des champ(s) non autorisé(s) : :fields.',
     ],
+
+    /*
+     * Phase F1 - couche de synchronisation bureau (SYNCDESKTOP §4.3-§4.5).
+     *
+     * Ces phrases ne concernent que les rejets au niveau HTTP. Le résultat de
+     * chaque mutation (`applied`/`conflict`/`rejected`/`duplicate`) est
+     * transporté par un `code` lisible par la machine ; le client l'affiche
+     * depuis `desktop.errors.*` dans sa propre langue.
+     */
+    'sync' => [
+        'device_token_required' => "Ce point de terminaison nécessite un jeton d'appareil bureau.",
+        'protocol_version_mismatch' => "L'application bureau n'est pas à jour ; la synchronisation a été arrêtée.",
+        'push_batch_too_large' => 'Le lot de modifications soumis dépasse la limite autorisée.',
+        'invalid_credentials' => "L'adresse e-mail ou le mot de passe est incorrect.",
+        'user_inactive' => 'Votre compte a été désactivé. Veuillez contacter votre administrateur système.',
+    ],
 ];

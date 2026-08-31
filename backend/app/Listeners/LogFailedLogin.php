@@ -38,8 +38,13 @@ class LogFailedLogin
      * throws is identical for "unknown e-mail" and "wrong password" (see
      * AuthService::login()), which is what prevents user enumeration. Do not
      * add anything here that leaks $matchedUser back to the caller.
+     *
+     * `$channel` (F1): 'web' for the SPA, 'desktop' for
+     * POST /api/auth/device. Defaulted rather than required so every
+     * existing caller keeps its exact meaning, and so the column's own
+     * DEFAULT 'web' and this signature cannot drift apart.
      */
-    public function log(?User $matchedUser, string $attemptedEmail, Request $request): void
+    public function log(?User $matchedUser, string $attemptedEmail, Request $request, string $channel = 'web'): void
     {
         try {
             $userAgent = (string) $request->userAgent();
@@ -49,6 +54,7 @@ class LogFailedLogin
                 'user_id' => $matchedUser?->getAuthIdentifier(),
                 'email' => $attemptedEmail,
                 'event' => 'failed_login',
+                'channel' => $channel,
                 'ip_address' => $request->ip(),
                 'user_agent' => $userAgent,
                 'device' => $parsed['device'],
