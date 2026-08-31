@@ -1,0 +1,30 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Narrow default capability set for the Syncra desktop shell (SYNCDESKTOP.md §6.3, docs/DESKTOP-ARCHITECTURE.md §5.3). clipboard-manager:allow-read-text is deliberately ABSENT: it is not granted statically and is switched on at runtime only when clipboard capture is opted in (K10, default off) — that runtime grant mechanism is F5-6 scope, not this turn's.",
+  "windows": ["main", "quick-capture"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "notification:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "deep-link:default",
+    "autostart:default",
+    "updater:default",
+    "dialog:allow-open",
+    "os:allow-platform",
+    "os:allow-arch",
+    "process:allow-restart",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [{ "url": "https://*" }, { "url": "http://*" }]
+    },
+    {
+      "identifier": "fs:scope",
+      "allow": ["$APPDATA/syncra/**", "$TEMP/syncra/**"]
+    }
+  ]
+}

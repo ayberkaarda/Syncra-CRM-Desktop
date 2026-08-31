@@ -1,0 +1,71 @@
+[package]
+name = "syncra-desktop"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Syncra CRM desktop shell (Tauri 2)"
+license = "MIT"
+publish = false
+
+[lib]
+name = "syncra_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Path dependency on the frozen sync engine (`SYNCDESKTOP.md` §5.2 — public API not touched
+# from this crate; see `docs/DESKTOP-SYNC-PROTOCOL.md` §5 for its contract).
+syncra-sync = { path = "../crates/syncra-sync" }
+
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+
+# Plugins — `SYNCDESKTOP.md` §6.1 / `docs/DESKTOP-ARCHITECTURE.md` §5.1.
+tauri-plugin-notification = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-os = "2"
+tauri-plugin-process = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-log = "2"
+
+# Desktop-only; guarded with `#[cfg(desktop)]` at the call site (mobile is out of scope,
+# `SYNCDESKTOP.md` K11).
+tauri-plugin-single-instance = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+# Only needed for `auth::list_devices` / `auth::revoke_device`, which are not `SyncEngine`
+# methods (`docs/DESKTOP-ARCHITECTURE.md` §5.2: they map straight to
+# `GET/DELETE /api/me/devices*`). Same feature set as `syncra-sync` to keep one TLS stack.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+url = { version = "2", features = ["serde"] }
+thiserror = "1"
+tracing = "0.1"
+
+[features]
+# Empty on purpose: `custom-protocol` must stay OUT of `default`. `tauri-macros`'
+# `generate_context!()` treats the crate as a *dev* build whenever this feature is absent
+# (`tauri-macros::context::dev: cfg!(not(feature = "custom-protocol"))`) and, in that mode,
+# skips embedding `frontendDist` from disk as long as `build.devUrl` is set
+# (`tauri-codegen::context::context_codegen`). `desktop/dist` does not exist yet (the
+# frontend strand — `desktop/vite.desktop.config.ts` — is out of this turn's scope), so a
+# default-enabled `custom-protocol` would make `cargo check`/`clippy` panic with
+# "frontendDist ... doesn't exist". `tauri build` (production) turns this feature on
+# explicitly via `--features custom-protocol`; do not remove this comment along with it.
+default = []
+custom-protocol = ["tauri/custom-protocol"]
+
+# Same MSVC linker note as `syncra-sync` (`Cargo.toml` there): the vendored OpenSSL pulled
+# in transitively by `syncra-sync`'s SQLCipher build ships object files without PDBs.
+[lints.rust]
+linker_messages = "allow"
