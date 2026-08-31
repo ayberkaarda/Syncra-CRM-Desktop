@@ -239,6 +239,13 @@ const data: Platform['data'] = {
     delete: (id) => notifications.deleteNotificationRequest(id),
   },
   search: {
+    // One index, so no source label — and note HOW that is expressed: not by a branch, but by
+    // this call staying exactly what it was. `search_source` (`WithSearchSource`, types.ts) is
+    // an optional field that only a platform with two indexes fills; the API body has no such
+    // field, `fetchGlobalSearch` returns it untouched, and `CommandPalette` renders no label
+    // for the `undefined` it therefore reads. The desktop adapter unifies local FTS with this
+    // same endpoint and tags both halves (`desktop/src/platform/data/comms.ts`, SYNCDESKTOP.md
+    // §7.2) — the SyncStateBadge pairing, applied to search (KARAR A19).
     query: (term) => search.fetchGlobalSearch(term),
   },
   products: {

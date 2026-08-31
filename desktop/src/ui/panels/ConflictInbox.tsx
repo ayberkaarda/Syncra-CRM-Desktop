@@ -75,6 +75,35 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 }
 
+/** A non-empty string, or `null` if the value isn't one. */
+function asLabel(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null
+}
+
+/**
+ * A human-readable label for the record a conflict is about, read from whatever the mutation
+ * payload happens to carry.
+ *
+ * `mine` and `theirs` are not full records — they are the fields the offline mutation actually
+ * touched (`Conflict.mine`/`.theirs` in `../commands`), so a name field is present only when it
+ * happened to be part of the edit. This checks the handful of fields `desktop:fields.*` already
+ * names as an entity's identifying label (`title`, `name`, `subject`, a contact's
+ * first/last name, or `company_name` for a lead/company) on the local side first, then the
+ * server side. It never invents a label: when none of those fields are present, the caller falls
+ * back to the translated entity type instead of calling this.
+ */
+function conflictDisplayName(conflict: Conflict): string | null {
+  for (const side of [conflict.mine, conflict.theirs]) {
+    const record = asRecord(side)
+    const direct = asLabel(record.title) ?? asLabel(record.name) ?? asLabel(record.subject) ?? asLabel(record.company_name)
+    if (direct) return direct
+
+    const fullName = [asLabel(record.first_name), asLabel(record.last_name)].filter(Boolean).join(' ')
+    if (fullName) return fullName
+  }
+  return null
+}
+
 /**
  * One side's value for one field, as text.
  *
@@ -270,6 +299,9 @@ function ConflictRow({
 }: ConflictRowProps) {
   const t = useT()
   const fields = useMemo(() => mergeableFields(conflict), [conflict])
+  const displayName = useMemo(() => conflictDisplayName(conflict), [conflict])
+  const entityLabel = t(`desktop:entities.${conflict.entity}`)
+  const idText = conflict.client_id ?? conflict.id
 
   // Which fields the local change wins. Starts as "all of them", i.e. a merge nobody edits is
   // KeepMine — the safe default, because it never silently discards work the user did offline.
@@ -285,9 +317,9 @@ function ConflictRow({
         <Checkbox checked={selected} onChange={onToggleSelected} />
 
         <div className="flex min-w-0 flex-col">
-          <span className="truncate font-mono text-sm text-fg">{conflict.entity}</span>
+          <span className="truncate text-sm text-fg">{displayName ?? entityLabel}</span>
           <span className="truncate font-mono text-xs text-fg-muted">
-            {conflict.client_id ?? conflict.id}
+            {displayName ? `${entityLabel} · ${idText}` : idText}
           </span>
         </div>
 

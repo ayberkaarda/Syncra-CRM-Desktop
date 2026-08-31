@@ -48,6 +48,18 @@ impl Harness {
 
     /// Same, with an explicit manifest table set.
     pub async fn start_with_granted(granted: &[Entity]) -> Harness {
+        let harness = Self::start_bare().await;
+        mount_manifest(&harness.server, manifest_body(granted, 1)).await;
+        harness
+    }
+
+    /// An engine and a mock server with **no** `GET /api/sync/manifest` mounted.
+    ///
+    /// wiremock resolves a request against the mocks in mount order, so a manifest the
+    /// harness mounted cannot be overridden afterwards. A test that needs that endpoint to
+    /// fail — the O46 connectivity probe's negative control, for one — starts from here and
+    /// mounts its own.
+    pub async fn start_bare() -> Harness {
         let server = MockServer::start().await;
         let dir = tempfile::tempdir().expect("tempdir");
         let cfg = SyncConfig::new(
@@ -64,8 +76,6 @@ impl Harness {
             .get(&service, KEY_DB)
             .expect("keystore")
             .expect("the engine must have stored a database key");
-
-        mount_manifest(&server, manifest_body(granted, 1)).await;
 
         Harness {
             server,
@@ -386,6 +396,17 @@ pub async fn push_requests(server: &MockServer) -> Vec<Value> {
         .collect()
 }
 
+/// How many `GET /api/sync/manifest` requests the server has answered so far.
+pub async fn manifest_request_count(server: &MockServer) -> usize {
+    server
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| r.url.path() == "/api/sync/manifest")
+        .count()
+}
+
 /// Every `POST /api/sync/pull` request body the server received, in order.
 pub async fn pull_requests(server: &MockServer) -> Vec<Value> {
     server
@@ -486,6 +507,65 @@ impl wiremock::Respond for ApplyAllButLast {
             "server_time": "2026-08-30T12:00:00.000Z"
         }))
     }
+}
+
+/// A `GET /api/sync/manifest` responder that can be closed and reopened while the test runs.
+///
+/// The O46 connectivity probe made "is the server reachable?" a question the engine asks on
+/// its own, so a test that needs the engine to *stay* offline has to be able to take the
+/// endpoint away — and a test about the `set_online` wake trigger has to keep it away, or the
+/// probe would be an equally good explanation for the round it observes.
+///
+/// A closed gate answers `503`. What an unplugged machine really produces is a connect error,
+/// which the transport maps to [`syncra_sync::SyncError::Offline`], and wiremock cannot
+/// refuse a connection — but both are "no manifest came back", which is the only thing the
+/// probe asks about, and `503` is the harder of the two to get right.
+#[derive(Clone)]
+pub struct ManifestGate {
+    is_open: Arc<std::sync::atomic::AtomicBool>,
+    body: Value,
+}
+
+impl ManifestGate {
+    /// A gate serving `body`, open or closed to start with.
+    pub fn new(body: Value, open: bool) -> Self {
+        ManifestGate {
+            is_open: Arc::new(std::sync::atomic::AtomicBool::new(open)),
+            body,
+        }
+    }
+
+    /// The server is reachable from now on.
+    pub fn open(&self) {
+        self.is_open
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// The server is unreachable from now on.
+    pub fn close(&self) {
+        self.is_open
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl wiremock::Respond for ManifestGate {
+    fn respond(&self, _request: &wiremock::Request) -> ResponseTemplate {
+        if self.is_open.load(std::sync::atomic::Ordering::SeqCst) {
+            ResponseTemplate::new(200).set_body_json(self.body.clone())
+        } else {
+            ResponseTemplate::new(503)
+                .set_body_json(json!({ "errors": { "code": "SERVICE_UNAVAILABLE" } }))
+        }
+    }
+}
+
+/// Mount a [`ManifestGate`] on `GET /api/sync/manifest`.
+pub async fn mount_manifest_gate(server: &MockServer, gate: ManifestGate) {
+    Mock::given(method("GET"))
+        .and(path("/api/sync/manifest"))
+        .respond_with(gate)
+        .mount(server)
+        .await;
 }
 
 /// Mount a dynamic push responder for the rest of the test.

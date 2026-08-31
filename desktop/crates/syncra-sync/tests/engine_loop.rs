@@ -10,12 +10,26 @@ use uuid::Uuid;
 
 /// Coming back online is a trigger: the background loop wakes without waiting out the
 /// 60 second timer.
+///
+/// The manifest gate is what keeps this test about the trigger. Since O46 B2 the loop probes
+/// for connectivity on its own, so against a reachable server a round proves nothing about
+/// `set_online` — the probe would have found the network anyway. Here the server stays
+/// unreachable for the whole test: the probe cannot succeed, the round that follows
+/// `set_online(true)` runs off the manifest cached before the gate closed, and the wake
+/// trigger is therefore the only possible explanation for it.
 #[tokio::test]
 async fn coming_back_online_wakes_the_background_loop() {
-    let h = Harness::start().await;
+    let h = Harness::start_bare().await;
+    let gate = ManifestGate::new(manifest_body(GRANTED, 1), true);
+    mount_manifest_gate(&h.server, gate.clone()).await;
     h.login().await;
     mount_empty_pull(&h.server).await;
     mount_push_responder(&h.server, ApplyAll).await;
+
+    // Fill the ten minute manifest cache (§5.5) while the server is still reachable, so the
+    // round below needs no network of its own, then take the server away.
+    h.engine.restore_session().await.expect("restore");
+    gate.close();
 
     h.engine.set_online(false);
     h.engine
@@ -28,7 +42,7 @@ async fn coming_back_online_wakes_the_background_loop() {
 
     let scheduler = h.engine.start_background_sync();
 
-    // Nothing may go out while the engine believes it is offline.
+    // Nothing may go out while the engine believes it is offline and cannot prove otherwise.
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     assert!(
         push_requests(&h.server).await.is_empty(),
@@ -50,6 +64,191 @@ async fn coming_back_online_wakes_the_background_loop() {
         "set_online(true) must trigger a round"
     );
     assert_eq!(push_requests(&h.server).await.len(), 1);
+    scheduler.stop();
+}
+
+// ---------------------------------------------------------------------------
+// O46 B2 — the loop discovers connectivity by itself
+// ---------------------------------------------------------------------------
+
+/// Poll `condition` on the millisecond scale until it holds or `timeout` runs out.
+///
+/// The probe ramp is measured in seconds and the assertions below only ever need to observe
+/// the *first*, immediate probe, so no test in this file has to wait one out. This exists so
+/// they do not have to guess how long a wiremock round trip takes either.
+async fn within<F: FnMut() -> bool>(timeout: std::time::Duration, mut condition: F) -> bool {
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        if condition() {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    condition()
+}
+
+/// O46 B2: nobody tells the engine the network came back — it finds out.
+///
+/// This is the F4 acceptance failure in miniature: the app was offline with a full outbox,
+/// the network returned, and nothing in the process was capable of noticing. There is no
+/// `set_online(true)` anywhere in this test on purpose.
+#[tokio::test]
+async fn the_offline_probe_discovers_the_network_and_drains_the_outbox() {
+    let h = Harness::start_bare().await;
+    // Closed: the network is down before the loop even starts, exactly as it was when the
+    // F4 acceptance run left the app stuck on `pending = 19`.
+    let gate = ManifestGate::new(manifest_body(GRANTED, 1), false);
+    mount_manifest_gate(&h.server, gate.clone()).await;
+    h.login().await;
+    mount_empty_pull(&h.server).await;
+    mount_push_responder(&h.server, ApplyAll).await;
+
+    h.engine.set_online(false);
+    h.engine
+        .mutate(LocalMutation::create(
+            Entity::Company,
+            Uuid::now_v7(),
+            json!({ "name": "Queued while the network was down" }),
+        ))
+        .unwrap();
+    assert_eq!(h.engine.status().pending, 1);
+
+    let scheduler = h.engine.start_background_sync();
+
+    // The first probe fires immediately and finds nothing.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(!h.engine.status().online, "the gate is still closed");
+    assert!(push_requests(&h.server).await.is_empty());
+
+    // The network comes back. Nobody tells the engine.
+    gate.open();
+
+    let engine = h.engine.clone();
+    let recovered = within(std::time::Duration::from_secs(5), || {
+        engine.status().online && engine.status().pending == 0
+    })
+    .await;
+
+    assert!(
+        recovered,
+        "the probe must flip `online` and run a round without any outside trigger \
+         (online={}, pending={})",
+        h.engine.status().online,
+        h.engine.status().pending
+    );
+    assert_eq!(
+        push_requests(&h.server).await.len(),
+        1,
+        "the round the probe triggered must be a real one"
+    );
+    scheduler.stop();
+}
+
+/// The probe ramp climbs and then stops at 30 seconds — the ceiling F4's "back in sync
+/// shortly after the network returns" depends on, and the reason it is not the 300s the
+/// failed-round backoff uses.
+#[test]
+fn the_offline_probe_ramp_climbs_and_stops_at_thirty_seconds() {
+    use syncra_sync::sync::offline_probe_delay;
+
+    let secs = |attempt: u32| offline_probe_delay(attempt).as_secs();
+
+    assert_eq!(
+        [secs(0), secs(1), secs(2), secs(3), secs(4)],
+        [1, 2, 4, 8, 16],
+        "the ramp must double"
+    );
+    for attempt in 5..64u32 {
+        assert_eq!(secs(attempt), 30, "attempt {attempt} must sit on the ceiling");
+    }
+    assert_eq!(secs(u32::MAX), 30, "the shift must not wrap past the ceiling");
+    assert!(
+        secs(3) > secs(0),
+        "a fixed 1s poll would burn the 30/min `sync` throttle bucket"
+    );
+}
+
+/// Negative control: a probe that does not get a manifest back changes nothing.
+///
+/// A 5xx is the sharpest version of the false positive to rule out — the socket connected and
+/// the server answered, which is exactly the shape a naive "did the request go anywhere?"
+/// probe would call "online".
+#[tokio::test]
+async fn a_failing_probe_leaves_the_engine_offline_and_the_outbox_alone() {
+    let h = Harness::start_bare().await;
+    mount_error(&h.server, "GET", "/api/sync/manifest", 503, "SERVER_ERROR", None).await;
+    h.login().await;
+    mount_empty_pull(&h.server).await;
+    mount_push_responder(&h.server, ApplyAll).await;
+
+    h.engine.set_online(false);
+    h.engine
+        .mutate(LocalMutation::create(
+            Entity::Company,
+            Uuid::now_v7(),
+            json!({ "name": "Must stay in the outbox" }),
+        ))
+        .unwrap();
+
+    let scheduler = h.engine.start_background_sync();
+
+    // Long enough for the immediate probe plus the first 1s rung of the ramp.
+    tokio::time::sleep(std::time::Duration::from_millis(1_200)).await;
+
+    assert!(
+        !h.engine.status().online,
+        "a 503 is not connectivity: `online` must stay false"
+    );
+    assert_eq!(
+        h.engine.status().pending,
+        1,
+        "a probe must not touch the outbox"
+    );
+    assert!(
+        push_requests(&h.server).await.is_empty(),
+        "an offline engine must not push"
+    );
+    assert!(
+        pull_requests(&h.server).await.is_empty(),
+        "an offline engine must not pull"
+    );
+
+    // The ramp, observed from the outside: probes land at t = 0s and t = 1s. A loop that
+    // ignored the ramp and spun would have made hundreds of requests in the same window.
+    let probes = manifest_request_count(&h.server).await;
+    assert!(
+        (1..=3).contains(&probes),
+        "expected the first one or two rungs of the ramp, got {probes} probes in 1.2s"
+    );
+    scheduler.stop();
+}
+
+/// A halted engine does not probe: reaching the server changes nothing until the app itself
+/// is updated, so the `halted` branch still wins over the new offline branch.
+#[tokio::test]
+async fn a_halted_engine_does_not_probe() {
+    let h = Harness::start_bare().await;
+    mount_manifest(&h.server, manifest_body(GRANTED, 2)).await;
+    h.login().await;
+
+    let err = h.engine.sync_now().await.unwrap_err();
+    assert!(
+        matches!(err, syncra_sync::SyncError::Protocol(_)),
+        "got {err:?}"
+    );
+
+    h.engine.set_online(false);
+    let before = manifest_request_count(&h.server).await;
+
+    let scheduler = h.engine.start_background_sync();
+    tokio::time::sleep(std::time::Duration::from_millis(1_200)).await;
+
+    assert_eq!(
+        manifest_request_count(&h.server).await,
+        before,
+        "a halted engine must not spend the `sync` throttle bucket on probes"
+    );
+    assert!(!h.engine.status().online);
     scheduler.stop();
 }
 

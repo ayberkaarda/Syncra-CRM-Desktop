@@ -13,6 +13,7 @@
     "UNRESOLVED_REFERENCE": "İlişkili bir kayıt bulunamadı. Önce senkronize edin.",
     "FIELD_CONFLICT": "Bu kayıtta sunucuyla çakışan değişiklikler var.",
     "RECORD_DELETED": "Bu kayıt sunucuda silinmiş.",
+    "INVALID_MUTATION": "Bu değişiklik sunucu tarafından reddedildi.",
     "PROTOCOL_VERSION_MISMATCH": "Senkron protokolü sürümünüz sunucuyla uyumsuz. Lütfen uygulamayı güncelleyin.",
     "ABILITY_REQUIRED": "Bu işlem için gerekli yetkiye sahip değilsiniz.",
     "LOCKED_OUT": "Çok fazla başarısız deneme nedeniyle hesabınız geçici olarak kilitlendi.",
@@ -112,6 +113,10 @@
     "resolveSelected": "Seçilenleri çöz",
     "resolvedToast": "Çakışma çözüldü.",
     "resolveError": "Çakışma çözülürken bir hata oluştu."
+  },
+  "search": {
+    "sourceLocal": "Yerel",
+    "sourceServer": "Sunucu"
   },
   "storage": {
     "title": "Depolama",

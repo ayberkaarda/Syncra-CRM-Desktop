@@ -5,10 +5,16 @@
 //! close-to-tray window default (D-8). It deliberately stops short of:
 //!
 //! * `files::*` / `os::*` commands (F5 scope),
-//! * the tray icon itself (F5-1) and starting [`syncra_sync::SyncEngine::start_background_sync`]
-//!   (that belongs with the tray/network-event triggers that give it something to react to),
+//! * the tray icon itself and the OS network-event listener (F5-1),
 //! * anything under `desktop/src/**` or `desktop/vite.desktop.config.ts` (a different strand
 //!   is landing `frontend/src/platform`; W1 §E.3 keeps this turn off those files).
+//!
+//! [`syncra_sync::SyncEngine::start_background_sync`] used to be on that list, deferred to
+//! F5-1 alongside the tray. O46 moved it here: `SYNCDESKTOP.md` §5.5 opens its trigger list
+//! with **"open"**, so the loop starting when the app starts is the specification itself, and
+//! the F4 acceptance run proved what deferring it costs — the network was back for 79 seconds,
+//! the app never noticed, and restarting it was the only way out. The tray and the OS network
+//! event are still F5; they make the loop *faster*, not *possible*.
 
 mod commands;
 mod events;
@@ -109,11 +115,31 @@ pub fn run() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
-            let state = tauri::async_runtime::block_on(AppState::init(&handle))?;
+            let mut state = tauri::async_runtime::block_on(AppState::init(&handle))?;
             // Must start before the state is moved into the app: `TablesChanged` is what
             // keeps the UI's query cache honest, and an event emitted before the bridge
             // exists is simply lost (the channel only replays to live subscribers).
             events::forward_engine_events(handle.clone(), &state.engine);
+
+            // O46 B2 — "open" is the first trigger in `SYNCDESKTOP.md` §5.5. The loop syncs on
+            // its 60 second timer while online and probes for the network while offline, which
+            // is what lets the app come back on its own after an outage.
+            //
+            // Inside `block_on` because `start_background_sync` calls `tokio::spawn`, and
+            // `.setup()` runs on the main thread, outside any runtime context; `block_on`
+            // enters Tauri's global runtime, which is the same one the commands await on. The
+            // closure itself does no awaiting, so this does not block startup.
+            //
+            // The handle goes into the managed state rather than being dropped on the floor.
+            // Dropping it would not kill the loop — `SyncScheduler` wraps a `JoinHandle`, and
+            // dropping one detaches the task — but a detached loop is a loop nothing can ever
+            // stop or account for. Keeping it in the state ties its lifetime to the app's, on
+            // purpose and visibly, and leaves `SyncScheduler::stop` reachable if a later phase
+            // needs it (a "pause sync" setting, a teardown path).
+            let scheduler =
+                tauri::async_runtime::block_on(async { state.engine.start_background_sync() });
+            state.scheduler = Some(scheduler);
+
             app.manage(state);
 
             // D-8: closing the main window minimizes to tray by default (the tray icon

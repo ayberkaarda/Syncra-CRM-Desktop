@@ -13,8 +13,10 @@ import type {
   ContactsSource,
   DealsSource,
   LeadsSource,
+  WithSyncState,
 } from '@/platform/types'
 import type { TimelineItem } from '@/components/shared/Timeline'
+import { recordSyncState } from '@/components/shared/recordSyncState'
 import type { Company, ContactSummary } from '@/features/companies/types'
 import type { Contact } from '@/features/contacts/types'
 import type {
@@ -232,7 +234,7 @@ function isOverdue(status: DealStatus, expectedCloseDate: string | null): boolea
  * `can` is permissive for the same reason every other mapper's is (`mappers.ts` header):
  * row-level permissions are not mirrored, and the push endpoint is the authority.
  */
-function boardCard(row: LocalRow, refs: BoardRefs): DealCard {
+function boardCard(row: LocalRow, refs: BoardRefs): WithSyncState<DealCard> {
   const status = (text(row.status) || 'open') as DealStatus
   const expectedCloseDate = str(row.expected_close_date)
   const stageRow = refs.stages.resolve(row.pipeline_stage_id, row.pipeline_stage_client_id)
@@ -256,6 +258,12 @@ function boardCard(row: LocalRow, refs: BoardRefs): DealCard {
     tags: tagList(row, refs.tags),
     is_overdue: isOverdue(status, expectedCloseDate),
     can: { update: true, move: true },
+    // Local truth, not a server field — same validated `row.sync_state` read `mappers.ts`
+    // uses for every other DTO. That reader is private to `mappers.ts` (not exported), so this
+    // reuses the identical, already-shared validator `recordSyncState` (`components/shared/`)
+    // instead of duplicating the check; `recordSyncState` returns `null` for a missing/invalid
+    // value where the field type wants `undefined`, hence the `?? undefined`.
+    sync_state: recordSyncState(row) ?? undefined,
   }
 }
 

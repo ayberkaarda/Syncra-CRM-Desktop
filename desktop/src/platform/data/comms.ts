@@ -9,6 +9,10 @@
 //   `conversation.delivered` are on it and survive being done offline; conversation
 //   membership changes are not, and go to `platform.http` rather than into an outbox that
 //   would report success the server never granted.
+//
+// The global search at the bottom is the one method in this file that is neither purely
+// local nor purely remote: `SYNCDESKTOP.md` §7.2 asks for the local FTS index and the
+// online server search **unified**, with every hit labelled by the index that produced it.
 import type {
   Attachment,
   ChatUnreadCount,
@@ -18,8 +22,14 @@ import type {
   MessagesPage,
 } from '@/features/chat/types'
 import type { Notification, NotificationsListResponse } from '@/features/notifications/types'
-import type { SearchResponse, SearchResultItem } from '@/features/search/types'
-import type { ChatSource, NotificationsSource, SearchSource } from '@/platform/types'
+import type { SearchGroupKey, SearchResponse, SearchResultItem } from '@/features/search/types'
+import type {
+  ChatSource,
+  NotificationsSource,
+  SearchResultSource,
+  SearchSource,
+  WithSearchSource,
+} from '@/platform/types'
 
 import { http } from '../http'
 import { sessionUserId } from '../session'
@@ -341,55 +351,206 @@ export const notificationsSource: NotificationsSource = {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Global search
+// Global search — the ONE unified read (`SYNCDESKTOP.md` §7.2)
+//
+// > "Command palette lokal FTS + online sunucu **birleşik** (kaynak etiketi)"
+//
+// Two indexes answer, not one:
+//
+//   * **local FTS always runs.** Offline it is the only index there is, and a palette that
+//     went quiet without a network would be worse than no palette.
+//   * **the server runs too, whenever the engine reports online.** The mirror holds a
+//     retention window, not the whole database (`SYNCDESKTOP.md` §5.1), so a record that has
+//     never been pulled exists ONLY on the server — and before this, an online user simply
+//     could not find it, with nothing on screen to say why.
+//
+// The failure direction is asymmetric on purpose: the server half is allowed to fail and the
+// local half is not. A 5xx, a timeout or a dropped link degrades the palette to local results
+// (with a warning in the console); it never turns search into something that returns nothing.
 // ------------------------------------------------------------------------------------------------
 
 /** How many hits the palette asks the local index for before grouping. */
 const SEARCH_LIMIT = 40
 
-export const searchSource: SearchSource = {
-  /**
-   * Local FTS5, grouped into the same envelope `GET /api/search` returns.
-   *
-   * The server omits a group entirely when the user cannot see that module (an absent key is
-   * NOT the same as `[]` — `features/search/types.ts`). Locally the same rule holds for a
-   * different reason: a module the user cannot see was never pulled, so it produces no hits
-   * and therefore no key.
-   */
-  query: async (term): Promise<SearchResponse> => {
-    const entities = Object.keys(SEARCH_GROUPS) as EntityName[]
-    const hits = await searchLocal(term, entities, SEARCH_LIMIT)
-    if (hits.length === 0) return {}
-
-    const byEntity = new Map<string, string[]>()
-    for (const hit of hits) {
-      const bucket = byEntity.get(hit.entity) ?? []
-      bucket.push(hit.client_id)
-      byEntity.set(hit.entity, bucket)
-    }
-
-    const pages = await Promise.all(
-      [...byEntity].map(
-        async ([entity, clientIds]) =>
-          [
-            entity,
-            await runQuery(
-              { query: 'rows_by_client_ids', entity: entity as EntityName, client_ids: clientIds },
-              { limit: clientIds.length },
-            ),
-          ] as const,
-      ),
+/**
+ * Tag every item in a response with the index it came from.
+ *
+ * `search_source` is an optional extra field (`WithSearchSource`, `platform/types.ts`), so a
+ * tagged response is still a plain `SearchResponse` — which is exactly why the web adapter,
+ * which never calls this, needs no change and shows no label.
+ */
+function tagged(response: SearchResponse, source: SearchResultSource): SearchResponse {
+  const out: SearchResponse = {}
+  for (const [group, items] of Object.entries(response)) {
+    if (!Array.isArray(items)) continue
+    out[group as SearchGroupKey] = items.map(
+      (item): WithSearchSource<SearchResultItem> => ({ ...item, search_source: source }),
     )
+  }
+  return out
+}
 
-    const response: SearchResponse = {}
-    for (const [entity, rows] of pages) {
-      const group = SEARCH_GROUPS[entity]?.group as keyof SearchResponse | undefined
-      if (!group) continue
-      const items = rows
-        .map((row) => mapSearchResult(entity, row))
-        .filter((item): item is SearchResultItem => item !== null)
-      if (items.length > 0) response[group] = items
-    }
-    return response
-  },
+/**
+ * The identity the two halves share.
+ *
+ * The mirror keeps `server_id` for every row that has ever been pushed, and `mapSearchResult`
+ * reports it as the item's `id` (`rowId()`), which is the same number `GET /api/search`
+ * returns. A row created offline has no `server_id` yet and reports `-local_rowid` instead —
+ * negative, so it cannot collide with anything the server sends, which is correct: the server
+ * has never heard of that record.
+ */
+function searchIdentity(item: SearchResultItem): string {
+  return `${item.type}:${item.id}`
+}
+
+/**
+ * The local half: FTS5, grouped into the same envelope `GET /api/search` returns.
+ *
+ * The server omits a group entirely when the user cannot see that module (an absent key is
+ * NOT the same as `[]` — `features/search/types.ts`). Locally the same rule holds for a
+ * different reason: a module the user cannot see was never pulled, so it produces no hits
+ * and therefore no key.
+ */
+async function localSearchGroups(term: string): Promise<SearchResponse> {
+  const entities = Object.keys(SEARCH_GROUPS) as EntityName[]
+  const hits = await searchLocal(term, entities, SEARCH_LIMIT)
+  if (hits.length === 0) return {}
+
+  const byEntity = new Map<string, string[]>()
+  for (const hit of hits) {
+    const bucket = byEntity.get(hit.entity) ?? []
+    bucket.push(hit.client_id)
+    byEntity.set(hit.entity, bucket)
+  }
+
+  const pages = await Promise.all(
+    [...byEntity].map(
+      async ([entity, clientIds]) =>
+        [
+          entity,
+          await runQuery(
+            { query: 'rows_by_client_ids', entity: entity as EntityName, client_ids: clientIds },
+            { limit: clientIds.length },
+          ),
+        ] as const,
+    ),
+  )
+
+  const response: SearchResponse = {}
+  for (const [entity, rows] of pages) {
+    const group = SEARCH_GROUPS[entity]?.group as keyof SearchResponse | undefined
+    if (!group) continue
+    const items = rows
+      .map((row) => mapSearchResult(entity, row))
+      .filter((item): item is SearchResultItem => item !== null)
+    if (items.length > 0) response[group] = items
+  }
+  return tagged(response, 'local')
+}
+
+/**
+ * The server half: the very same `GET /api/search` the web adapter calls.
+ *
+ * No client-side permission filter is added here either — the whitelist is
+ * `GlobalSearchService::search()`'s `Gate::allows('viewAny', ...)` pass, and re-filtering a
+ * set the server already filtered would only create a false sense of two checks
+ * (`CommandPalette.tsx`, `docs/PHASE-AUDIT.md` §5.4 C1).
+ */
+async function serverSearchGroups(term: string): Promise<SearchResponse> {
+  const body = await http.get<{ data: SearchResponse }>('/api/search', { params: { q: term } })
+  return tagged(body?.data ?? {}, 'server')
+}
+
+/**
+ * Merge the two halves, **local wins**.
+ *
+ * A record both indexes know about appears ONCE. The local copy is the one kept, and that
+ * direction is not arbitrary: the local row may carry the user's own edit that has not been
+ * pushed yet, so preferring the server's copy would show someone their record without the
+ * change they just made to it — the exact thing the pending badge exists to reassure them
+ * about.
+ *
+ * A group present in only one half survives untouched. Groups that end up empty are dropped,
+ * because an empty group HEADING in the palette still leaks "this module exists, you cannot
+ * see into it" (the same reason the local half never emits one).
+ */
+export function mergeSearchGroups(local: SearchResponse, server: SearchResponse): SearchResponse {
+  const merged: SearchResponse = {}
+  const groups = new Set<SearchGroupKey>([
+    ...(Object.keys(local) as SearchGroupKey[]),
+    ...(Object.keys(server) as SearchGroupKey[]),
+  ])
+  for (const group of groups) {
+    const localItems = local[group] ?? []
+    const seen = new Set(localItems.map(searchIdentity))
+    const serverItems = (server[group] ?? []).filter((item) => !seen.has(searchIdentity(item)))
+    const items = [...localItems, ...serverItems]
+    if (items.length > 0) merged[group] = items
+  }
+  return merged
+}
+
+/**
+ * The composition, with both halves injected.
+ *
+ * The halves are parameters rather than direct calls so that this — the part with the actual
+ * decisions in it (parallelism, the swallowed server failure, who wins a duplicate) — can be
+ * tested against fakes, with no Tauri host and no HTTP server. `comms.test.ts` does exactly
+ * that; `searchSource.query` below binds the real two.
+ *
+ * `server === null` means "offline, do not even ask": the engine already knows the API is
+ * unreachable, and a doomed request would only make every keystroke wait for a timeout.
+ */
+export async function unifiedSearch(
+  term: string,
+  local: (term: string) => Promise<SearchResponse>,
+  server: ((term: string) => Promise<SearchResponse>) | null,
+): Promise<SearchResponse> {
+  // Concurrent: the two indexes are independent, and serialising them would add the server's
+  // latency to every local result the user could already have been looking at.
+  const [localGroups, serverGroups] = await Promise.all([
+    local(term),
+    server === null
+      ? null
+      : server(term).catch((error: unknown) => {
+          // Logged, not swallowed: "the server half is down" is a real condition someone has
+          // to be able to diagnose. It is not raised to the palette as an error, because the
+          // local results beside it are valid, and an error screen over them would hide the
+          // answer the user may well already have.
+          console.warn('[search] server half failed; showing local results only', error)
+          return null
+        }),
+  ])
+  return serverGroups === null ? localGroups : mergeSearchGroups(localGroups, serverGroups)
+}
+
+/**
+ * Whether the engine considers the API reachable.
+ *
+ * Deferred import on purpose. `platform/desktop.ts` imports `./data`, which imports THIS
+ * module; a static `import { getEngineStatus } from '../desktop'` would close that cycle, and
+ * if anything ever evaluated `data/index.ts` before `desktop.ts`, the top-level
+ * `desktopPlatform = { data: desktopData, … }` would read `desktopData` in its TDZ and the app
+ * would not boot. The dynamic form keeps the static graph acyclic; after the first call it is
+ * a module-cache hit.
+ *
+ * Rolldown reports `INEFFECTIVE_DYNAMIC_IMPORT` for it, and that is the expected outcome, not
+ * a problem to fix: `desktop.ts` is already in the entry chunk (`main.desktop.tsx` imports it
+ * statically), so nothing is code-split off. The dynamic form is here for evaluation ORDER,
+ * not for chunking — turning it back into a static import to silence the warning would
+ * reintroduce the cycle it exists to break.
+ *
+ * `navigator.onLine` is NOT used, here or anywhere else in this tree
+ * (`docs/DESKTOP-ARCHITECTURE.md` §3.5): it reports "online" for a machine that has a LAN but
+ * cannot reach the API host, which is the common failure mode in the closed networks this
+ * product is deployed into. The engine is the authority.
+ */
+async function engineIsOnline(): Promise<boolean> {
+  const { getEngineStatus } = await import('../desktop')
+  return getEngineStatus().online
+}
+
+export const searchSource: SearchSource = {
+  query: async (term): Promise<SearchResponse> =>
+    unifiedSearch(term, localSearchGroups, (await engineIsOnline()) ? serverSearchGroups : null),
 }

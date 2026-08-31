@@ -40,6 +40,12 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // no longer reads as "no internet connection". `commands/mod.rs` falls back to this code
   // whenever the server's own body carried none of its own (the common case for a `500`).
   'SERVER_ERROR',
+  // O48 / finding B7: the four dictionaries got `errors.INVALID_MUTATION` but this set did not,
+  // so `errorMessage()` fell through to `errors.unknown` and the Conflict Inbox showed every
+  // server refusal as "An unknown error occurred." — the second F4 scenario run caught it with a
+  // deliberate reject probe. A key can exist in all four locales and still be dead if its code is
+  // not listed here; that asymmetry is exactly what open item O55 proposes to check statically.
+  'INVALID_MUTATION',
 ])
 
 /** `HTTP_403` and friends — `commands/auth.rs` builds this shape from any non-2xx response. */

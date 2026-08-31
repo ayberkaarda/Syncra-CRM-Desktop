@@ -13,6 +13,7 @@
     "UNRESOLVED_REFERENCE": "Un enregistrement associé est introuvable. Synchronisez d'abord.",
     "FIELD_CONFLICT": "Cet enregistrement contient des modifications en conflit avec le serveur.",
     "RECORD_DELETED": "Cet enregistrement a été supprimé sur le serveur.",
+    "INVALID_MUTATION": "Cette modification a été rejetée par le serveur.",
     "PROTOCOL_VERSION_MISMATCH": "Votre version du protocole de synchronisation n'est pas compatible avec le serveur. Veuillez mettre à jour l'application.",
     "ABILITY_REQUIRED": "Vous n'avez pas les droits nécessaires pour effectuer cette action.",
     "LOCKED_OUT": "Votre compte est temporairement verrouillé suite à trop de tentatives échouées.",
@@ -112,6 +113,10 @@
     "resolveSelected": "Résoudre la sélection",
     "resolvedToast": "Conflit résolu.",
     "resolveError": "Une erreur est survenue lors de la résolution du conflit."
+  },
+  "search": {
+    "sourceLocal": "Local",
+    "sourceServer": "Serveur"
   },
   "storage": {
     "title": "Stockage",

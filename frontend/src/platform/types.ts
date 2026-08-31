@@ -183,6 +183,31 @@ export type SyncState = 'synced' | 'pending' | 'conflict' | 'tombstone'
  */
 export type WithSyncState<T> = T & { sync_state?: SyncState }
 
+/**
+ * Which half of a unified global search produced a hit (`SYNCDESKTOP.md` §7.2 — "command
+ * palette lokal FTS + online sunucu **birleşik** (kaynak etiketi)").
+ *
+ * Like {@link SyncState} this is not a property of the found record: it says which of the two
+ * indexes answered for it, and only a platform that HAS two indexes can answer that.
+ */
+export type SearchResultSource = 'local' | 'server'
+
+/**
+ * A search hit as an offline-capable platform produces it: the feature shape, plus the index
+ * that produced it.
+ *
+ * **`search_source` is optional, and that is the whole design** — the exact pairing
+ * {@link WithSyncState} uses. The web adapter has ONE index (the server), so
+ * `fetchGlobalSearch` returns the API body untouched and the field is simply never there;
+ * `CommandPalette` renders no label for `undefined`, so the web palette stays exactly what it
+ * was. The desktop adapter runs both halves and tags every item, so there the label appears —
+ * with no `isDesktop` branch in the component (KARAR A19).
+ *
+ * A label on the web would be noise anyway: with a single source, "Server" on every row is a
+ * badge on no row.
+ */
+export type WithSearchSource<T> = T & { search_source?: SearchResultSource }
+
 // ------------------------------------------------------------------------------------------------
 // DataSource — `docs/DESKTOP-ARCHITECTURE.md` §E.5 / KARAR A19
 //
@@ -478,7 +503,14 @@ export interface NotificationsSource {
 
 /** `features/search/api/searchApi.ts` */
 export interface SearchSource {
-  /** <- `fetchGlobalSearch` (`GET /api/search?q=`; server-side permission filter) */
+  /**
+   * <- `fetchGlobalSearch` (`GET /api/search?q=`; server-side permission filter)
+   *
+   * Web: that request, verbatim. Desktop: local FTS **unified** with the same request
+   * (`SYNCDESKTOP.md` §7.2), every item tagged through {@link WithSearchSource}. The return
+   * type does not change for either: the tag is an optional extra field on the items, so the
+   * web response is still a valid `SearchResponse` without it.
+   */
   query(term: string): Promise<SearchResponse>
 }
 

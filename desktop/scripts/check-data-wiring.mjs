@@ -9,7 +9,10 @@
 //   * an online-only action that reaches `mutate()` lands in the outbox, and the UI tells the
 //     user a quote was sent when nothing left the machine (KARAR A15);
 //   * a method that still throws `NOT_IMPLEMENTED` looks wired from the outside;
-//   * a `NamedQuery` variant nothing calls is dead weight in a security-relevant whitelist.
+//   * a `NamedQuery` variant nothing calls is dead weight in a security-relevant whitelist;
+//   * a method declared `query` that is supposed to consult the server too (the command
+//     palette, SYNCDESKTOP.md §7.2) looks perfectly wired while half of it is missing — which
+//     is why `hybrid` is a kind of its own here, asserted to reach BOTH paths.
 //
 // So this script reads four sources and cross-references them:
 //
@@ -211,7 +214,15 @@ const MUTATE_CALLS = /\b(createRow|updateRow|updateRowByClientId|deleteRow|delet
 const QUERY_CALLS = /\b(runQuery|listPage|countRows|searchLocal|rowsByIds|rowById|readBack|loadRefs|loadRefsByIds|loadCounts|loadTagRefs)\(/
 const HTTP_CALLS = /\bhttp\s*\n?\s*\.(get|post|put|patch|delete)\b|\bhttp\.(get|post|put|patch|delete)\b/
 
-/** Helpers whose own bodies are the shared implementation of several members. */
+/**
+ * Helpers whose own bodies are the shared implementation of a member.
+ *
+ * A value may be one helper name or a list of them; the listed bodies are appended to the
+ * member's own before it is classified. A list is NOT a way to make a thin member look wired:
+ * every name on it has to be a real function in a domain module, and the union still has to
+ * satisfy the member's declared `kind` (a `hybrid` still has to show BOTH a local read and an
+ * `http` call, wherever the two live).
+ */
 const SHARED_HELPERS = {
   'contacts.timeline': 'recordTimeline',
   'companies.timeline': 'recordTimeline',
@@ -227,11 +238,23 @@ const SHARED_HELPERS = {
   'chat.muteConversation': 'conversationById',
   'chat.markRead': 'cursorAck',
   'chat.markDelivered': 'cursorAck',
+  // `search.query` is one line that composes the two halves; the halves themselves are where
+  // the local read and the HTTP call live, and both have to be seen for the `hybrid`
+  // classification below to mean anything.
+  'search.query': ['unifiedSearch', 'localSearchGroups', 'serverSearchGroups'],
 }
 
 function helperBody(name) {
   const pattern = new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n\\}`)
-  return domainSources.match(pattern)?.[0] ?? ''
+  const body = domainSources.match(pattern)?.[0]
+  if (body === undefined) {
+    // A helper that cannot be found would silently contribute an empty body, and the member
+    // would then be judged on its own one line — which is exactly how a wrong classification
+    // gets to look correct.
+    fail(`SHARED_HELPERS names ${name}, which is not a function in any domain module`)
+    return ''
+  }
+  return body
 }
 
 const memberIndex = new Map()
@@ -260,7 +283,9 @@ for (const [name, binding] of bindings) {
     continue
   }
   const helper = SHARED_HELPERS[name]
-  if (helper) body += `\n${helperBody(helper)}`
+  for (const helperName of helper === undefined ? [] : [helper].flat()) {
+    body += `\n${helperBody(helperName)}`
+  }
 
   const usesMutate = MUTATE_CALLS.test(body)
   const usesQuery = QUERY_CALLS.test(body)
@@ -276,6 +301,16 @@ for (const [name, binding] of bindings) {
     if (!usesQuery) fail(`${name}: declared query, but its body runs no local read`)
     if (usesHttp) fail(`${name}: declared query, but its body calls platform.http`)
     if (usesMutate) fail(`${name}: declared query, but its body writes`)
+  } else if (binding.kind === 'hybrid') {
+    // BOTH are required, and that is the whole point of the kind. `search.query` used to be
+    // declared `query` while it only read the local index; the manifest was true and the
+    // feature was missing (SYNCDESKTOP.md §7.2 asks for the two unified). Demanding both
+    // halves here means the same gap cannot reopen without this script saying so.
+    if (!usesQuery) fail(`${name}: declared hybrid, but its body runs no local read`)
+    if (!usesHttp) fail(`${name}: declared hybrid, but its body never calls platform.http`)
+    // A hybrid is a READ. Half of it goes straight to the network and cannot be queued, so a
+    // write on this path would be reported as done while only one half of it happened.
+    if (usesMutate) fail(`${name}: declared hybrid, but its body writes (a hybrid is read-only)`)
   } else {
     fail(`${name}: unknown kind ${binding.kind}`)
   }
@@ -288,6 +323,9 @@ for (const name of online) {
     fail(`${name}: listed as online-only but absent from the manifest`)
     continue
   }
+  // Deliberately `!== 'http'`, not "reaches http": `hybrid` also touches the network, and an
+  // §8 action bound that way would still have a local half that could report success the
+  // server never granted. Only a plain `http` binding satisfies KARAR A15.
   if (binding.kind !== 'http') {
     fail(`${name}: online-only (§8) but bound to '${binding.kind}' — it must go to platform.http, never mutate()`)
   }
@@ -393,7 +431,7 @@ for (const entity of mappedEntities) {
 // Report
 // ------------------------------------------------------------------------------------------------
 
-const byKind = { query: 0, mutate: 0, http: 0 }
+const byKind = { query: 0, mutate: 0, http: 0, hybrid: 0 }
 for (const binding of bindings.values()) byKind[binding.kind] += 1
 
 notes.push(`contract methods            : ${contract.methods.length} across ${contract.domains.length} domains`)
@@ -401,6 +439,7 @@ notes.push(`manifest entries            : ${bindings.size}`)
 notes.push(`  (a) local read  [query]   : ${byKind.query}`)
 notes.push(`  (b) local write [mutate]  : ${byKind.mutate}`)
 notes.push(`  (c) online-only [http]    : ${byKind.http}`)
+notes.push(`  (d) local+server [hybrid] : ${byKind.hybrid}`)
 notes.push(`SYNCDESKTOP §8 methods      : ${online.length}, all bound to http`)
 notes.push(`NamedQuery variants         : ${variants.length} (${usedVariants.length} used, ${reservedSeen.length} reserved)`)
 notes.push(`reserved variants           : ${reservedSeen.join(', ') || '-'}`)

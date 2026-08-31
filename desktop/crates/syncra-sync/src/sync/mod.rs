@@ -35,8 +35,36 @@ const SETTING_LAST_RETENTION: &str = "retention.last_run_at";
 
 /// Timer trigger of the background loop while online (`SYNCDESKTOP.md` §5.5).
 const SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
-/// How often the background loop re-checks connectivity while offline.
-const OFFLINE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+/// First interval between connectivity probes once the engine believes it is offline.
+const OFFLINE_PROBE_BASE_SECS: u64 = 1;
+/// Ceiling of the offline probe ramp (O46 B2).
+///
+/// Deliberately **not** [`backoff::MAX_SECS`] (300s). That ceiling belongs to a *failed
+/// round*: the engine is online, the server answered badly, and waiting five minutes costs
+/// nothing but freshness. This one belongs to *offline discovery*, which is the only thing
+/// that can notice the network came back, so it also fixes the worst case for the "back in
+/// sync shortly after the network returns" acceptance of §5.5. 30s plus the measured 4.8s
+/// round sits comfortably inside a minute; 300s would not.
+///
+/// Cost against the server, checked rather than assumed: `GET /api/sync/manifest` carries
+/// `throttle:30,1,sync` (`backend/routes/api.php`) — 30 requests a minute, in a bucket it
+/// shares with `sync/pull`. Probes at t = 0, 1, 3, 7, 15, 45, 75, … put at most six requests
+/// in any 60 second window, and while the engine is offline nothing else spends that bucket.
+const OFFLINE_PROBE_MAX_SECS: u64 = 30;
+
+/// Interval before the *next* connectivity probe, after `attempt` failed ones.
+///
+/// `1, 2, 4, 8, 16, 30, 30, …` seconds. No jitter, unlike [`backoff::with_jitter`]: jitter
+/// exists to spread a herd of clients retrying the same failed request, and a ramp that only
+/// ever runs while this one disconnected desktop app talks to nobody has no herd to spread.
+/// Being deterministic is also what makes the ceiling testable without a clock.
+pub fn offline_probe_delay(attempt: u32) -> std::time::Duration {
+    let shift = attempt.min(16);
+    let secs = OFFLINE_PROBE_BASE_SECS
+        .saturating_mul(1u64 << shift)
+        .min(OFFLINE_PROBE_MAX_SECS);
+    std::time::Duration::from_secs(secs)
+}
 
 /// True when `err` is a `5xx` the server answered with ([`SyncError::Server`]).
 ///
@@ -917,18 +945,43 @@ impl SyncEngine {
     /// [`SyncEngine::sync_now`]. A failed round backs off `1s, 2s, 4s, ... 300s` with ±20%
     /// jitter ([`backoff`]); a successful one resets the ramp.
     ///
+    /// While the engine believes it is **offline** the loop probes for connectivity itself
+    /// ([`SyncEngine::probe_online`]) on the `1, 2, 4, 8, 16, 30, 30 …` second ramp of
+    /// [`offline_probe_delay`]. That is O46 B2: `online` is otherwise only ever set back to
+    /// `true` by a login or by an OS network event, so before this an app that lost the
+    /// network and was never told it came back stayed offline until it was restarted, with a
+    /// full outbox and a `sync_now` that could only answer `OFFLINE`.
+    ///
     /// The engine never starts this on its own — the shell decides when background work is
     /// appropriate — so an embedder that wants only manual syncs simply does not call it.
     pub fn start_background_sync(&self) -> SyncScheduler {
         let engine = self.clone();
         let handle = tokio::spawn(async move {
             let mut failures: u32 = 0;
+            let mut probes: u32 = 0;
             loop {
                 let delay = if engine.inner.halted.load(Ordering::SeqCst) {
+                    // A halted engine speaks a protocol this build does not implement. It
+                    // does not probe either: reaching the server changes nothing until the
+                    // app itself is updated, and a probe would only burn the `sync` bucket.
                     SYNC_INTERVAL
                 } else if !engine.status().online {
-                    OFFLINE_POLL_INTERVAL
+                    // The first probe of an offline stretch is immediate, and the ramp spaces
+                    // the ones after it. The loop only reaches this branch a full backoff
+                    // delay after the round that discovered the outage, so "immediate" here is
+                    // already ≥1s after the last real request.
+                    if engine.probe_online().await {
+                        probes = 0;
+                        failures = 0;
+                        // Straight back to the top: `sync_now` now passes its own online
+                        // check, so the queued work goes out without waiting for a timer.
+                        continue;
+                    }
+                    let delay = offline_probe_delay(probes);
+                    probes = probes.saturating_add(1);
+                    delay
                 } else {
+                    probes = 0;
                     match engine.sync_now().await {
                         Ok(_) => {
                             failures = 0;
@@ -961,6 +1014,37 @@ impl SyncEngine {
     // -----------------------------------------------------------------------
     // Internals
     // -----------------------------------------------------------------------
+
+    /// One lightweight connectivity probe: `GET /api/sync/manifest` (O46 B2).
+    ///
+    /// Returns `true` only when the server answered a manifest this build can speak, and in
+    /// that case marks the engine online and publishes the transition. Every other outcome —
+    /// no session, no network, a 5xx, a protocol mismatch — leaves `online` false and touches
+    /// nothing else. A probe never pushes, never pulls, and never invents a reason to believe
+    /// the network is back; discovery is its whole job, and the round the caller runs next is
+    /// what actually moves data.
+    ///
+    /// `force = true` is load-bearing. The ten minute manifest cache (§5.5) would otherwise
+    /// answer out of memory and report "online" on a machine with no network at all.
+    async fn probe_online(&self) -> bool {
+        // No session means nothing to authenticate a probe with. `load_manifest` would fail
+        // the same way one line later, but not spending a request says it better.
+        if self.token().is_none() {
+            return false;
+        }
+        if let Err(err) = self.load_manifest(true).await {
+            tracing::debug!(error = %err, "connectivity probe failed; still offline");
+            return false;
+        }
+        self.set_online_flag(true);
+        // `refresh_status`, not `set_online`: both publish the `StatusChanged` the shell's
+        // connectivity indicator listens for, but `set_online` would also leave a wake permit
+        // behind for the round this probe is about to trigger anyway.
+        if let Err(err) = self.refresh_status() {
+            tracing::warn!(error = %err, "could not publish status after a successful probe");
+        }
+        true
+    }
 
     fn db(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
         self.inner

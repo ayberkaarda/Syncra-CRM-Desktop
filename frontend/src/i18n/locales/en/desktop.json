@@ -13,6 +13,7 @@
     "UNRESOLVED_REFERENCE": "A related record could not be found. Sync first.",
     "FIELD_CONFLICT": "This record has changes that conflict with the server.",
     "RECORD_DELETED": "This record has been deleted on the server.",
+    "INVALID_MUTATION": "This change was rejected by the server.",
     "PROTOCOL_VERSION_MISMATCH": "Your sync protocol version is incompatible with the server. Please update the app.",
     "ABILITY_REQUIRED": "You don't have permission to perform this action.",
     "LOCKED_OUT": "Your account is temporarily locked due to too many failed attempts.",
@@ -112,6 +113,10 @@
     "resolveSelected": "Resolve selected",
     "resolvedToast": "Conflict resolved.",
     "resolveError": "An error occurred while resolving the conflict."
+  },
+  "search": {
+    "sourceLocal": "Local",
+    "sourceServer": "Server"
   },
   "storage": {
     "title": "Storage",

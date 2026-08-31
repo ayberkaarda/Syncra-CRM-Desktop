@@ -371,6 +371,24 @@ req: { "batch_id": "uuid", "mutations": [
 - `op=create`: ilgili `Store*Request` kuralları `Validator::make` ile uygulanır, Policy `create`, mevcut create Action/Service çağrılır, `client_id` set edilir. Aynı `client_id` zaten varsa → `duplicate`.
 - `op=update`: `changed_fields ⊆ payload keys` doğrulanır; `changed_fields` dışı alan **yazılmaz**. Policy `update` + mevcut horizontal boundary. Yasak alanlar (`pipeline_stage_id, position, version, status` deals için) 422 `rejected`.
 - `op=action`: beyaz liste — `deal.move, deal.assign, task.complete, task.assign, ticket.status, ticket.assign, lead.assign, quote.status(draft→…yalnız accepted/rejected/expired), conversation.read, conversation.delivered, notification.read, notification.read_all`. Mevcut controller'ların çağırdığı Action sınıfları kullanılır. `lead.convert, quote.send, quote.revise` beyaz listede DEĞİL → `rejected` `code=ONLINE_ONLY`.
+
+  <a id="k-action-bare"></a>
+  > **BU LİSTE WIRE ALANI DEĞİLDİR — `entity.action` ANAHTARIDIR (2026-08-31).** Yukarıdaki
+  > `deal.move` gibi noktalı adlar, "hangi *entity + action* çifti izinli" sorusunun
+  > adlandırmasıdır. **Wire şekli §4.4'te tanımlıdır ve orada nokta yoktur:** `entity` ve
+  > `action` iki **ayrı** alandır (`{"entity":"deal","action":"move"}`), `protocol.rs`
+  > `WireMutation` de böyle serileştirir.
+  >
+  > **Bu ayrımın atlanması gerçek bir hataydı.** `MutationApplier` çıplak `action` alanını bu
+  > noktalı listeyle karşılaştırıyordu; sonuç, **12 fiilin tamamının** `INVALID_MUTATION` ile
+  > reddedilmesiydi — `deal.move` dahil. F4 kabul senaryosu koşulana kadar hiçbir test
+  > yakalamadı, çünkü backend fixture'ları noktalı gönderiyordu (sunucunun kendi
+  > konvansiyonunu test ediyorlardı) ve crate testleri kendi tarafında çıplak gönderip yeşil
+  > kalıyordu. Defter O45.
+  >
+  > **Tek lehçe kuralı:** sunucu artık `action` alanında nokta görürse mutasyonu
+  > `INVALID_MUTATION` ile **açıkça reddeder**. "Her ikisini de kabul et" bilinçle
+  > reddedildi — iki lehçe kalıcılaşmış drift demektir.
 - `op=delete`: Policy `delete` + mevcut kısıtlar (won/lost deal, resolved ticket vb. → `rejected`).
 - `ConflictDetector` (update için): `server.sync_version > base_sync_version` ise `activity_log` içinde `subject=(entity,server_id)` ve `created_at > occurred_at` olan kayıtların `properties.attributes` anahtarlarını topla; `changed_fields ∩ değişen_anahtarlar ≠ ∅` → `conflict` (kesişim `conflicting_fields`), aksi halde alanlar uygulanır ve `applied`. `activity_log` tutmayan entity'de (kontrol et, Faz 0) kayıt düzeyinde: `sync_version` farklıysa `conflict`.
 - **KARAR P10b — kısmi push yanıtı (wire sözleşmesi).** P4a retry'ı tükendiğinde sunucu **HTTP 200** ile o ana kadar işlenmiş sonuçları döner. Bağlayıcı cümle: **`results` dizisinde `seq`'i bulunmayan her mutasyon işlenmemiş sayılır; istemcide `queued` durumunda kalır ve sonraki turda yeniden gönderilir.** Yeni bir hata kodu veya statü **gerekmez** — `idempotency_key` tekrar gönderimi güvenli kılar. İstemci karşılığı §5.5 P15'tir.
@@ -610,6 +628,19 @@ export interface Platform {
 ### 7.2 Yeni UI (desktop namespace, 4 dil)
 Connectivity bar/tray durumu · kayıt rozetleri (`pending`, `conflict`) · Conflict Inbox sayfası (diff görünümü, KeepMine/TakeServer/alan bazlı merge, toplu) · Storage ayarları (retention gün, MB, kullanım, Download archive, Clear local) · Devices sayfası (`/api/me/devices`) · Quick-capture penceresi · Dashboard/rapor "last synced X min ago" damgası · Command palette lokal FTS + online sunucu birleşik (kaynak etiketi).
 
+<a id="k-quickcapture-f5"></a>
+> **DİPNOT — Quick-capture penceresi F5'te teslim edilir (2026-08-31).** Yukarıdaki liste
+> quick-capture'ı F4 kapsamındaki UI'lar arasında sayıyor, ama §10 aynı özelliği **F5 madde 3**
+> (hotkey quick-capture) olarak listeliyor. Şartname kendi içinde çelişiyordu; **F5 kazanır.**
+>
+> Gerekçe: quick-capture'ın tetikleyicisi global hotkey'dir ve hotkey tartışmasız F5-3'tür.
+> Hotkey'siz bir quick-capture penceresi güdük kalır — açılış yolu olmayan bir pencere.
+> İkisini birlikte teslim etmek, F4'te yarısını yazıp F5'te yeniden ele almaktan ucuzdur.
+>
+> **F4 kabulü bu maddeden etkilenmez;** §7.2'nin kalan yedi maddesi F4 kapsamındadır ve
+> "§7.2 tamamı" ifadesi bundan böyle "quick-capture hariç yedi madde" diye okunur.
+> Defter: O44.
+
 ---
 
 ## 8. ONLINE-ONLY LİSTESİ (offline'da devre dışı + tooltip)
@@ -734,6 +765,8 @@ Bu belge F0 öncesinde yazıldı ve keşif ilerledikçe **projenin en yanlış b
 | §6.2 | O29 | `data::get` sözleşmeden düşürüldü — kayıtlıydı, hiçbir tüketicisi yoktu; komut + `generate_handler!` + kontrolör `CONTRACT`'ı birlikte silindi | 2026-08-31 |
 | §6.2 | O8 | `storage_settings` komut listesine eklendi — motordaki `settings()` getter'ı tel'e bağlandı, ayar ekranının `localStorage` aynası kaldırıldı | 2026-08-31 |
 | §9 madde 2 | A25 / O1 | 🔴 AÇIK → ✅ KAPALI: karar koda ve teste bağlandı; tehdit modeli TM-F1 ile birlikte eşitlendi | 2026-08-31 |
+| §7.2 | O44 | Quick-capture penceresi F5 madde 3'e devredildi; §10 ile çelişki dipnotla çözüldü, F4 kabulü "§7.2'nin yedi maddesi" olarak okunur | 2026-08-31 |
+| §4.4 | O45 / B1 | `op=action` beyaz listesinin **wire alanı değil `entity.action` anahtarı** olduğu açıkça yazıldı; tek lehçe kuralı (noktalı `action` açık redle döner) belgelendi | 2026-08-31 |
 | §1 | — | Karar kimliği çakışması uyarısı: şartname `K1–K13` ile RISK-2 serisi `K1/K2/K3` ayrıştırıldı | 2026-08-31 |
 | §3 | — | `docs/DESKTOP-OPEN-ITEMS.md` repo ağacına eklendi | 2026-08-31 |
 | §4.1 | **P1, P1b** | `quote_items` RW satırından çıkarıldı; `taggables`/`quote_items`/`custom_field_values` "PULL SETİNDE DEĞİL" olarak ayrı satıra alındı — kendi `sync_version`'ını almaz, tombstone'a girmez; sahip bump zorunluluğu yazıldı | 2026-08-31 |

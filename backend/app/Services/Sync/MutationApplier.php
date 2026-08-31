@@ -108,6 +108,12 @@ class MutationApplier
      * refused, so a capability added to the web later cannot become an
      * unreviewed offline capability by default.
      *
+     * These entries are `entity.action` KEYS, not wire values. The wire
+     * carries the two halves separately - `{"entity":"deal","action":"move"}`
+     * (SYNCDESKTOP §4.4, protocol §4.3/P10) - and applyAction() joins them
+     * before looking here. Naming the pair in one string keeps the list
+     * readable; it is not a second spelling of the `action` field.
+     *
      * @var array<int, string>
      */
     public const ALLOWED_ACTIONS = [
@@ -129,6 +135,8 @@ class MutationApplier
      * dispatches mail and renders a PDF; `quote.revise` mints a new numbered
      * document. Replaying any of them from a stale offline snapshot produces a
      * result nobody can reconcile.
+     *
+     * Same shape as ALLOWED_ACTIONS: `entity.action` keys, not wire values.
      *
      * @var array<int, string>
      */
@@ -436,12 +444,43 @@ class MutationApplier
     {
         $action = (string) $mutation->action;
 
-        if (in_array($action, self::ONLINE_ONLY_ACTIONS, true)) {
+        /*
+         * ONE DIALECT, AND THE BARE VERB IS IT.
+         *
+         * `entity` and `action` are two separate wire fields and `action`
+         * holds the BARE verb: SYNCDESKTOP §4.4's own example is
+         * `{"op":"action","entity":"deal","server_id":18342,"action":"move"}`
+         * and protocol §4.3/P10's is `{"entity":"notification",
+         * "action":"read_all","scope":"user"}`. The whitelists below are
+         * written as `entity.action` pairs because that is what a permission
+         * reviewer needs to read, so the two halves are joined HERE.
+         *
+         * An entity-qualified `action` is REFUSED rather than also accepted.
+         * Being liberal in what we accept would mint a second spelling of the
+         * same mutation, and a second spelling is drift with a delay fuse: a
+         * client that gets a silent pass for `deal.move` keeps sending it, and
+         * the day one side stops joining the halves the same way, the failure
+         * lands on the user's offline queue instead of on this line.
+         */
+        if (str_contains($action, '.')) {
+            return MutationResult::rejected(
+                $mutation->seq,
+                'INVALID_MUTATION',
+                'action must be the bare verb, not entity-qualified: '.$action,
+            );
+        }
+
+        $key = $mutation->entity.'.'.$action;
+
+        if (in_array($key, self::ONLINE_ONLY_ACTIONS, true)) {
             return MutationResult::rejected($mutation->seq, 'ONLINE_ONLY');
         }
 
-        if (! in_array($action, self::ALLOWED_ACTIONS, true)) {
-            return MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'Action is not whitelisted: '.$action);
+        if (! in_array($key, self::ALLOWED_ACTIONS, true)) {
+            // The COMPOSITE key is reported: `deal` + `obliterate` and
+            // `ticket` + `move` are different refusals, and a message naming
+            // only the verb cannot tell them apart.
+            return MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'Action is not whitelisted: '.$key);
         }
 
         /*
@@ -451,7 +490,7 @@ class MutationApplier
          * before target resolution precisely because there is nothing to
          * resolve.
          */
-        if ($action === 'notification.read_all') {
+        if ($key === 'notification.read_all') {
             if ($mutation->scope !== 'user') {
                 return MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'read_all requires scope=user');
             }
@@ -469,7 +508,7 @@ class MutationApplier
             return MutationResult::rejected($mutation->seq, $this->unresolvedCode($mutation));
         }
 
-        return match ($action) {
+        return match ($key) {
             'deal.move' => $this->dealMove($mutation, $model, $actor),
             'deal.assign' => $this->simpleAction($mutation, $model, $actor, 'assign', AssignDealRequest::class,
                 fn (array $data) => app(DealService::class)->assign($model, (int) $data['owner_id'])),

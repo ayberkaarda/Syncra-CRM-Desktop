@@ -301,7 +301,7 @@ class SyncPushTest extends TestCase
             'op' => 'action',
             'entity' => 'deal',
             'server_id' => $deal->id,
-            'action' => 'deal.move',
+            'action' => 'move',
             /*
              * Field names come from the EXISTING MoveDealRequest contract
              * (`to_stage_id`, not `pipeline_stage_id`) - K7: the sync path
@@ -337,7 +337,7 @@ class SyncPushTest extends TestCase
             'op' => 'action',
             'entity' => 'deal',
             'server_id' => $deal->id,
-            'action' => 'deal.move',
+            'action' => 'move',
             'payload' => [
                 'to_stage_id' => $target->id,
                 'version' => $deal->version,
@@ -378,7 +378,7 @@ class SyncPushTest extends TestCase
             'op' => 'action',
             'entity' => 'ticket',
             'server_id' => $ticket->id,
-            'action' => 'ticket.status',
+            'action' => 'status',
             'payload' => ['status' => 'closed'],
         ])])->assertJsonPath('results.0.status', 'rejected')
             ->assertJsonPath('results.0.code', 'INVALID_STATUS_TRANSITION');
@@ -394,12 +394,16 @@ class SyncPushTest extends TestCase
             'op' => 'action',
             'entity' => 'lead',
             'server_id' => $lead->id,
-            'action' => 'lead.convert',
+            'action' => 'convert',
             'payload' => [],
         ])])->assertJsonPath('results.0.status', 'rejected')
             ->assertJsonPath('results.0.code', 'ONLINE_ONLY');
     }
 
+    /**
+     * The refusal is about the entity+action PAIR: `obliterate` is not a verb
+     * this entity - or any entity - exposes offline.
+     */
     public function test_an_action_outside_the_whitelist_is_refused(): void
     {
         [, $token] = $this->deviceUser('Admin');
@@ -410,7 +414,7 @@ class SyncPushTest extends TestCase
             'op' => 'action',
             'entity' => 'deal',
             'server_id' => $deal->id,
-            'action' => 'deal.obliterate',
+            'action' => 'obliterate',
             'payload' => [],
         ])])->assertJsonPath('results.0.status', 'rejected')
             ->assertJsonPath('results.0.code', 'INVALID_MUTATION');
@@ -514,7 +518,7 @@ class SyncPushTest extends TestCase
                 'entity' => 'task',
                 // No server_id: it does not exist yet on the client.
                 'client_id' => $taskClientId,
-                'action' => 'task.complete',
+                'action' => 'complete',
                 'payload' => ['completed' => true],
             ]),
         ]);
@@ -572,7 +576,7 @@ class SyncPushTest extends TestCase
             'op' => 'action',
             'entity' => 'task',
             'client_id' => (string) Str::uuid(),
-            'action' => 'task.complete',
+            'action' => 'complete',
             'payload' => ['completed' => true],
         ])])->assertJsonPath('results.0.status', 'rejected')
             ->assertJsonPath('results.0.code', 'UNRESOLVED_REFERENCE');
@@ -601,7 +605,7 @@ class SyncPushTest extends TestCase
             'op' => 'action',
             'entity' => 'task',
             'server_id' => $id,
-            'action' => 'task.complete',
+            'action' => 'complete',
             'payload' => ['completed' => true],
         ])])->assertJsonPath('results.0.status', 'rejected')
             ->assertJsonPath('results.0.code', 'RECORD_DELETED');
@@ -634,7 +638,7 @@ class SyncPushTest extends TestCase
             'op' => 'action',
             'entity' => 'notification',
             'client_id' => $uuid,
-            'action' => 'notification.read',
+            'action' => 'read',
         ])])->assertJsonPath('results.0.status', 'applied');
 
         $this->assertNotNull(DB::table('notifications')->where('id', $uuid)->value('read_at'));
@@ -727,7 +731,7 @@ class SyncPushTest extends TestCase
         $response = $this->push($token, [$this->mutation([
             'op' => 'action',
             'entity' => 'notification',
-            'action' => 'notification.read_all',
+            'action' => 'read_all',
             'scope' => 'user',
         ])]);
 
@@ -748,7 +752,7 @@ class SyncPushTest extends TestCase
         $this->push($token, [$this->mutation([
             'op' => 'action',
             'entity' => 'notification',
-            'action' => 'notification.read_all',
+            'action' => 'read_all',
         ])])->assertJsonPath('results.0.status', 'rejected')
             ->assertJsonPath('results.0.code', 'INVALID_MUTATION');
     }
@@ -857,5 +861,176 @@ class SyncPushTest extends TestCase
             $company->fresh()->tags()->pluck('tags.id')->all(),
             'tag_ids bağlanmadı — tags anahtarı fazladan gönderilince push kırıldı.'
         );
+    }
+
+    /**
+     * O45 - THE WIRE CARRIES THE BARE VERB.
+     *
+     * `entity` and `action` are two separate fields and `action` holds the
+     * verb alone: SYNCDESKTOP §4.4 sends `{"entity":"deal","action":"move"}`
+     * and protocol §4.3/P10 sends `{"entity":"notification",
+     * "action":"read_all"}`. MutationApplier joins the halves itself before
+     * consulting ALLOWED_ACTIONS.
+     *
+     * This ran RED before O45: every one of the twelve offline verbs came back
+     * `INVALID_MUTATION - Action is not whitelisted: move`, because the server
+     * compared the bare wire value against its own dotted list. The whole
+     * `op=action` surface was dead on arrival and no test noticed, because
+     * every fixture in this file spoke the server's private dialect.
+     *
+     * Four verbs are exercised rather than one: `deal.move` (its own request
+     * and service), `task.complete` (a FormRequest that reads the bound route
+     * model), `ticket.status` (a status machine) and `notification.read_all`
+     * (the one action with no subject row) are the four distinct shapes the
+     * dispatcher has.
+     */
+    public function test_whitelisted_actions_accept_the_bare_verb(): void
+    {
+        [$user, $token] = $this->deviceUser('Admin');
+
+        $deal = Deal::factory()->create();
+        $target = PipelineStage::query()
+            ->where('id', '!=', $deal->pipeline_stage_id)
+            ->where('is_won', false)->where('is_lost', false)
+            ->first();
+
+        $task = Task::factory()->create();
+        $ticket = Ticket::factory()->create(['status' => 'open']);
+
+        $notificationId = (string) Str::uuid();
+        DB::table('notifications')->insert([
+            'id' => $notificationId,
+            'type' => 'App\\Notifications\\Dummy',
+            'notifiable_type' => $user->getMorphClass(),
+            'notifiable_id' => $user->id,
+            'data' => '{}',
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+            'sync_version' => 0,
+        ]);
+
+        $response = $this->push($token, [
+            $this->mutation([
+                'seq' => 1,
+                'op' => 'action',
+                'entity' => 'deal',
+                'server_id' => $deal->id,
+                'action' => 'move',
+                /*
+                 * The REAL body the client sends: MoveDealRequest marks
+                 * `position` `prohibited`, so the ordering key is absent and
+                 * the neighbours are named instead. A fixture that omitted
+                 * `version` would also miss the optimistic lock entirely.
+                 */
+                'payload' => [
+                    'to_stage_id' => $target->id,
+                    'version' => $deal->version,
+                    'after_deal_id' => null,
+                    'before_deal_id' => null,
+                ],
+            ]),
+            $this->mutation([
+                'seq' => 2,
+                'op' => 'action',
+                'entity' => 'task',
+                'server_id' => $task->id,
+                'action' => 'complete',
+                'payload' => ['completed' => true],
+            ]),
+            $this->mutation([
+                'seq' => 3,
+                'op' => 'action',
+                'entity' => 'ticket',
+                'server_id' => $ticket->id,
+                'action' => 'status',
+                'payload' => ['status' => 'in_progress'],
+            ]),
+            $this->mutation([
+                'seq' => 4,
+                'op' => 'action',
+                'entity' => 'notification',
+                'action' => 'read_all',
+                'scope' => 'user',
+            ]),
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('results.0.status', 'applied')
+            ->assertJsonPath('results.1.status', 'applied')
+            ->assertJsonPath('results.2.status', 'applied')
+            ->assertJsonPath('results.3.status', 'applied');
+
+        // `applied` is asserted against the ROW, not only against the envelope:
+        // a status word is cheap, a moved deal is not.
+        $this->assertSame($target->id, $deal->fresh()->pipeline_stage_id);
+        $this->assertSame('completed', $task->fresh()->status);
+        $this->assertSame('in_progress', $ticket->fresh()->status);
+        $this->assertNotNull(DB::table('notifications')->where('id', $notificationId)->value('read_at'));
+    }
+
+    /**
+     * O45, the other half - ONE DIALECT.
+     *
+     * An entity-qualified `action` is refused instead of quietly accepted.
+     * "Be liberal in what you accept" was considered and rejected here: it
+     * would mint a second spelling of the same mutation, both spellings would
+     * then have to keep agreeing forever, and the drift would surface in a
+     * user's offline queue rather than at the boundary. The refusal is what
+     * stops the second dialect from being reintroduced later as a kindness.
+     */
+    public function test_an_entity_qualified_action_is_refused(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $deal = Deal::factory()->create();
+        $target = PipelineStage::query()
+            ->where('id', '!=', $deal->pipeline_stage_id)
+            ->where('is_won', false)->where('is_lost', false)
+            ->first();
+
+        $this->push($token, [$this->mutation([
+            'op' => 'action',
+            'entity' => 'deal',
+            'server_id' => $deal->id,
+            // The server's own former dialect. Otherwise a valid move.
+            'action' => 'deal.move',
+            'payload' => [
+                'to_stage_id' => $target->id,
+                'version' => $deal->version,
+                'after_deal_id' => null,
+                'before_deal_id' => null,
+            ],
+        ])])->assertOk()
+            ->assertJsonPath('results.0.status', 'rejected')
+            ->assertJsonPath('results.0.code', 'INVALID_MUTATION');
+
+        $this->assertSame(
+            $deal->pipeline_stage_id,
+            $deal->fresh()->pipeline_stage_id,
+            'Noktali action REDDEDILMELI - ikinci lehce sessizce calisamaz.'
+        );
+    }
+
+    /**
+     * The ONLINE_ONLY list is keyed the same way, so it has to be reachable
+     * from the bare wire too: `lead` + `convert` must answer ONLINE_ONLY and
+     * not fall through to "not whitelisted", which would tell the client to
+     * drop the mutation instead of replaying it online.
+     */
+    public function test_an_online_only_action_is_reached_from_the_bare_verb(): void
+    {
+        [, $token] = $this->deviceUser('Admin');
+
+        $lead = Lead::factory()->create();
+
+        $this->push($token, [$this->mutation([
+            'op' => 'action',
+            'entity' => 'lead',
+            'server_id' => $lead->id,
+            'action' => 'convert',
+            'payload' => [],
+        ])])->assertJsonPath('results.0.status', 'rejected')
+            ->assertJsonPath('results.0.code', 'ONLINE_ONLY');
     }
 }

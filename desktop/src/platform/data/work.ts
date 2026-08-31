@@ -153,10 +153,14 @@ export const tasksSource: TasksSource = {
    * `task.complete` is on the crate's action whitelist and has a local effect the applier
    * knows (`status = completed`, `completed_at = now`). Un-completing is a plain field
    * update: there is no `uncomplete` action on the wire.
+   *
+   * `CompleteTaskRequest` (`backend/app/Http/Requests/Tasks/CompleteTaskRequest.php`) requires
+   * `completed` as a boolean — an empty payload is rejected server-side ("tamamlanma durumu
+   * alanı zorunludur").
    */
   complete: async (id, completed): Promise<Task> => {
     if (completed) {
-      await runAction('task', id, 'complete')
+      await runAction('task', id, 'complete', { completed: true })
     } else {
       await updateRow('task', id, { status: 'pending', completed_at: null })
     }

@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use syncra_sync::{SyncConfig, SyncEngine, SyncError};
+use syncra_sync::{sync::SyncScheduler, SyncConfig, SyncEngine, SyncError};
 use tauri::{AppHandle, Manager, Runtime};
 use url::Url;
 
@@ -35,6 +35,17 @@ pub struct AppState {
     /// Shared HTTP client for the account-management calls the engine does not own
     /// (`auth::list_devices`, `auth::revoke_device`).
     pub http: reqwest::Client,
+    /// Keeps the background sync loop alive for the life of the process (O46 B2).
+    ///
+    /// Nothing reads this field yet. `SyncScheduler` wraps the loop's `JoinHandle`, and
+    /// dropping a `JoinHandle` detaches the task rather than cancelling it, so the loop would
+    /// survive being thrown away — but only as something nothing can stop or account for.
+    /// Parking it in the managed state ties its lifetime to the app's explicitly and keeps
+    /// [`SyncScheduler::stop`] reachable for a later phase that wants to pause syncing.
+    ///
+    /// `stop` consumes `self`, so calling it means owning the state; no command does, and the
+    /// loop is meant to run until the process exits.
+    pub scheduler: Option<SyncScheduler>,
 }
 
 impl AppState {
@@ -71,6 +82,9 @@ impl AppState {
             db_path,
             cache_dir,
             http: reqwest::Client::new(),
+            // Started in `.setup()` rather than here: the engine event bridge has to exist
+            // before the loop can emit anything, or the first `TablesChanged` is lost.
+            scheduler: None,
         })
     }
 }

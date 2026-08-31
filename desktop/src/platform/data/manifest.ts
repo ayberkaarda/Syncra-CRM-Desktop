@@ -12,34 +12,48 @@
 // `kind: 'http'` all fail that script. `index.ts` re-checks the manifest against the assembled
 // object at startup in dev builds, so a drift cannot survive a single run either.
 //
-// ## The three kinds
+// ## The four kinds
 //
 // | kind | Path | Offline |
 // |---|---|---|
 // | `query` | `invoke('query' \| 'search')` against the local mirror | works |
 // | `mutate` | `invoke('mutate')` — local row + outbox, pushed on the next round | works |
 // | `http` | `platform.http` — straight to the API | fails loudly |
+// | `hybrid` | BOTH, in one call — the local answer, widened by the server's when reachable | degrades |
 //
 // **`http` is never a fallback for "not wired yet".** It is the correct binding for two
 // disjoint sets: the `SYNCDESKTOP.md` §8 online-only list (KARAR A15 — these must NOT reach
 // `mutate()`, or the outbox would tell the user an action succeeded that never happened), and
 // writes to tables that are read-only in the sync scope (`SyncEngine::mutate` refuses them).
 // Each entry says which.
+//
+// **`hybrid` is not a softer `http`, and it is a READ-ONLY kind.** It exists for exactly one
+// method (`search.query`) because §7.2 asks for exactly that shape: local FTS unified with the
+// online search. It carries two obligations the check script enforces — the body must reach
+// BOTH paths (a `hybrid` that only reads locally is the bug this kind was introduced to make
+// visible), and it must never write, since half of it cannot be queued. An online-only §8
+// action can therefore never hide behind it: those are asserted to be `http` by name.
 
 /** How a `DataSource` method reaches its data. */
-export type MethodKind = 'query' | 'mutate' | 'http'
+export type MethodKind = 'query' | 'mutate' | 'http' | 'hybrid'
 
 /** One method's binding. */
 export interface MethodBinding {
-  /** Which of the three paths it takes. */
+  /** Which of the four paths it takes. */
   kind: MethodKind
   /**
    * What it is bound to: a `NamedQuery` tag (or several), an `entity.op` / `entity.action`
    * pair, or an HTTP method and path.
    */
   via: string
-  /** Why it is online-only, for `kind: 'http'` entries. */
-  reason?: 'spec-8' | 'read-only-entity' | 'server-algorithm' | 'server-get-or-create' | 'not-whitelisted'
+  /** Why it is online-only (`kind: 'http'`), or why it is both (`kind: 'hybrid'`). */
+  reason?:
+    | 'spec-8'
+    | 'read-only-entity'
+    | 'server-algorithm'
+    | 'server-get-or-create'
+    | 'not-whitelisted'
+    | 'local-plus-server'
 }
 
 /**
@@ -199,7 +213,19 @@ export const DATA_METHOD_MANIFEST: Record<string, MethodBinding> = {
   'notifications.delete': { kind: 'mutate', via: 'notification.delete' },
 
   // ---- search --------------------------------------------------------------------------
-  'search.query': { kind: 'query', via: 'search + rows_by_client_ids' },
+  // The one `hybrid` binding, and the only one §7.2 asks for: "command palette lokal FTS +
+  // online sunucu **birlesik** (kaynak etiketi)". Local FTS always runs — offline it is the
+  // only index there is — and `GET /api/search` runs alongside it whenever the engine reports
+  // online, because the mirror is a retention window and a record that was never pulled lives
+  // only on the server. Duplicates are collapsed on `type:id` with the LOCAL copy winning (it
+  // may carry an unpushed edit), and a failing server half degrades to local results rather
+  // than to no results. NOT on the §8 list: nothing here is an action, and the read still
+  // answers offline.
+  'search.query': {
+    kind: 'hybrid',
+    via: 'search + rows_by_client_ids | GET /api/search',
+    reason: 'local-plus-server',
+  },
 
   // ---- products ------------------------------------------------------------------------
   'products.list': { kind: 'query', via: 'product_list' },

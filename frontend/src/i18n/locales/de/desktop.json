@@ -13,6 +13,7 @@
     "UNRESOLVED_REFERENCE": "Ein verknüpfter Datensatz wurde nicht gefunden. Synchronisieren Sie zuerst.",
     "FIELD_CONFLICT": "Dieser Datensatz enthält Änderungen, die mit dem Server in Konflikt stehen.",
     "RECORD_DELETED": "Dieser Datensatz wurde auf dem Server gelöscht.",
+    "INVALID_MUTATION": "Diese Änderung wurde vom Server abgelehnt.",
     "PROTOCOL_VERSION_MISMATCH": "Ihre Synchronisationsprotokollversion ist mit dem Server nicht kompatibel. Bitte aktualisieren Sie die App.",
     "ABILITY_REQUIRED": "Sie haben nicht die erforderliche Berechtigung für diese Aktion.",
     "LOCKED_OUT": "Ihr Konto ist wegen zu vieler fehlgeschlagener Versuche vorübergehend gesperrt.",
@@ -112,6 +113,10 @@
     "resolveSelected": "Ausgewählte lösen",
     "resolvedToast": "Konflikt gelöst.",
     "resolveError": "Beim Lösen des Konflikts ist ein Fehler aufgetreten."
+  },
+  "search": {
+    "sourceLocal": "Lokal",
+    "sourceServer": "Server"
   },
   "storage": {
     "title": "Speicher",
