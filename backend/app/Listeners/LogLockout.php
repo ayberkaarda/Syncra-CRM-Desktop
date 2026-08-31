@@ -33,7 +33,13 @@ class LogLockout
 {
     public function __construct(private readonly UserAgentParser $parser) {}
 
-    public function log(string $email, Request $request): void
+    /**
+     * `$channel` (F1): 'web' for the SPA, 'desktop' for
+     * POST /api/auth/device. Defaulted rather than required so every
+     * existing caller keeps its exact meaning, and so the column's own
+     * DEFAULT 'web' and this signature cannot drift apart.
+     */
+    public function log(string $email, Request $request, string $channel = 'web'): void
     {
         try {
             $userAgent = (string) $request->userAgent();
@@ -42,6 +48,7 @@ class LogLockout
             $this->persist([
                 'email' => $email,
                 'event' => 'locked_out',
+                'channel' => $channel,
                 'ip_address' => $request->ip(),
                 'user_agent' => $userAgent,
                 'device' => $parsed['device'],

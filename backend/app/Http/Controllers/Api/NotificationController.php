@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\NotificationResource;
+use App\Services\Notifications\NotificationReadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -30,6 +31,8 @@ use Illuminate\Validation\Rule;
  */
 class NotificationController extends Controller
 {
+    public function __construct(private readonly NotificationReadService $reads) {}
+
     private const DEFAULT_PER_PAGE = 20;
 
     private const MAX_PER_PAGE = 100;
@@ -87,7 +90,7 @@ class NotificationController extends Controller
 
         $this->authorizeOwnership($request, $notification);
 
-        $notification->markAsRead();
+        $this->reads->markRead($notification);
 
         return (new NotificationResource($notification))->response();
     }
@@ -96,11 +99,20 @@ class NotificationController extends Controller
     {
         abort_unless(Gate::allows('notifications.view'), Response::HTTP_FORBIDDEN);
 
-        $request->user()->unreadNotifications()->update(['read_at' => now()]);
+        /*
+         * Protocol §2.3 #2 - this used to be a single bulk UPDATE. It bypassed
+         * Eloquent entirely, so `sync_version` was never stamped and the whole
+         * batch was invisible to a desktop client. Even stamping it in one
+         * statement would be wrong: §2.5/K-C requires ONE DISTINCT version per
+         * row, because the pull cursor is a single scalar and a LIMIT boundary
+         * inside a tie loses rows permanently. The chunked model loop lives in
+         * NotificationReadService, which the sync push applier calls too (K7).
+         */
+        $this->reads->markAllRead($request->user());
 
         return response()->json([
             'data' => [
-                'unread_count' => $request->user()->unreadNotifications()->count(),
+                'unread_count' => $this->reads->unreadCount($request->user()),
             ],
         ]);
     }

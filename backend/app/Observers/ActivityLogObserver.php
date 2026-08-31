@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Events\ActivityLogged;
 use App\Support\ActivityLogging\ActivityFormatter;
 use App\Support\ActivityLogging\PropertyTruncator;
+use App\Sync\SyncActivityContext;
 use Spatie\Activitylog\Models\Activity;
 use Throwable;
 
@@ -53,6 +54,21 @@ class ActivityLogObserver
         // can filter by origin ("hide everything the importer did") instead of
         // inferring it from a null causer.
         $properties['_context'] = ActivityFormatter::context();
+
+        /*
+         * Faz F1 (SYNCDESKTOP §4.4): a mutation replayed from the desktop
+         * outbox must be identifiable as such, and as part of ONE batch.
+         * Stamped here for the same reason everything else is stamped here -
+         * this is the only place every audit row passes through, and the rows
+         * themselves are written by the existing services, not by the sync
+         * layer. Absent for web traffic, so no existing row changes shape.
+         */
+        $syncContext = SyncActivityContext::current();
+
+        if ($syncContext !== null) {
+            $properties['channel'] = 'desktop';
+            $properties['batch_id'] = $syncContext['batch_id'] ?? null;
+        }
 
         $activity->properties = $properties;
     }

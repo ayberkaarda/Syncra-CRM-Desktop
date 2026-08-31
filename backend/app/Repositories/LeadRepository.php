@@ -5,6 +5,8 @@ namespace App\Repositories;
 use App\Models\CustomField;
 use App\Models\CustomFieldValue;
 use App\Models\Lead;
+use App\Services\Sync\TagSyncService;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -156,11 +158,16 @@ class LeadRepository
     }
 
     /**
+     * Routed through TagSyncService so the owner's `sync_version` moves with
+     * the pivot write - `->tags()->sync()` fires no model event at all, so
+     * without it a tag-only edit never reaches a desktop client (protocol
+     * §1.4).
+     *
      * @param  array<int, int>  $tagIds
      */
     public function syncTags(Lead $lead, array $tagIds): void
     {
-        $lead->tags()->sync($tagIds);
+        TagSyncService::apply($lead, $tagIds);
     }
 
     /**
@@ -182,6 +189,8 @@ class LeadRepository
             ->get()
             ->keyBy('key');
 
+        $changed = false;
+
         foreach ($customFields as $key => $value) {
             $field = $fields->get($key);
 
@@ -189,7 +198,7 @@ class LeadRepository
                 continue;
             }
 
-            CustomFieldValue::updateOrCreate(
+            $row = CustomFieldValue::updateOrCreate(
                 [
                     'custom_field_id' => $field->id,
                     'customizable_type' => Lead::class,
@@ -197,6 +206,18 @@ class LeadRepository
                 ],
                 ['value' => is_array($value) ? json_encode($value) : (string) $value]
             );
+
+            $changed = $changed || $row->wasRecentlyCreated || $row->wasChanged();
+        }
+
+        // Embedded child (protocol §1.5): `custom_field_values` is not a pull
+        // table - its rows ride inside the owner's `custom_fields` payload.
+        // When ONLY a custom field changed, the owner row itself is clean, no
+        // observer fires, and the edit would never cross a client's cursor.
+        // Bumped only when something actually changed, so a no-op upsert does
+        // not manufacture a phantom delta.
+        if ($changed) {
+            SyncVersionBumper::bump($lead);
         }
     }
 }

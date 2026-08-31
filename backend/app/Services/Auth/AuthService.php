@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * All authentication business logic lives here - controllers stay thin
@@ -254,15 +255,67 @@ class AuthService
 
         $user->save();
 
-        // A password change is a privilege boundary - same rule as login.
-        $request->session()->regenerate();
+        /*
+         * Faz F1 — DEVICE TOKENS (SYNCDESKTOP §4.3, protokol §3.6).
+         *
+         * Step 4.5 in docs/AUTH-FLOWS.md §3.2's binding order: after the hash
+         * is stored, before the session is regenerated.
+         *
+         * THE TRAP: the obvious "keep my own token, drop the rest" filter
+         * `where('id', '!=', $user->currentAccessToken()?->id)` deletes NOTHING
+         * when the change arrives from the SPA. A cookie session's
+         * currentAccessToken() is a TransientToken, which has no `id`, so the
+         * expression becomes `where('id', '!=', null)` - and in SQL that
+         * matches no row at all. The gate would silently do nothing, forever,
+         * with no error to notice.
+         *
+         * So the token TYPE is tested explicitly:
+         *   - change made from the SPA  -> every device token is dropped. The
+         *     browser is not one of them, and the user is choosing to
+         *     re-authenticate their machines.
+         *   - change made from a device -> that device keeps working, all the
+         *     others are dropped.
+         */
+        $current = $user->currentAccessToken();
 
-        // NOTE: the user's OTHER sessions need no code here. Sanctum's
+        $tokens = $user->tokens();
+
+        if ($current instanceof PersonalAccessToken) {
+            $tokens->whereKeyNot($current->getKey());
+        }
+
+        $tokens->delete();
+
+        /*
+         * A password change is a privilege boundary - same rule as login.
+         *
+         * GUARDED IN F1: a desktop client changing its password arrives with a
+         * bearer token and NO session at all (it never matches
+         * SANCTUM_STATEFUL_DOMAINS - protocol §3.8 requires exactly that), so
+         * `session()` would throw "Session store not set on request" and turn a
+         * successful password change into a 500 AFTER the hash was already
+         * written. Same `hasSession()` guard logout() has carried since Faz 5.
+         *
+         * Skipping it costs nothing there: session fixation is a cookie
+         * problem, and a bearer credential has no session id to fixate. The
+         * device's OTHER tokens are already gone a few lines above.
+         */
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
+
+        // NOTE: the user's OTHER SPA sessions need no code here. Sanctum's
         // AuthenticateSession (config/sanctum.php -> middleware.authenticate_session)
         // compares the session's `password_hash_web` against the current hash on
         // every stateful request and throws 401 on a mismatch, so they drop on
         // their next request. Redis sessions are not indexed by user id, so this
         // lazy model is the deliberate design (see App\Events\UserDeactivated).
+        //
+        // F1 CORRECTION: that argument covers STATEFUL requests only. Bearer
+        // tokens never reach AuthenticateSession, so nothing described above
+        // would ever invalidate them - which is why the explicit token delete
+        // a few lines up is not redundant with this paragraph but the missing
+        // half of it.
         Log::info('Şifre değiştirildi.', [
             'user_id' => $user->id,
             'ip' => $request->ip(),

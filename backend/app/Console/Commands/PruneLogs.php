@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\PageVisitLog;
 use App\Models\SessionLog;
+use App\Models\SyncDeletion;
+use App\Models\SyncIdempotency;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,14 +28,14 @@ class PruneLogs extends Command
      */
     protected $signature = 'logs:prune
         {--days= : Tüm tablolar için tek bir saklama süresi (gün) — config değerlerini ezer}
-        {--table= : Yalnızca bu tabloyu buda: page_visits|sessions|activities}
+        {--table= : Yalnızca bu tabloyu buda: page_visits|sessions|activities|sync_deletions|sync_idempotency}
         {--dry-run : Hiçbir şey silmez, kaç satırın etkileneceğini yazdırır}
         {--force : Onay istemeden çalıştır (üretimde --force olmadan silme yapılmaz)}';
 
     /**
      * @var string
      */
-    protected $description = 'Saklama süresini aşan page_visit_logs / session_logs / activity_log kayıtlarını chunk\'lı şekilde budar.';
+    protected $description = 'Saklama süresini aşan page_visit_logs / session_logs / activity_log / sync_deletions / sync_idempotency kayıtlarını chunk\'lı şekilde budar.';
 
     /**
      * Silme sırasında tek seferde işlenecek satır sayısı.
@@ -166,6 +168,34 @@ class PruneLogs extends Command
                 'label' => config('activitylog.table_name', 'activity_log'),
                 'date_column' => 'created_at',
                 'config_key' => 'syncra.log_retention.activities',
+            ],
+
+            /*
+             * Faz F1 — masaüstü senkron tabloları (SYNCDESKTOP §4.2).
+             *
+             * Both grow forever if left alone, and both are safe to prune on a
+             * time basis for the SAME reason: they are only useful to a client
+             * whose cursor is older than the row.
+             *
+             *  - sync_deletions, 90 days: a tombstone tells a client "drop this
+             *    row". A device offline for longer than the retention window
+             *    cannot be caught up by tombstones anyway - it re-bootstraps,
+             *    which is the correct and cheaper recovery.
+             *  - sync_idempotency, 7 days: the ledger exists to make a RETRY
+             *    free. Retries happen within minutes, not weeks; a week is
+             *    already generous for a laptop that was shut for a few days.
+             */
+            'sync_deletions' => [
+                'model' => SyncDeletion::class,
+                'label' => 'sync_deletions',
+                'date_column' => 'deleted_at',
+                'config_key' => 'syncra.log_retention.sync_deletions',
+            ],
+            'sync_idempotency' => [
+                'model' => SyncIdempotency::class,
+                'label' => 'sync_idempotency',
+                'date_column' => 'created_at',
+                'config_key' => 'syncra.log_retention.sync_idempotency',
             ],
         ];
 

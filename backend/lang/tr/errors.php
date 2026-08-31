@@ -59,4 +59,20 @@ return [
     'saved_view' => [
         'invalid_query' => 'Kayıtlı görünüm sorgusu izin verilmeyen alan(lar) içeriyor: :fields.',
     ],
+
+    /*
+     * Faz F1 — masaüstü senkron katmanı (SYNCDESKTOP §4.3–§4.5).
+     *
+     * Buradaki metinler yalnızca HTTP düzeyinde reddedilen istekler içindir.
+     * Tek tek mutasyonların sonucu (`applied`/`conflict`/`rejected`/`duplicate`)
+     * `code` alanıyla taşınır ve istemci onu `desktop.errors.*` altında kendi
+     * diliyle gösterir — sunucu orada cümle üretmez.
+     */
+    'sync' => [
+        'device_token_required' => 'Bu uç yalnızca masaüstü cihaz belirteciyle kullanılabilir.',
+        'protocol_version_mismatch' => 'Masaüstü uygulaması güncel değil; senkronizasyon durduruldu.',
+        'push_batch_too_large' => 'Gönderilen değişiklik paketi izin verilen sınırı aşıyor.',
+        'invalid_credentials' => 'E-posta veya şifre hatalı.',
+        'user_inactive' => 'Hesabınız devre dışı bırakılmış. Lütfen sistem yöneticisi ile iletişime geçin.',
+    ],
 ];

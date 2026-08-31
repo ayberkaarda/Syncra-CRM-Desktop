@@ -27,7 +27,18 @@ class ChangePasswordRequest extends FormRequest
             // profile screen), and it stops someone sitting at an unattended
             // screen - or holding a stolen session cookie - from taking the
             // account over permanently.
-            'current_password' => ['required', 'string', 'current_password:web'],
+            //
+            // GUARD CHANGED IN F1: `web` -> `sanctum` (protokol §3.6).
+            //
+            // The rule resolves the user from the NAMED guard. `web` is the
+            // session guard, so it is a guest for a bearer request and the rule
+            // returned false unconditionally - a desktop client could never
+            // change its password, and §3.6's "the calling device keeps its own
+            // token" was unreachable. `sanctum` is the same guard the route
+            // authenticates with: it tries the session FIRST and falls back to
+            // the bearer token, so the SPA's behaviour is byte-for-byte
+            // identical and the device path starts working.
+            'current_password' => ['required', 'string', 'current_password:sanctum'],
 
             'password' => [
                 'required',

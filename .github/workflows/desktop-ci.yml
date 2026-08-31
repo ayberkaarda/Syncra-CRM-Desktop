@@ -1,0 +1,305 @@
+name: Desktop CI
+
+# DRAFT — SYNCDESKTOP.md F7 ("Paketleme ve CI").
+#
+# This workflow has never been executed (push is forbidden for lanes in this repo per
+# docs/ENGINEERING-RULES.md §1 / SYNCDESKTOP.md §0.2, so nothing can trigger a real run from here).
+# Syntax was only validated locally with a YAML parser — see the F(W2-c) phase report
+# for the exact command and output. Do not treat this file as CI-green evidence.
+#
+# It also references paths that do not exist yet in this worktree:
+#   - desktop/crates/syncra-sync   (lands in F2)
+#   - desktop/ (Tauri app, package.json, src-tauri)   (lands in F3)
+# The `desktop-rust` and `desktop-tauri-build` jobs are written ahead of spec (SYNCDESKTOP.md
+# §5, §6) and will need a smoke-run + adjustment once F2/F3 actually land those directories.
+
+on:
+  pull_request:
+    branches: [main, feat/desktop]
+    paths:
+      - 'desktop/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/desktop-ci.yml'
+  push:
+    branches: [feat/desktop]
+    paths:
+      - 'desktop/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/desktop-ci.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # syncra-sync crate: cargo test + clippy, 3-OS matrix (SYNCDESKTOP.md §5.7, §0.4)
+  # ---------------------------------------------------------------------------
+  desktop-rust:
+    name: rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, macos-latest]
+    defaults:
+      run:
+        working-directory: desktop/crates/syncra-sync
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # --- Precondition 1 (Windows only) --------------------------------------
+      # `rusqlite` is built with the `bundled-sqlcipher-vendored-openssl` feature
+      # (SYNCDESKTOP.md §5.1), which vendors and compiles OpenSSL from source via the
+      # `openssl-src` crate's Perl-based `Configure` script. `windows-latest` ships both
+      # Git's minimal Perl 5.42 (its `usr\bin` is on PATH by default, and its distribution
+      # has ExtUtils::MakeMaker / Locale::Maketext::Simple stripped out) and a full
+      # Strawberry Perl install. If Git's Perl resolves first on PATH, `Configure` dies
+      # with a missing-module error. Prepending Strawberry's bin dir to GITHUB_PATH here
+      # makes it win the lookup for every later step in this job.
+      - name: Prefer Strawberry Perl over Git's Perl (Windows OpenSSL vendored build)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $strawberry = 'C:\Strawberry\perl\bin'
+          if (-not (Test-Path $strawberry)) {
+            throw "Strawberry Perl not found at $strawberry - runner image changed, update this step"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $strawberry
+          perl -MExtUtils::MakeMaker -e "print 'ExtUtils::MakeMaker OK'"
+
+      # --- Precondition 2 (Windows only) --------------------------------------
+      # The vendored OpenSSL build copies its C source tree into a nested path under
+      # `target/<profile>/build/openssl-src-*/out/...`. Combined with the already-deep
+      # GitHub Actions workspace path (e.g. D:\a\Syncra-CRM\Syncra-CRM\desktop\crates\
+      # syncra-sync\target\...), the copied path exceeds Windows' 260-char MAX_PATH and
+      # the build fails with "There are files missing, probably because of a failed
+      # Makefile.PL etc.". Pointing CARGO_TARGET_DIR at a short root avoids the overflow.
+      - name: Use short CARGO_TARGET_DIR (Windows MAX_PATH workaround)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\t | Out-Null
+          Add-Content -Path $env:GITHUB_ENV -Value 'CARGO_TARGET_DIR=C:\t'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable (branch ref pinned to a commit; action publishes no version tags)
+        with:
+          toolchain: stable
+          components: clippy
+
+      # --- Precondition 3 -------------------------------------------------------
+      # Cold vendored-OpenSSL compile measured at ~7m45s locally (F2). rust-cache keys
+      # on job id + OS + rustc version + Cargo.lock hash automatically (covers the
+      # target triple implicitly via the OS/job key); without caching every run pays
+      # the full OpenSSL build cost again.
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: desktop/crates/syncra-sync -> target
+
+      - name: cargo test
+        run: cargo test --locked
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+  # ---------------------------------------------------------------------------
+  # cargo audit (SYNCDESKTOP.md F2 kabul: "cargo audit temiz")
+  # ---------------------------------------------------------------------------
+  desktop-cargo-audit:
+    name: cargo audit
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: desktop/crates/syncra-sync
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: desktop/crates/syncra-sync -> target
+          cache-bin: false
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: cargo audit
+        run: cargo audit
+
+  # ---------------------------------------------------------------------------
+  # frontend: tsc, i18n parity/bootstrap, web build (docs/ENGINEERING-RULES.md §0.4 Tuzak 1/2)
+  # ---------------------------------------------------------------------------
+  desktop-frontend:
+    name: frontend (typecheck, i18n, build)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+
+      # Trap 1 (docs/ENGINEERING-RULES.md §2): the root tsconfig.json is solution-style (references-only);
+      # a bare `tsc --noEmit` matches nothing and silently exits 0. Always target the app
+      # tsconfig explicitly.
+      - name: Typecheck (tsconfig.app.json)
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      # Trap 2 (docs/ENGINEERING-RULES.md §2): check-i18n-bootstrap.mjs asserts against the literal source
+      # text of src/i18n/index.ts and src/main.tsx. If a future change to this workflow's
+      # frontend steps needs those files touched, the script needs updating too.
+      - name: i18n parity check
+        run: npm run i18n:check
+      - name: i18n bootstrap check
+        run: npm run i18n:check-bootstrap
+
+      - name: Web bundle build (must stay unaffected by desktop work)
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # backend: php artisan test — Linux job only is sufficient per task brief
+  # ---------------------------------------------------------------------------
+  desktop-backend:
+    name: backend (php artisan test)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      # Precondition 5: a job-scoped database name, never `syncra_crm` / `syncra_crm_test`
+      # (docs/ENGINEERING-RULES.md §8 forbids touching those without explicit per-call approval; a CI
+      # service container is disposable per-run anyway, but the name is kept distinct
+      # so a misconfigured local DB_DATABASE can never point a developer's real dev/test
+      # database at this job by accident).
+      mariadb:
+        image: mariadb:10.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: desktop_ci_backend_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: desktop_ci_backend_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql, redis, bcmath, gd, zip
+          coverage: none
+      - name: composer install
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Configure .env for CI
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+      - name: php artisan test
+        run: php artisan test
+
+  # ---------------------------------------------------------------------------
+  # tauri build --debug, 3-OS matrix (SYNCDESKTOP.md F7). Depends on desktop-rust
+  # (crate must compile/pass first) and desktop-frontend (web assets must build).
+  # ---------------------------------------------------------------------------
+  desktop-tauri-build:
+    name: tauri build --debug (${{ matrix.os }})
+    needs: [desktop-rust, desktop-frontend]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, macos-latest]
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Same Windows preconditions as desktop-rust (see comments there) — the Tauri
+      # shell also links against desktop/crates/syncra-sync and hits the same
+      # vendored-OpenSSL Perl/MAX_PATH issues.
+      - name: Prefer Strawberry Perl over Git's Perl (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $strawberry = 'C:\Strawberry\perl\bin'
+          if (-not (Test-Path $strawberry)) {
+            throw "Strawberry Perl not found at $strawberry - runner image changed, update this step"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $strawberry
+
+      - name: Use short CARGO_TARGET_DIR (Windows MAX_PATH workaround)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\t | Out-Null
+          Add-Content -Path $env:GITHUB_ENV -Value 'CARGO_TARGET_DIR=C:\t'
+
+      # Precondition 4: Tauri v2 Linux build/runtime dependencies, per
+      # https://v2.tauri.app/start/prerequisites/#linux (current list as of Tauri 2.x;
+      # re-check against the docs if this job starts failing on missing libraries).
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - run: npm ci
+
+      # NOTE (F3 assumption): assumes desktop/package.json exposes the default
+      # `create-tauri-app` script `"tauri": "tauri"`. If F3 names it differently
+      # (SYNCDESKTOP.md §0.4 mentions a separate `build:desktop` script for the full
+      # release build), update this step to match the real script name.
+      - name: tauri build --debug
+        run: npm run tauri -- build --debug

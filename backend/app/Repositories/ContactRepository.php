@@ -4,6 +4,8 @@ namespace App\Repositories;
 
 use App\Models\Contact;
 use App\Models\CustomField;
+use App\Services\Sync\TagSyncService;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -150,14 +152,31 @@ class ContactRepository
      * Bir firmada birden fazla `is_primary=true` kişi kalmasın diye, verilen
      * kişi dışındaki tüm firma kişilerini `is_primary=false` yapar.
      * Tek bir UPDATE sorgusu — N+1 yok, ham SQL yok.
+     *
+     * Protocol §2.3 #5: the bulk UPDATE fires no model event, so the demoted
+     * contacts would keep showing as primary on every desktop client. The
+     * statement stays (it is the reason this method exists); the affected keys
+     * are collected first and versioned afterwards, one distinct version per
+     * row as protocol §2.5 requires.
      */
     public function clearOtherPrimaryContacts(int $companyId, int $exceptContactId): void
     {
-        Contact::query()
+        $demoted = Contact::query()
             ->where('company_id', $companyId)
             ->where('id', '!=', $exceptContactId)
             ->where('is_primary', true)
+            ->pluck('id')
+            ->all();
+
+        if ($demoted === []) {
+            return;
+        }
+
+        Contact::query()
+            ->whereIn('id', $demoted)
             ->update(['is_primary' => false]);
+
+        SyncVersionBumper::bumpRows('contacts', $demoted);
     }
 
     /**
@@ -169,11 +188,16 @@ class ContactRepository
     }
 
     /**
+     * Routed through TagSyncService so the owner's `sync_version` moves with
+     * the pivot write - `->tags()->sync()` fires no model event at all, so
+     * without it a tag-only edit never reaches a desktop client (protocol
+     * §1.4).
+     *
      * @param  array<int, int>  $tagIds
      */
     public function syncTags(Contact $contact, array $tagIds): void
     {
-        $contact->tags()->sync($tagIds);
+        TagSyncService::apply($contact, $tagIds);
     }
 
     /**
