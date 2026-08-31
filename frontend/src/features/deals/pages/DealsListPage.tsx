@@ -29,6 +29,8 @@ import {
   Tr,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
 import { formatMoney } from '../../../lib/money'
 import { formatDate } from '../../../lib/datetime'
 import { usePermission } from '../../auth/hooks/usePermission'
@@ -411,9 +413,15 @@ export function DealsListPage() {
                       return (
                         <Tr key={deal.id}>
                           <Td>
-                            <Link to={`/deals/${deal.id}`} className="font-medium text-fg hover:text-primary hover:underline">
-                              {deal.title}
-                            </Link>
+                            <span className="inline-flex items-center gap-2">
+                              <Link to={`/deals/${deal.id}`} className="font-medium text-fg hover:text-primary hover:underline">
+                                {deal.title}
+                              </Link>
+                              {/* Masaüstünde çevrimdışı yapılan bir düzenleme sunucuya ulaşana kadar
+                                  burada işaretli kalır; web'de `sync_state` hiç dolmadığı için rozet
+                                  `null` döner ve satır bugünküyle birebir aynıdır. */}
+                              <SyncStateBadge state={recordSyncState(deal)} compact />
+                            </span>
                           </Td>
                           <Td>{deal.company?.name ?? '—'}</Td>
                           <Td>{deal.contact?.full_name ?? '—'}</Td>

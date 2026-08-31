@@ -1,11 +1,15 @@
 // Kanban panosu veri katmanı: pano okuması, kart taşıma ve sütun/kart cache'i üzerinde
 // çalışan SAF yardımcılar ile pano için gereken lookup'lar.
 //
-// Pano ile taşıma artık DOĞRUDAN axios kullanmaz: ikisi de platform sözleşmesinden
-// (`platform.data.deals.board/move`, KARAR A19) geçer. Web'de bu sözleşme aynı iki isteği
-// aynı parametrelerle yapar (`platform/web.ts`); masaüstünde aynı iki fiil yerel SQLCipher
-// aynasından okunur ve taşıma outbox'a yazılır — bu dosyanın geri kalanı ve panoyu render
-// eden bileşenlerin hiçbiri değişmez.
+// Bu dosyada DOĞRUDAN axios ile veri çeken hiçbir fonksiyon KALMADI. Pano, taşıma ve üç
+// lookup (aşamalar / sahip / firma) platform sözleşmesinden (KARAR A19) geçer. Web'de bu
+// sözleşme aynı istekleri aynı parametrelerle yapar (`platform/web.ts`); masaüstünde aynı
+// fiiller yerel SQLCipher aynasından okunur ve taşıma outbox'a yazılır — bu dosyanın geri
+// kalanı ve panoyu render eden bileşenlerin hiçbiri değişmez.
+//
+// `axios` importu YALNIZCA hata SINIFLANDIRMASI için durur (`axios.isAxiosError`): 409/422/ağ
+// yardımcıları ve iki `isForbidden` bayrağı. Bunlar istek yapmaz, ellerine geçen hata
+// nesnesine bakar.
 //
 // Cache yardımcıları burada durur (bileşenlerde değil) çünkü pano cache'inin ŞEKLİ bu
 // dosyanın sözleşmesidir: sorgu anahtarını, yanıt tipini ve o yanıtın nasıl güncelleneceğini
@@ -15,7 +19,6 @@
 // onlara hiç dokunmaz.
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../../../lib/axios'
 import { getPlatform } from '../../../platform'
 import type {
   BoardColumn,
@@ -115,9 +118,25 @@ export function isNetworkError(error: unknown): boolean {
   return axios.isAxiosError(error) && error.response === undefined
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Pano lookup'ları — üçü de platform sözleşmesinden geçer                    */
+/*                                                                            */
+/*  Üçünün de web yolu DEĞİŞMEDİ: aynı uç, aynı parametreler, aynı sıra.       */
+/*  Değişen tek şey, isteği KİMİN yaptığı — böylece masaüstünde aynı üç liste  */
+/*  yerel aynadan gelir ve filtre açılırları çevrimdışı da dolar.              */
+/*                                                                            */
+/*  HATA NESNESİ AYNEN GEÇER. Üç fonksiyonun hiçbirinde `try`/`catch` yok:     */
+/*  `await` reddedildiğinde `async` fonksiyon TAM O NESNEYLE reddeder, dönüşüm */
+/*  yalnızca başarı dalında çalışır. Web'de sözleşmenin ucunda hâlâ axios var  */
+/*  (`platform/web.ts` → `api.get`), dolayısıyla aşağıdaki `isForbidden`       */
+/*  kontrollerine ULAŞAN nesne yine bir `AxiosError`'dır ve 403 sinyali        */
+/*  kaybolmaz. Aynı desen `useTaskUserOptions` (`tasks/api/tasksApi.ts`) ile   */
+/*  bir önceki turda zaten kurulmuştu.                                        */
+/* -------------------------------------------------------------------------- */
+
+/** Aktif aşamalar, `position` sırasında (`GET /api/pipeline-stages`, `include_inactive` YOK). */
 async function fetchPipelineStages(): Promise<PipelineStage[]> {
-  const { data } = await api.get<{ data: PipelineStage[] }>('/api/pipeline-stages')
-  return data.data
+  return getPlatform().data.deals.stages()
 }
 
 export function usePipelineStages() {
@@ -128,9 +147,18 @@ export function usePipelineStages() {
   })
 }
 
+/**
+ * Sahip seçenekleri — `GET /api/users?per_page=100`.
+ *
+ * `users.list()` KULLANILMAZ: `SYNCDESKTOP.md` §8 `users.*`'ı çevrimiçi-zorunlu ilan eder ve
+ * masaüstü uygulaması (`desktop/src/platform/data/catalog.ts` → `usersSource.list`, manifest
+ * `reason: 'spec-8'`) gerçekten HTTP'ye çıkar — sahip filtresi oradan beslenseydi çevrimdışı
+ * boş kalırdı. `deals.ownerOptions()` ise `users` AYNASINDAN okur; dört emsalin
+ * (`contacts.userOptions`, `companies.userOptions`, `tasks.userOptions`,
+ * `leads.ownerOptions`) hepsi aynı desende, aynı `user_list` sorgusuyla tanımlı.
+ */
 async function fetchOwnerOptions(): Promise<OwnerOption[]> {
-  const { data } = await api.get<{ data: OwnerOption[] }>('/api/users', { params: { per_page: 100 } })
-  return data.data
+  return getPlatform().data.deals.ownerOptions()
 }
 
 /**
@@ -148,11 +176,15 @@ export function useDealOwnerOptions() {
   return { ...query, isForbidden }
 }
 
+/**
+ * Sabit (arama yapmayan) firma listesi — `GET /api/companies?per_page=100&sort=name`.
+ * `companies.list()` bu isteği aynı iki parametreyle kurar (`platform/web.ts` →
+ * `companiesApi.fetchCompanies`; diğer tüm filtreler `undefined` olduğu için axios onları hiç
+ * göndermez), masaüstünde ise `company_list` ile aynadan okur.
+ */
 async function fetchCompanyOptions(): Promise<CompanyOption[]> {
-  const { data } = await api.get<{ data: CompanyOption[] }>('/api/companies', {
-    params: { per_page: 100, sort: 'name' },
-  })
-  return data.data.map((company) => ({ id: company.id, name: company.name }))
+  const { data } = await getPlatform().data.companies.list({ per_page: 100, sort: 'name' })
+  return data.map((company) => ({ id: company.id, name: company.name }))
 }
 
 export function useDealCompanyOptions() {

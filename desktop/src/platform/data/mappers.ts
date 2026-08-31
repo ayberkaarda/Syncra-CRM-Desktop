@@ -47,6 +47,7 @@ import type { Task, TaskableRef, TaskableType, TaskPriority, TaskStatus } from '
 import type { Ticket, TicketPriority, TicketStatus } from '@/features/tickets/types'
 import type { Role, User } from '@/features/users/types'
 import type { TimelineItem } from '@/components/shared/Timeline'
+import type { SyncState, WithSyncState } from '@/platform/types'
 
 import {
   bool,
@@ -67,6 +68,25 @@ import { EMPTY_REFS, type RefIndex } from './refs'
 // ------------------------------------------------------------------------------------------------
 // Shared shapes
 // ------------------------------------------------------------------------------------------------
+
+/**
+ * The mirror row's own replication state (`SYNCDESKTOP.md` §5.3), carried into the DTO.
+ *
+ * This is the ONE field in this file that is not a reconstruction of something the server sent:
+ * it is local truth, and it is the only way a shared list page can tell the user that the
+ * company they edited on a plane is still sitting in the outbox. `SyncStateBadge` renders
+ * nothing for `synced`/`undefined`, so a web DTO — which never gets this far — is unaffected.
+ *
+ * The value is validated rather than cast: `sync_state` is a `TEXT` column whose four legal
+ * values are pinned by `CHECK(sync_state IN (...))` in `0001_init.sql`, and a row that somehow
+ * carries anything else reports no state at all instead of a badge nobody can explain.
+ */
+function syncState(row: LocalRow): SyncState | undefined {
+  const state = row.sync_state
+  return state === 'synced' || state === 'pending' || state === 'conflict' || state === 'tombstone'
+    ? state
+    : undefined
+}
 
 /** `{id, name}` — owners, companies, creators, assignees. */
 export function nameRef(row: LocalRow | null): { id: number; name: string } | null {
@@ -165,7 +185,7 @@ export function mapPipelineStage(row: LocalRow | null): PipelineStage | null {
  * Not reconstructable: `related` (the C3 panel is loaded per-permission by the controller;
  * `undefined` is its documented "not loaded" state).
  */
-export function mapDeal(row: LocalRow, refs: DealRefs): Deal {
+export function mapDeal(row: LocalRow, refs: DealRefs): WithSyncState<Deal> {
   const status = (text(row.status) || 'open') as DealStatus
   return {
     id: rowId(row),
@@ -194,6 +214,8 @@ export function mapDeal(row: LocalRow, refs: DealRefs): Deal {
     created_at: str(row.created_at),
     updated_at: str(row.updated_at),
     can: { update: true, move: true, delete: true, assign: true },
+    // Local truth, not a server field — see `syncState` above.
+    sync_state: syncState(row),
   }
 }
 
@@ -213,7 +235,7 @@ export interface ContactRefs {
 }
 
 /** `ContactResource`. `related` is the controller's per-permission C3 panel — not mirrored. */
-export function mapContact(row: LocalRow, refs: ContactRefs): Contact {
+export function mapContact(row: LocalRow, refs: ContactRefs): WithSyncState<Contact> {
   const id = rowId(row)
   return {
     id,
@@ -237,6 +259,8 @@ export function mapContact(row: LocalRow, refs: ContactRefs): Contact {
     tickets_count: refs.ticketCounts?.get(id) ?? 0,
     created_at: text(row.created_at),
     updated_at: text(row.updated_at),
+    // Local truth, not a server field — see `syncState` above.
+    sync_state: syncState(row),
   }
 }
 
@@ -270,7 +294,7 @@ export interface CompanyRefs {
  * `primary_contact` needs a per-company lookup, so it is resolved on the detail path only;
  * on a list page it is `null` rather than 50 extra queries.
  */
-export function mapCompany(row: LocalRow, refs: CompanyRefs): Company {
+export function mapCompany(row: LocalRow, refs: CompanyRefs): WithSyncState<Company> {
   const id = rowId(row)
   const primary = refs.primaryContacts?.get(id) ?? null
   return {
@@ -296,6 +320,8 @@ export function mapCompany(row: LocalRow, refs: CompanyRefs): Company {
       : null,
     created_at: text(row.created_at),
     updated_at: text(row.updated_at),
+    // Local truth, not a server field — see `syncState` above.
+    sync_state: syncState(row),
   }
 }
 
@@ -310,7 +336,7 @@ export interface LeadRefs {
 }
 
 /** `LeadResource`. */
-export function mapLead(row: LocalRow, refs: LeadRefs): Lead {
+export function mapLead(row: LocalRow, refs: LeadRefs): WithSyncState<Lead> {
   return {
     id: rowId(row),
     first_name: text(row.first_name),
@@ -334,6 +360,8 @@ export function mapLead(row: LocalRow, refs: LeadRefs): Lead {
     created_at: text(row.created_at),
     updated_at: text(row.updated_at),
     can: { update: true, convert: true, delete: true, assign: true },
+    // Local truth, not a server field — see `syncState` above.
+    sync_state: syncState(row),
   }
 }
 
@@ -371,7 +399,7 @@ export interface TaskRefs {
 }
 
 /** `TaskResource`. */
-export function mapTask(row: LocalRow, refs: TaskRefs): Task {
+export function mapTask(row: LocalRow, refs: TaskRefs): WithSyncState<Task> {
   const status = (text(row.status) || 'pending') as TaskStatus
   return {
     id: rowId(row),
@@ -392,11 +420,13 @@ export function mapTask(row: LocalRow, refs: TaskRefs): Task {
     created_at: str(row.created_at),
     updated_at: str(row.updated_at),
     can: { update: true, complete: true, delete: true, assign: true },
+    // Local truth, not a server field — see `syncState` above.
+    sync_state: syncState(row),
   }
 }
 
 /** `ActivityResource`. */
-export function mapActivity(row: LocalRow, refs: TaskRefs): Activity {
+export function mapActivity(row: LocalRow, refs: TaskRefs): WithSyncState<Activity> {
   return {
     id: rowId(row),
     type: (text(row.type) || 'note') as Activity['type'],
@@ -410,6 +440,8 @@ export function mapActivity(row: LocalRow, refs: TaskRefs): Activity {
     created_at: str(row.created_at),
     updated_at: str(row.updated_at),
     can: { update: true, delete: true },
+    // Local truth, not a server field — see `syncState` above.
+    sync_state: syncState(row),
   }
 }
 
@@ -477,7 +509,7 @@ export interface TicketRefs {
  * documents ("`status === 'pending'` ile eşdeğer"). `notes_count` has no mirrored source and is
  * `0`.
  */
-export function mapTicket(row: LocalRow, refs: TicketRefs): Ticket {
+export function mapTicket(row: LocalRow, refs: TicketRefs): WithSyncState<Ticket> {
   const status = (text(row.status) || 'open') as TicketStatus
   return {
     id: rowId(row),
@@ -517,6 +549,8 @@ export function mapTicket(row: LocalRow, refs: TicketRefs): Ticket {
     created_at: str(row.created_at),
     updated_at: str(row.updated_at),
     can: { update: true, status: true, delete: true, assign: true },
+    // Local truth, not a server field — see `syncState` above.
+    sync_state: syncState(row),
   }
 }
 
@@ -564,7 +598,7 @@ function mapQuoteItem(item: LocalRow, index: number): QuoteItem {
  * and is not mirrored; reproducing it here would be the second implementation
  * `docs/QUOTE-FINANCIALS.md` forbids.
  */
-export function mapQuote(row: LocalRow, refs: QuoteRefs, withItems: boolean): Quote {
+export function mapQuote(row: LocalRow, refs: QuoteRefs, withItems: boolean): WithSyncState<Quote> {
   const items = embeddedItems(row.items)
   return {
     id: rowId(row),
@@ -596,6 +630,8 @@ export function mapQuote(row: LocalRow, refs: QuoteRefs, withItems: boolean): Qu
     items_count: items.length,
     created_at: text(row.created_at),
     updated_at: text(row.updated_at),
+    // Local truth, not a server field — see `syncState` above.
+    sync_state: syncState(row),
   }
 }
 

@@ -26,6 +26,8 @@ import {
   Tr,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
 import { tokenBadgeVariant } from '../../../components/shared/tokenBadgeVariant'
 import { usePermission } from '../../auth/hooks/usePermission'
 import { SavedViewsBar } from '../../saved-views/components/SavedViewsBar'
@@ -324,7 +326,13 @@ export function ContactsPage() {
                           <div className="flex items-center gap-3">
                             <Avatar name={c.full_name} size="sm" />
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-fg">{c.full_name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm font-medium text-fg">{c.full_name}</p>
+                                {/* Masaüstünde çevrimdışı yapılan bir düzenleme sunucuya ulaşana kadar
+                                    burada işaretli kalır; web'de `sync_state` hiç dolmadığı için rozet
+                                    `null` döner ve satır bugünküyle birebir aynıdır. */}
+                                <SyncStateBadge state={recordSyncState(c)} compact />
+                              </div>
                               {c.position && <p className="truncate text-xs text-fg-muted">{c.position}</p>}
                             </div>
                           </div>

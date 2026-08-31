@@ -1,4 +1,4 @@
-// The wiring table: what every one of the 126 `DataSource` methods is actually bound to.
+// The wiring table: what every one of the 128 `DataSource` methods is actually bound to.
 //
 // This exists so the classification can be **checked** rather than asserted in prose.
 // `desktop/scripts/check-data-wiring.mjs` reads three things and cross-references them:
@@ -43,7 +43,7 @@ export interface MethodBinding {
 }
 
 /**
- * `"<domain>.<method>"` -> binding, for all 126 methods of `DataSource`.
+ * `"<domain>.<method>"` -> binding, for all 128 methods of `DataSource`.
  *
  * Ordered exactly as `frontend/src/platform/types.ts` declares them, so the two can be read
  * side by side.
@@ -63,6 +63,13 @@ export const DATA_METHOD_MANIFEST: Record<string, MethodBinding> = {
   // KARAR P20: the wire field is `to_stage_id`; `pipeline_stage_id` rides along as the mirror
   // COLUMN so the card moves locally too (see `crm.ts`). `position` is never sent.
   'deals.move': { kind: 'mutate', via: 'deal.move (action)' },
+  // Active stages in `position` order — the SAME read the board's columns come from
+  // (`activeStagesOrdered()`), so the two can never disagree about which stages exist.
+  'deals.stages': { kind: 'query', via: 'pipeline_stages' },
+  // Same `user_list` read as `contacts.userOptions` / `companies.userOptions` /
+  // `leads.ownerOptions`, through the same shared helper. NOT `users.list`: that one is
+  // §8 online-only (see below), and an owner filter fed from it would be empty offline.
+  'deals.ownerOptions': { kind: 'query', via: 'user_list' },
 
   // ---- contacts ------------------------------------------------------------------------
   'contacts.list': { kind: 'query', via: 'contact_list' },

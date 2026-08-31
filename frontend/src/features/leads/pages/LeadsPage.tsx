@@ -26,6 +26,8 @@ import {
   Tr,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
 import { usePermission } from '../../auth/hooks/usePermission'
 import { SavedViewsBar } from '../../saved-views/components/SavedViewsBar'
 import { useDeleteLead, useLeads, useOwnerOptions, useTags } from '../api/leadsApi'
@@ -332,9 +334,12 @@ export function LeadsPage() {
                       return (
                         <Tr key={lead.id}>
                           <Td>
-                            <Link to={`/leads/${lead.id}`} className="font-medium text-fg hover:text-primary hover:underline">
-                              {lead.full_name}
-                            </Link>
+                            <span className="inline-flex items-center gap-2">
+                              <Link to={`/leads/${lead.id}`} className="font-medium text-fg hover:text-primary hover:underline">
+                                {lead.full_name}
+                              </Link>
+                              <SyncStateBadge state={recordSyncState(lead)} compact />
+                            </span>
                           </Td>
                           <Td>{lead.company_name ?? '—'}</Td>
                           <Td className="text-fg-secondary">{lead.email ?? '—'}</Td>

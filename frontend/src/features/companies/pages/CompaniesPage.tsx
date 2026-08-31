@@ -26,6 +26,8 @@ import {
   Tr,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
 import { formatMoney } from '../../../lib/money'
 import { tokenBadgeVariant } from '../../../components/shared/tokenBadgeVariant'
 import { usePermission } from '../../auth/hooks/usePermission'
@@ -353,7 +355,13 @@ export function CompaniesPage() {
                             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary">
                               <Building2 className="size-4" aria-hidden="true" />
                             </span>
-                            <p className="truncate text-sm font-medium text-fg">{c.name}</p>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <p className="truncate text-sm font-medium text-fg">{c.name}</p>
+                              {/* Masaüstünde çevrimdışı yapılan bir düzenleme sunucuya ulaşana kadar
+                                  burada işaretli kalır; web'de `sync_state` hiç dolmadığı için rozet
+                                  `null` döner ve satır bugünküyle birebir aynıdır. */}
+                              <SyncStateBadge state={recordSyncState(c)} compact />
+                            </div>
                           </div>
                         </Td>
                         <Td>{c.industry ?? <span className="text-fg-muted">—</span>}</Td>

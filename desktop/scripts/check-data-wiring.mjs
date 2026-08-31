@@ -220,6 +220,7 @@ const SHARED_HELPERS = {
   'contacts.userOptions': 'userOptions',
   'companies.userOptions': 'userOptions',
   'leads.ownerOptions': 'userOptions',
+  'deals.ownerOptions': 'userOptions',
   'leads.customFields': 'customFieldRecords',
   'chat.conversation': 'conversationById',
   'chat.renameConversation': 'conversationById',

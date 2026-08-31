@@ -515,7 +515,7 @@ bootstrap → tablolar dolu, cursor'lar set; delta pull tombstone; server_id→c
 `tauri-plugin-notification, global-shortcut, deep-link, autostart, updater, window-state, single-instance, clipboard-manager, dialog, fs, os, process, shell(open only), log`.
 
 ### 6.2 Komutlar (`src-tauri/src/commands/`)
-`auth::{login, session, restore, logout, list_devices, revoke_device}` · `data::{query, mutate, search}` · `sync::{sync_now, status, conflicts, resolve_conflict, download_archive, bootstrap, handle_realtime}` · `storage::{storage_stats, update_settings, clear_local}` · `files::{cache_quote_pdf, open_cached, attach_from_paths, screenshot_to_ticket}` · `os::{set_badge, register_hotkey, set_autostart, notify}`.
+`auth::{login, session, restore, logout, list_devices, revoke_device}` · `data::{query, mutate, search}` · `sync::{sync_now, status, conflicts, resolve_conflict, download_archive, bootstrap, handle_realtime}` · `storage::{storage_stats, storage_settings, update_settings, clear_local}` · `files::{cache_quote_pdf, open_cached, attach_from_paths, screenshot_to_ticket}` · `os::{set_badge, register_hotkey, set_autostart, notify}`.
 Her komut `SyncError` → `{code, message}` JSON; UI'da `desktop.errors.*` i18n (bilinmeyen `code` → `desktop.errors.unknown`; eksik anahtar dev/test'te **throw** eder).
 
 <a id="k-handle-realtime"></a>
@@ -529,6 +529,7 @@ Her komut `SyncError` → `{code, message}` JSON; UI'da `desktop.errors.*` i18n 
 - **`auth::session`** kayıtlıydı ve `platform/auth.ts` onu kullanıyordu, ama §6.2 hiç listelemiyordu. Açılışta ağa gitmeden oturumu ve device token’ı veren tek komuttur (F3 teslimi); listeye eklendi.
 - **`storage::stats`** kodda ve bu listede `stats`, sözleşme metninin başka yerlerinde `storage_stats` diye anılıyordu. **Uzun ad kazandı:** Rust fonksiyonu, `generate_handler!` girdisi ve TS çağrı yeri `storage_stats` olarak hizalandı (defter O5).
 - **`data::get` listeden düşürüldü.** Kayıtlıydı ve bu sözleşmede duruyordu, ama hiçbir tüketicisi yoktu: TS tarafında `rowById` yerel `query` yolundan (`platform/data/engine.ts`, `rows_by_server_ids`) gidiyor ve doğru desen budur. Kayıtlı-ama-ölü bir komut hem bakım hem saldırı yüzeyidir; komut, `generate_handler!` girdisi ve kontrolörün `CONTRACT` sabiti birlikte silindi (defter O29). **Komut sayısı 27 → 26, teslim 19 → 19.**
+- **`storage_settings` eklendi (defter O8).** Motorda `SyncEngine::settings()` zaten vardı ve testliydi, ama hiçbir komuta bağlı değildi; ayar ekranı bu yüzden `retention_days`'i bir `localStorage` aynasından okuyordu ve yeniden kurulumda bayat değer gösteriyordu. `update_settings` yazma yolunun simetriği olarak kaydedildi; ayna kaldırıldı.
 
 `handle_realtime` için yukarıda yazılan üçlü-tutarlılık kuralı **tüm komutlar için** geçerlidir ve artık statik olarak zorlanır: TS `invoke` adı · Rust `#[tauri::command] fn` · `lib.rs` `generate_handler!` · bu §6.2 listesi. Dördü ayrışırsa `check:commands` kırmızı verir (iki yönde negatif kontrolle doğrulandı). F5 kapsamındaki `files::*` ve `os::*` kontrolörde gerekçeli **DEFERRED** listesindedir; teslim edildiklerinde o listeden çıkarılırlar.
 
@@ -624,7 +625,7 @@ Durum sütunu `docs/DESKTOP-THREAT-MODEL.md` §3/§6 ve `docs/DESKTOP-OPEN-ITEMS
 | # | Madde | Durum |
 |---|---|---|
 | 1 | **Device token taşımayan istemci (cookie oturumu dahil) → `/api/sync/*` 403** (test) | ✅ KAPALI |
-| 2 | **403 `USER_DEACTIVATED` → lokal DB + keychain wipe; genel 401 → outbox korunur** (test) | 🔴 **AÇIK** |
+| 2 | **403 `USER_DEACTIVATED` → lokal DB + keychain wipe; genel 401 → outbox korunur** (test) | ✅ KAPALI (2026-08-31) — `sync/mod.rs:1072`, sunucu tarafı `AuthService.php:355`; `tests/wire_contract.rs` 3 test, ikisi negatif kontrol (`a_plain_403_does_not_wipe_anything`, `a_bare_401_still_keeps_the_outbox`) |
 | 3 | DB dosyası düz `sqlite3` ile açılamıyor (test: header `SQLite format 3` yok) | ✅ KAPALI |
 | 4 | Keychain'de anahtar; app data'da anahtar/token dosyası yok (dizin taraması) | ✅ KAPALI |
 | 5 | Deep link regex reddi (fuzz 50 örnek) | ⬜ DEĞERLENDİRİLEMEZ — F5-4 |
@@ -731,6 +732,8 @@ Bu belge F0 öncesinde yazıldı ve keşif ilerledikçe **projenin en yanlış b
 | §0.4 | `docs/ENGINEERING-RULES.md` §2 | Regresyon bloğu `docs/ENGINEERING-RULES.md` ile birebir eşitlendi; iki tuzak notu, gerçek test tabanı (1411) ve kapı-olmayan yapısal kontroller (`check:data`, `check:realtime`) eklendi | 2026-08-31 |
 | §6.2 | O5 / `check:commands` | `auth::session` listeye eklendi; `storage::stats` → `storage_stats` (üç taraf hizalandı); komut adı üçlü-tutarlılık kuralı tüm komutlara genişletildi | 2026-08-31 |
 | §6.2 | O29 | `data::get` sözleşmeden düşürüldü — kayıtlıydı, hiçbir tüketicisi yoktu; komut + `generate_handler!` + kontrolör `CONTRACT`'ı birlikte silindi | 2026-08-31 |
+| §6.2 | O8 | `storage_settings` komut listesine eklendi — motordaki `settings()` getter'ı tel'e bağlandı, ayar ekranının `localStorage` aynası kaldırıldı | 2026-08-31 |
+| §9 madde 2 | A25 / O1 | 🔴 AÇIK → ✅ KAPALI: karar koda ve teste bağlandı; tehdit modeli TM-F1 ile birlikte eşitlendi | 2026-08-31 |
 | §1 | — | Karar kimliği çakışması uyarısı: şartname `K1–K13` ile RISK-2 serisi `K1/K2/K3` ayrıştırıldı | 2026-08-31 |
 | §3 | — | `docs/DESKTOP-OPEN-ITEMS.md` repo ağacına eklendi | 2026-08-31 |
 | §4.1 | **P1, P1b** | `quote_items` RW satırından çıkarıldı; `taggables`/`quote_items`/`custom_field_values` "PULL SETİNDE DEĞİL" olarak ayrı satıra alındı — kendi `sync_version`'ını almaz, tombstone'a girmez; sahip bump zorunluluğu yazıldı | 2026-08-31 |

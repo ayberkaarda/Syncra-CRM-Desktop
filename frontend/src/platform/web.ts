@@ -30,7 +30,13 @@ import * as priceLists from '../features/price-lists/api/priceListsApi'
 import * as exchange from '../features/exchange/api/exchangeRatesApi'
 import * as savedViews from '../features/saved-views/api/savedViewsApi'
 import * as users from '../features/users/api/usersApi'
-import type { BoardFilters, BoardResponse, DealCard, MoveDealPayload } from '../features/deals/types'
+import type {
+  BoardFilters,
+  BoardResponse,
+  DealCard,
+  MoveDealPayload,
+  PipelineStage,
+} from '../features/deals/types'
 import type { AppNotification, ConnState, Platform, RealtimeChannel } from './types'
 
 // `platform/web.ts` is the declared single source for the API base URL and Reverb connection
@@ -58,10 +64,10 @@ const http: Platform['http'] = {
 }
 
 // ------------------------------------------------------------------------------------------------
-// The kanban board is the one pair with no plain function to delegate to.
+// The kanban board is the one group with no plain function to delegate to.
 //
-// `boardApi.ts` now reads through `getPlatform().data.deals.board/move`, so a delegation back
-// into that module would recurse. The two requests were therefore MOVED here verbatim — same
+// `boardApi.ts` now reads through `getPlatform().data.deals.board/move/stages`, so a delegation
+// back into that module would recurse. The requests were therefore MOVED here verbatim — same
 // endpoints, same query parameter names (`per_stage`, `filter[...]`), same response unwrapping
 // — and nothing about the web's behaviour changes.
 //
@@ -87,6 +93,16 @@ async function moveDeal(dealId: number, payload: MoveDealPayload): Promise<DealC
   return data.data
 }
 
+/**
+ * No `include_inactive` param, exactly as before: on this route the backend defaults it to
+ * FALSE, so the response is the active stages in `position` order. Sending `include_inactive=0`
+ * would be equivalent but is a different request, so it is not sent.
+ */
+async function fetchPipelineStages(): Promise<PipelineStage[]> {
+  const { data } = await api.get<{ data: PipelineStage[] }>('/api/pipeline-stages')
+  return data.data
+}
+
 // ------------------------------------------------------------------------------------------------
 // DataSource — the web implementation is pure delegation to the plain functions each feature's api
 // module already exports (`docs/DESKTOP-ARCHITECTURE.md` §3.4 / KARAR A19). Every member is an
@@ -106,6 +122,11 @@ const data: Platform['data'] = {
     assign: (id, ownerId) => deals.assignDealRequest(id, ownerId),
     board: (filters) => fetchBoard(filters),
     move: (id, payload) => moveDeal(id, payload),
+    stages: () => fetchPipelineStages(),
+    // The SAME plain function `leads.ownerOptions` delegates to, deliberately shared rather
+    // than copied: both verbs are `GET /api/users?per_page=100`, and a second local fetcher
+    // would be a second place for that request to drift.
+    ownerOptions: () => leads.fetchOwnerOptions(),
   },
   contacts: {
     list: (query) => contacts.fetchContacts(query),

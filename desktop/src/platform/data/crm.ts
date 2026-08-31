@@ -259,6 +259,38 @@ function boardCard(row: LocalRow, refs: BoardRefs): DealCard {
   }
 }
 
+/** The one read both stage callers issue; `{ limit: MAX_PAGE }` is applied at each call site. */
+const STAGE_ROWS: NamedQuery = { query: 'pipeline_stages' }
+
+/**
+ * ACTIVE pipeline stages, in the order the mirror returned them.
+ *
+ * ONE filter/map serves two callers on purpose: the board's columns and `deals.stages()`. On
+ * the server they are literally the same list — `GET /api/pipeline-stages` defaults
+ * `include_inactive` to FALSE on the board route, and `DealService::board()` builds its columns
+ * from that same active set — so a second, subtly different reading here is how a stage would
+ * end up as a board column but not as an option in the stage filter above it. (The `runQuery`
+ * call itself stays at each call site rather than moving in here: `check-data-wiring.mjs`
+ * classifies a method by the reads its own body performs.)
+ *
+ * Ordering is the crate's: `NamedQuery::PipelineStages` declares `("position", Asc)` as its
+ * default sort (`db/query.rs`), which is `PipelineStageService::list()`'s `orderBy('position')`.
+ *
+ * `mapPipelineStage` carries `name_key` (mirrored since migration `0002`). It must survive:
+ * a NON-NULL `name_key` means the stage belongs to the core taxonomy and its heading is
+ * rendered through `enums:pipelineStage.<name_key>` (`utils/stageLabel.ts`); dropping it would
+ * print the raw stored name and un-translate every default column.
+ */
+function activeStagesOrdered(rows: LocalRow[]): PipelineStage[] {
+  const stages: PipelineStage[] = []
+  for (const row of rows) {
+    if (!bool(row.is_active)) continue
+    const stage = mapPipelineStage(row)
+    if (stage) stages.push(stage)
+  }
+  return stages
+}
+
 export const dealsSource: DealsSource = {
   list: async (query): Promise<DealsListResponse> =>
     listPage(
@@ -334,14 +366,7 @@ export const dealsSource: DealsSource = {
    */
   board: async (filters): Promise<BoardResponse> => {
     const perStage = Math.max(1, filters.per_stage ?? BOARD_PER_STAGE)
-    const stageRows = await runQuery({ query: 'pipeline_stages' }, { limit: MAX_PAGE })
-
-    const stages: PipelineStage[] = []
-    for (const row of stageRows) {
-      if (!bool(row.is_active)) continue
-      const stage = mapPipelineStage(row)
-      if (stage) stages.push(stage)
-    }
+    const stages = activeStagesOrdered(await runQuery(STAGE_ROWS, { limit: MAX_PAGE }))
 
     const loaded = await Promise.all(
       stages.map(async (stage) => {
@@ -421,6 +446,29 @@ export const dealsSource: DealsSource = {
     const row = await readBack('deal', id)
     return boardCard(row, await dealRefs([row]))
   },
+
+  /**
+   * `GET /api/pipeline-stages`, rebuilt from the mirror — the board's stage filter, the deal
+   * form's stage select and the deals list's stage column, all offline.
+   *
+   * `pipeline_stages` is a read-only mirror table that is NOT windowed (`SYNCDESKTOP.md` §4.1,
+   * K2), so the local copy is the whole set and this is the complete answer, not a recent
+   * slice of one.
+   */
+  stages: async (): Promise<PipelineStage[]> =>
+    activeStagesOrdered(await runQuery(STAGE_ROWS, { limit: MAX_PAGE })),
+
+  /**
+   * `GET /api/users?per_page=100`, rebuilt from the mirror — the board's owner filter, the
+   * deal form's owner select and the assign-owner modal, all offline.
+   *
+   * The SHARED `userOptions()` helper, not a copy: `contacts.userOptions`,
+   * `companies.userOptions` and `leads.ownerOptions` already route through it, and five
+   * separate readings of the same `user_list` query is how one screen ends up offering an
+   * owner another screen does not. `users` is a read-only, non-windowed projection
+   * (`SYNCDESKTOP.md` §4.1, K2), so the local copy is the whole set.
+   */
+  ownerOptions: () => userOptions(),
 }
 
 // ------------------------------------------------------------------------------------------------

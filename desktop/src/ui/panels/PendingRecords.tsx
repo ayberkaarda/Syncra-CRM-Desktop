@@ -2,24 +2,22 @@
 //
 // ## Why the badges are also collected here
 //
-// The badge itself is `ui/SyncStateBadge.tsx` and it is ready to drop into a record row. Putting
-// it INTO those rows means editing `frontend/src/features/*/pages/*` — a tree this strand
-// cannot write, and one three other lanes are working in this turn. So this screen renders the
-// same information from the other end: every row the local mirror still holds in `pending` or
-// `conflict`, per entity, in the order the outbox will push them (`SYNCDESKTOP.md` §5.4).
-//
-// That is not a substitute for the per-row badge and is not claimed to be one — it is the part
-// that is deliverable without a `frontend/**` edit, and it answers the same question ("what of
-// mine has not reached the server?") in one place instead of eleven.
+// The badge itself now lives in `frontend/src/components/shared/SyncStateBadge.tsx` and sits on
+// the record rows of every writable entity's list page (defter O6), which is where a user
+// notices an unsent edit in the course of normal work. This screen answers the same question
+// from the other end and without a list page in hand: every row the local mirror still holds in
+// `pending` or `conflict`, per entity, in the order the outbox will push them
+// (`SYNCDESKTOP.md` §5.4) — one place instead of eleven, and the only view that also covers the
+// entities with no record list of their own (conversations, messages, notifications).
 import { useCallback, useEffect, useState } from 'react'
 
+import { SyncStateBadge } from '@/components/shared/SyncStateBadge'
 import { EmptyState } from '@/components/ui'
 
 import type { EntityName, LocalRow } from '../../platform/data/engine'
 import { listPendingRows, syncStateOf, WRITABLE_ENTITIES } from '../commands'
 import { errorCodeOf, errorMessage } from '../errors'
 import { PendingIcon } from '../icons'
-import { SyncStateBadge } from '../SyncStateBadge'
 import { useEngineStatus } from '../useEngineStatus'
 import { useT } from '../useT'
 

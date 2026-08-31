@@ -52,7 +52,7 @@ const DESKTOP_SRC = join(DESKTOP, 'src')
  * DÜZELTMESİ" note under §6.2 (KARAR A11 / defter U15), which adds both to the list.
  */
 const CONTRACT = {
-  auth: ['login', 'restore', 'logout', 'list_devices', 'revoke_device'],
+  auth: ['login', 'session', 'restore', 'logout', 'list_devices', 'revoke_device'],
   data: ['query', 'mutate', 'search'],
   sync: [
     'sync_now',
@@ -92,12 +92,13 @@ const DEFERRED_COMMANDS = {
  * exists; an undeclared one fails, because "the spec does not know about it" is exactly how a
  * command surface drifts away from the document every other document quotes.
  */
-const UNDOCUMENTED_COMMANDS = {
-  session:
-    'auth::session — the SessionSnapshot read `platform/auth.ts` polls; §6.2 lists only ' +
-    'login/restore/logout/list_devices/revoke_device, so the spec line needs a correction ' +
-    '(reported to the tech lead, not fixable from this strand — docs/** is not ours)',
-}
+// Empty on purpose. `auth::session` lived here until 2026-08-31: it was registered and used
+// but absent from §6.2, so this exception kept the check honest without silently passing it.
+// The spec has since been corrected (SYNCDESKTOP.md §13, "session eksikti, stats yanlıştı"),
+// so the exception is gone and `session` is verified like every other command. An entry here
+// is a documented gap, never a way to quiet the check — leaving a stale one would mean the
+// check stops caring if the spec later drops that command again.
+const UNDOCUMENTED_COMMANDS = {}
 
 /**
  * Files whose `invoke` argument is a parameter rather than a name this script can resolve.

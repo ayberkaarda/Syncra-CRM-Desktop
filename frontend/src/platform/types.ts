@@ -52,6 +52,8 @@ import type {
   Deal,
   DealCard,
   MoveDealPayload,
+  OwnerOption as DealOwnerOption,
+  PipelineStage,
 } from '../features/deals/types'
 import type { ExchangeRatesCurrentResponse } from '../features/exchange/types'
 import type { LeadPayload } from '../features/leads/api/leadsApi'
@@ -155,6 +157,32 @@ export interface RequestOptions {
   signal?: AbortSignal
 }
 
+/**
+ * A mirror row's replication state (`SYNCDESKTOP.md` §5.3, `0001_init.sql`
+ * `CHECK(sync_state IN ('synced','pending','conflict','tombstone'))`).
+ *
+ * It lives in the platform contract rather than in a feature's types because it is not a
+ * property of the domain record at all: it describes where a copy of that record stands
+ * relative to the server, and only a platform that keeps copies can answer it.
+ */
+export type SyncState = 'synced' | 'pending' | 'conflict' | 'tombstone'
+
+/**
+ * A record DTO as an offline-capable platform produces it: the feature shape, plus the
+ * replication state of the local copy it was read from.
+ *
+ * **`sync_state` is optional, and that is the whole design.** The web adapter never writes it,
+ * so every existing DTO stays exactly as it was and no web code path changes; the desktop
+ * adapter fills it, and `SyncStateBadge` renders nothing for `undefined` or `'synced'`. That
+ * pairing is what lets one shared page carry the indicator with no `isDesktop` branch anywhere
+ * in component code (KARAR A19: the platform layer differs, the components do not).
+ *
+ * Mappers declare it as their return type so the field is not an excess property on their
+ * object literals; the value then travels inside `Deal[]` / `Contact[]` / … untouched, because
+ * a wider object is still assignable to the narrower list the feature hooks are typed with.
+ */
+export type WithSyncState<T> = T & { sync_state?: SyncState }
+
 // ------------------------------------------------------------------------------------------------
 // DataSource — `docs/DESKTOP-ARCHITECTURE.md` §E.5 / KARAR A19
 //
@@ -172,13 +200,18 @@ export interface RequestOptions {
 // ------------------------------------------------------------------------------------------------
 
 /**
- * `features/deals/api/dealsApi.ts`, plus the two reads/writes the kanban board is built on
+ * `features/deals/api/dealsApi.ts`, plus the reads/writes the kanban board is built on
  * (`features/deals/api/boardApi.ts`).
  *
- * The board's two verbs live here rather than in a surface of their own because they are the
+ * The board's verbs live here rather than in a surface of their own because they are the
  * only part of `boardApi.ts` that talks to a backend at all: everything else in that module —
  * `boardKeys`, `normalizeFilters` and the pure column/card cache helpers — operates on a
  * `BoardResponse` that is already in hand and is platform-independent by construction.
+ *
+ * `stages` is a deals verb rather than a top-level surface of its own: a pipeline stage exists
+ * only as a deal's context (the backend says so too — `GET /api/pipeline-stages` has no policy
+ * of its own and authorizes through `DealPolicy::viewAny`), and `board` already reads the very
+ * same rows.
  */
 export interface DealsSource {
   /** <- `fetchDeals` */
@@ -204,6 +237,25 @@ export interface DealsSource {
    * offline implementation owns the column a card is in, never its rank inside that column.
    */
   move(id: number, payload: MoveDealPayload): Promise<DealCard>
+  /**
+   * <- `fetchPipelineStages` (`boardApi.ts`) — `GET /api/pipeline-stages` with no
+   * `include_inactive`, i.e. the ACTIVE stages in `position` order, which is exactly the column
+   * set `board` builds from. Backs the board's stage filter, the deal form's stage select and
+   * the deals list's stage column.
+   */
+  stages(): Promise<PipelineStage[]>
+  /**
+   * <- `fetchOwnerOptions` (`boardApi.ts`) — `GET /api/users?per_page=100`, the owner filter /
+   * owner select options.
+   *
+   * A verb of its own rather than a call into `users.list()`: `SYNCDESKTOP.md` §8 makes
+   * `users.*` online-only (KARAR A15), so an owner dropdown fed from there would be EMPTY
+   * offline. The `users` mirror is a read-only projection that is never windowed (§4.1, K2),
+   * which is what lets this one answer offline. Every other domain that needs the same list
+   * declares it the same way — `contacts.userOptions`, `companies.userOptions`,
+   * `tasks.userOptions`, `leads.ownerOptions` — and all of them read one `user_list` query.
+   */
+  ownerOptions(): Promise<DealOwnerOption[]>
 }
 
 /** `features/contacts/api/contactsApi.ts` */

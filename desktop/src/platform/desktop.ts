@@ -1,6 +1,6 @@
 // Desktop platform adapter — `SYNCDESKTOP.md` §7.1, `docs/DESKTOP-ARCHITECTURE.md` §3.5.
 //
-// `data` is now the real thing: all 124 `DataSource` methods are bound, and the binding table
+// `data` is now the real thing: all 128 `DataSource` methods are bound, and the binding table
 // is `platform/data/manifest.ts`. Reads run against the local mirror through the `NamedQuery`
 // whitelist, writes go to the outbox through `mutate()`, and the `SYNCDESKTOP.md` §8
 // online-only actions go to `http` — never to `mutate()` (KARAR A15), because an outbox entry

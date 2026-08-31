@@ -25,6 +25,8 @@ import {
   Tr,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
 import { usePermission } from '../../auth/hooks/usePermission'
 import { SavedViewsBar } from '../../saved-views/components/SavedViewsBar'
 import { QuoteStatusBadge } from '../components/QuoteStatusBadge'
@@ -288,17 +290,20 @@ export function QuotesListPage() {
                       return (
                         <Tr key={quote.id}>
                           <Td>
-                            <Link
-                              to={`/quotes/${quote.id}`}
-                              className="flex items-center gap-1.5 font-mono text-sm font-medium text-fg hover:text-primary hover:underline"
-                            >
-                              {quote.quote_number}
-                              {quote.revision > 1 && (
-                                <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-fg-muted">
-                                  R{quote.revision}
-                                </span>
-                              )}
-                            </Link>
+                            <span className="inline-flex items-center gap-2">
+                              <Link
+                                to={`/quotes/${quote.id}`}
+                                className="flex items-center gap-1.5 font-mono text-sm font-medium text-fg hover:text-primary hover:underline"
+                              >
+                                {quote.quote_number}
+                                {quote.revision > 1 && (
+                                  <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-fg-muted">
+                                    R{quote.revision}
+                                  </span>
+                                )}
+                              </Link>
+                              <SyncStateBadge state={recordSyncState(quote)} compact />
+                            </span>
                           </Td>
                           <Td className="max-w-64 truncate">
                             <Link to={`/quotes/${quote.id}`} className="text-fg hover:text-primary hover:underline">
