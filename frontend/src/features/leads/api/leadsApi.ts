@@ -5,6 +5,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
+import { getPlatform } from '../../../platform'
 import type {
   ConvertLeadPayload,
   ConvertLeadResult,
@@ -30,7 +31,7 @@ export const customFieldsKeys = {
 }
 export const ownerOptionsKeys = { all: ['leads', 'owner-options'] as const }
 
-async function fetchLeads(query: LeadsQuery): Promise<LeadsListResponse> {
+export async function fetchLeads(query: LeadsQuery): Promise<LeadsListResponse> {
   const { data } = await api.get<LeadsListResponse>('/api/leads', {
     params: {
       page: query.page,
@@ -50,7 +51,7 @@ async function fetchLeads(query: LeadsQuery): Promise<LeadsListResponse> {
   return data
 }
 
-async function fetchLead(id: number): Promise<Lead> {
+export async function fetchLead(id: number): Promise<Lead> {
   const { data } = await api.get<{ data: Lead }>(`/api/leads/${id}`)
   return data.data
 }
@@ -71,53 +72,53 @@ export type LeadPayload = {
   custom_fields?: Record<string, string>
 }
 
-async function createLeadRequest(payload: LeadPayload): Promise<Lead> {
+export async function createLeadRequest(payload: LeadPayload): Promise<Lead> {
   const { data } = await api.post<{ data: Lead }>('/api/leads', payload)
   return data.data
 }
 
-async function updateLeadRequest(id: number, payload: Partial<LeadPayload>): Promise<Lead> {
+export async function updateLeadRequest(id: number, payload: Partial<LeadPayload>): Promise<Lead> {
   const { data } = await api.patch<{ data: Lead }>(`/api/leads/${id}`, payload)
   return data.data
 }
 
-async function deleteLeadRequest(id: number): Promise<void> {
+export async function deleteLeadRequest(id: number): Promise<void> {
   await api.delete(`/api/leads/${id}`)
 }
 
-async function checkDuplicatesRequest(input: DuplicateCheckInput): Promise<DuplicateCandidate[]> {
+export async function checkDuplicatesRequest(input: DuplicateCheckInput): Promise<DuplicateCandidate[]> {
   const { data } = await api.post<{ data: DuplicateCandidate[] }>('/api/leads/check-duplicates', input)
   return data.data
 }
 
-async function convertLeadRequest(id: number, payload: ConvertLeadPayload): Promise<ConvertLeadResult> {
+export async function convertLeadRequest(id: number, payload: ConvertLeadPayload): Promise<ConvertLeadResult> {
   const { data } = await api.post<{ data: ConvertLeadResult }>(`/api/leads/${id}/convert`, payload)
   return data.data
 }
 
-async function assignLeadRequest(id: number, ownerId: number): Promise<Lead> {
+export async function assignLeadRequest(id: number, ownerId: number): Promise<Lead> {
   const { data } = await api.patch<{ data: Lead }>(`/api/leads/${id}/assign`, { owner_id: ownerId })
   return data.data
 }
 
-async function fetchTags(): Promise<Tag[]> {
+export async function fetchTags(): Promise<Tag[]> {
   const { data } = await api.get<{ data: Tag[] }>('/api/tags', { params: { per_page: 100 } })
   return data.data
 }
 
-async function createTagRequest(payload: { name: string; color?: string }): Promise<Tag> {
+export async function createTagRequest(payload: { name: string; color?: string }): Promise<Tag> {
   const { data } = await api.post<{ data: Tag }>('/api/tags', payload)
   return data.data
 }
 
-async function fetchCustomFields(entityType: string): Promise<CustomField[]> {
+export async function fetchCustomFields(entityType: string): Promise<CustomField[]> {
   const { data } = await api.get<{ data: CustomField[] }>('/api/custom-fields', {
     params: { entity_type: entityType },
   })
   return data.data
 }
 
-async function fetchOwnerOptions(): Promise<OwnerOption[]> {
+export async function fetchOwnerOptions(): Promise<OwnerOption[]> {
   const { data } = await api.get<{ data: OwnerOption[] }>('/api/users', { params: { per_page: 100 } })
   return data.data
 }
@@ -126,7 +127,7 @@ async function fetchOwnerOptions(): Promise<OwnerOption[]> {
 export function useLeads(query: LeadsQuery) {
   return useQuery({
     queryKey: leadsKeys.list(query),
-    queryFn: () => fetchLeads(query),
+    queryFn: () => getPlatform().data.leads.list(query),
     placeholderData: keepPreviousData,
   })
 }
@@ -134,7 +135,7 @@ export function useLeads(query: LeadsQuery) {
 export function useLead(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: leadsKeys.detail(id ?? -1),
-    queryFn: () => fetchLead(id as number),
+    queryFn: () => getPlatform().data.leads.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -142,7 +143,7 @@ export function useLead(id: number | undefined, options?: { enabled?: boolean })
 export function useCreateLead() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: createLeadRequest,
+    mutationFn: (payload: LeadPayload) => getPlatform().data.leads.create(payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: leadsKeys.all })
       toast.success(i18n.t('leads:toast.created'))
@@ -156,7 +157,7 @@ export function useCreateLead() {
 export function useUpdateLead() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<LeadPayload> }) => updateLeadRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<LeadPayload> }) => getPlatform().data.leads.update(id, payload),
     onSuccess: (updatedLead) => {
       void queryClient.invalidateQueries({ queryKey: leadsKeys.all })
       void queryClient.invalidateQueries({ queryKey: leadsKeys.detail(updatedLead.id) })
@@ -171,7 +172,7 @@ export function useUpdateLead() {
 export function useDeleteLead() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deleteLeadRequest(id),
+    mutationFn: (id: number) => getPlatform().data.leads.delete(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: leadsKeys.all })
       toast.success(i18n.t('leads:toast.deleted'))
@@ -190,14 +191,14 @@ export function useDeleteLead() {
  */
 export function useCheckDuplicates() {
   return useMutation({
-    mutationFn: checkDuplicatesRequest,
+    mutationFn: (input: DuplicateCheckInput) => getPlatform().data.leads.checkDuplicates(input),
   })
 }
 
 export function useConvertLead() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: ConvertLeadPayload }) => convertLeadRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: ConvertLeadPayload }) => getPlatform().data.leads.convert(id, payload),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: leadsKeys.all })
       void queryClient.invalidateQueries({ queryKey: leadsKeys.detail(result.lead.id) })
@@ -212,7 +213,7 @@ export function useConvertLead() {
 export function useAssignLead() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ownerId }: { id: number; ownerId: number }) => assignLeadRequest(id, ownerId),
+    mutationFn: ({ id, ownerId }: { id: number; ownerId: number }) => getPlatform().data.leads.assign(id, ownerId),
     onSuccess: (updatedLead) => {
       void queryClient.invalidateQueries({ queryKey: leadsKeys.all })
       void queryClient.invalidateQueries({ queryKey: leadsKeys.detail(updatedLead.id) })
@@ -227,7 +228,7 @@ export function useAssignLead() {
 export function useTags() {
   return useQuery({
     queryKey: tagsKeys.all,
-    queryFn: fetchTags,
+    queryFn: () => getPlatform().data.leads.tags(),
     staleTime: 60_000,
   })
 }
@@ -235,7 +236,7 @@ export function useTags() {
 export function useCreateTag() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: createTagRequest,
+    mutationFn: (payload: { name: string; color?: string }) => getPlatform().data.leads.createTag(payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: tagsKeys.all })
     },
@@ -248,7 +249,7 @@ export function useCreateTag() {
 export function useCustomFields(entityType: string) {
   return useQuery({
     queryKey: customFieldsKeys.forEntity(entityType),
-    queryFn: () => fetchCustomFields(entityType),
+    queryFn: () => getPlatform().data.leads.customFields(entityType),
     staleTime: 60_000,
   })
 }
@@ -261,7 +262,7 @@ export function useCustomFields(entityType: string) {
 export function useOwnerOptions() {
   const query = useQuery({
     queryKey: ownerOptionsKeys.all,
-    queryFn: fetchOwnerOptions,
+    queryFn: () => getPlatform().data.leads.ownerOptions(),
     staleTime: 60_000,
     retry: false,
   })

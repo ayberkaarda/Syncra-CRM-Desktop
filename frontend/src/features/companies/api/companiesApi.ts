@@ -6,6 +6,7 @@ import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import type { TimelineItem } from '../../../components/shared/Timeline'
 import type { Company, CompaniesQuery, CompanyPayload, ContactSummary, CustomFieldDef, Tag, UserOption } from '../types'
+import { getPlatform } from '../../../platform'
 
 type Pagination = {
   current_page: number
@@ -49,7 +50,7 @@ export const userOptionsKeys = {
   all: ['user-options'] as const,
 }
 
-async function fetchCompanies(query: CompaniesQuery): Promise<CompaniesListResponse> {
+export async function fetchCompanies(query: CompaniesQuery): Promise<CompaniesListResponse> {
   const { data } = await api.get<CompaniesListResponse>('/api/companies', {
     params: {
       page: query.page,
@@ -68,12 +69,12 @@ async function fetchCompanies(query: CompaniesQuery): Promise<CompaniesListRespo
   return data
 }
 
-async function fetchCompanyById(id: number): Promise<Company> {
+export async function fetchCompanyById(id: number): Promise<Company> {
   const { data } = await api.get<{ data: Company }>(`/api/companies/${id}`)
   return data.data
 }
 
-async function fetchCompanyTimeline(id: number, page: number): Promise<TimelineListResponse> {
+export async function fetchCompanyTimeline(id: number, page: number): Promise<TimelineListResponse> {
   const { data } = await api.get<TimelineListResponse>(`/api/companies/${id}/timeline`, {
     params: { page },
   })
@@ -82,7 +83,7 @@ async function fetchCompanyTimeline(id: number, page: number): Promise<TimelineL
 
 // Backend `is_primary` alanına göre sıralamayı desteklemiyor (izinli sort listesinde yok),
 // bu yüzden `last_name` ile çekilip birincil kişi varsa istemci tarafında en üste taşınır.
-async function fetchCompanyContacts(id: number): Promise<ContactSummary[]> {
+export async function fetchCompanyContacts(id: number): Promise<ContactSummary[]> {
   const { data } = await api.get<ContactsListResponse>('/api/contacts', {
     params: {
       'filter[company_id]': id,
@@ -96,33 +97,33 @@ async function fetchCompanyContacts(id: number): Promise<ContactSummary[]> {
   return [...primary, ...rest]
 }
 
-async function createCompanyRequest(payload: CompanyPayload): Promise<Company> {
+export async function createCompanyRequest(payload: CompanyPayload): Promise<Company> {
   const { data } = await api.post<{ data: Company }>('/api/companies', payload)
   return data.data
 }
 
-async function updateCompanyRequest(id: number, payload: Partial<CompanyPayload>): Promise<Company> {
+export async function updateCompanyRequest(id: number, payload: Partial<CompanyPayload>): Promise<Company> {
   const { data } = await api.patch<{ data: Company }>(`/api/companies/${id}`, payload)
   return data.data
 }
 
-async function deleteCompanyRequest(id: number): Promise<void> {
+export async function deleteCompanyRequest(id: number): Promise<void> {
   await api.delete(`/api/companies/${id}`)
 }
 
-async function fetchTags(): Promise<Tag[]> {
+export async function fetchTags(): Promise<Tag[]> {
   const { data } = await api.get<{ data: Tag[] }>('/api/tags')
   return data.data
 }
 
-async function fetchCustomFields(): Promise<CustomFieldDef[]> {
+export async function fetchCustomFields(): Promise<CustomFieldDef[]> {
   const { data } = await api.get<{ data: CustomFieldDef[] }>('/api/custom-fields', {
     params: { entity_type: 'companies' },
   })
   return data.data
 }
 
-async function fetchUserOptions(): Promise<UserOption[]> {
+export async function fetchUserOptions(): Promise<UserOption[]> {
   const { data } = await api.get<{ data: UserOption[] }>('/api/users', {
     params: { per_page: 100, sort: 'name' },
   })
@@ -133,7 +134,7 @@ async function fetchUserOptions(): Promise<UserOption[]> {
 export function useCompanies(query: CompaniesQuery) {
   return useQuery({
     queryKey: companiesKeys.list(query),
-    queryFn: () => fetchCompanies(query),
+    queryFn: () => getPlatform().data.companies.list(query),
     // Filtre/sayfa değişirken tablo boşalıp titremesin diye önceki veri korunur.
     placeholderData: keepPreviousData,
   })
@@ -142,7 +143,7 @@ export function useCompanies(query: CompaniesQuery) {
 export function useCompany(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: companiesKeys.detail(id ?? -1),
-    queryFn: () => fetchCompanyById(id as number),
+    queryFn: () => getPlatform().data.companies.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -154,7 +155,7 @@ export function useCompany(id: number | undefined, options?: { enabled?: boolean
 export function useCompanyTimeline(id: number | undefined) {
   return useInfiniteQuery({
     queryKey: companiesKeys.timeline(id ?? -1),
-    queryFn: ({ pageParam }) => fetchCompanyTimeline(id as number, pageParam),
+    queryFn: ({ pageParam }) => getPlatform().data.companies.timeline(id as number, pageParam),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.meta.pagination.current_page < lastPage.meta.pagination.last_page
@@ -168,7 +169,7 @@ export function useCompanyTimeline(id: number | undefined) {
 export function useCompanyContacts(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: companiesKeys.contacts(id ?? -1),
-    queryFn: () => fetchCompanyContacts(id as number),
+    queryFn: () => getPlatform().data.companies.contacts(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -176,7 +177,7 @@ export function useCompanyContacts(id: number | undefined, options?: { enabled?:
 export function useTags() {
   return useQuery({
     queryKey: tagsKeys.all,
-    queryFn: fetchTags,
+    queryFn: () => getPlatform().data.companies.tags(),
     staleTime: 5 * 60_000,
   })
 }
@@ -184,7 +185,7 @@ export function useTags() {
 export function useCustomFields() {
   return useQuery({
     queryKey: customFieldsKeys.companies,
-    queryFn: fetchCustomFields,
+    queryFn: () => getPlatform().data.companies.customFields(),
     staleTime: 5 * 60_000,
   })
 }
@@ -193,7 +194,7 @@ export function useCustomFields() {
 export function useUserOptions(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: userOptionsKeys.all,
-    queryFn: fetchUserOptions,
+    queryFn: () => getPlatform().data.companies.userOptions(),
     enabled: options?.enabled ?? true,
     staleTime: 60_000,
   })
@@ -202,7 +203,7 @@ export function useUserOptions(options?: { enabled?: boolean }) {
 export function useCreateCompany() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: createCompanyRequest,
+    mutationFn: (payload: CompanyPayload) => getPlatform().data.companies.create(payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: companiesKeys.all })
       toast.success(i18n.t('companies:toast.created'))
@@ -216,7 +217,7 @@ export function useCreateCompany() {
 export function useUpdateCompany() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<CompanyPayload> }) => updateCompanyRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<CompanyPayload> }) => getPlatform().data.companies.update(id, payload),
     onSuccess: (updatedCompany) => {
       void queryClient.invalidateQueries({ queryKey: companiesKeys.all })
       void queryClient.invalidateQueries({ queryKey: companiesKeys.detail(updatedCompany.id) })
@@ -231,7 +232,7 @@ export function useUpdateCompany() {
 export function useDeleteCompany() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deleteCompanyRequest(id),
+    mutationFn: (id: number) => getPlatform().data.companies.delete(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: companiesKeys.all })
       toast.success(i18n.t('companies:toast.deleted'))

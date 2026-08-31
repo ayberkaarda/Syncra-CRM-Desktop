@@ -9,6 +9,7 @@ import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import { boardKeys } from './boardApi'
 import type { Deal, DealStatus } from '../types'
+import { getPlatform } from '../../../platform'
 
 export const dealsKeys = {
   all: ['deals'] as const,
@@ -56,7 +57,7 @@ export type DealPayload = {
   custom_fields?: Record<string, string>
 }
 
-async function fetchDeals(query: DealsQuery): Promise<DealsListResponse> {
+export async function fetchDeals(query: DealsQuery): Promise<DealsListResponse> {
   const { data } = await api.get<DealsListResponse>('/api/deals', {
     params: {
       page: query.page,
@@ -78,26 +79,26 @@ async function fetchDeals(query: DealsQuery): Promise<DealsListResponse> {
   return data
 }
 
-async function fetchDeal(id: number): Promise<Deal> {
+export async function fetchDeal(id: number): Promise<Deal> {
   const { data } = await api.get<{ data: Deal }>(`/api/deals/${id}`)
   return data.data
 }
 
-async function createDealRequest(payload: DealPayload): Promise<Deal> {
+export async function createDealRequest(payload: DealPayload): Promise<Deal> {
   const { data } = await api.post<{ data: Deal }>('/api/deals', payload)
   return data.data
 }
 
-async function updateDealRequest(id: number, payload: Partial<DealPayload>): Promise<Deal> {
+export async function updateDealRequest(id: number, payload: Partial<DealPayload>): Promise<Deal> {
   const { data } = await api.patch<{ data: Deal }>(`/api/deals/${id}`, payload)
   return data.data
 }
 
-async function deleteDealRequest(id: number): Promise<void> {
+export async function deleteDealRequest(id: number): Promise<void> {
   await api.delete(`/api/deals/${id}`)
 }
 
-async function assignDealRequest(id: number, ownerId: number | null): Promise<Deal> {
+export async function assignDealRequest(id: number, ownerId: number | null): Promise<Deal> {
   const { data } = await api.patch<{ data: Deal }>(`/api/deals/${id}/assign`, { owner_id: ownerId })
   return data.data
 }
@@ -105,7 +106,7 @@ async function assignDealRequest(id: number, ownerId: number | null): Promise<De
 export function useDeals(query: DealsQuery) {
   return useQuery({
     queryKey: dealsKeys.list(query),
-    queryFn: () => fetchDeals(query),
+    queryFn: () => getPlatform().data.deals.list(query),
     placeholderData: keepPreviousData,
   })
 }
@@ -113,7 +114,7 @@ export function useDeals(query: DealsQuery) {
 export function useDeal(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: dealsKeys.detail(id ?? -1),
-    queryFn: () => fetchDeal(id as number),
+    queryFn: () => getPlatform().data.deals.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -135,7 +136,7 @@ export function useCreateDeal() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('deals')
   return useMutation({
-    mutationFn: createDealRequest,
+    mutationFn: (payload: DealPayload) => getPlatform().data.deals.create(payload),
     onSuccess: (deal) => {
       invalidateDealCaches(queryClient, deal.id)
       toast.success(t('toast.created'))
@@ -149,7 +150,7 @@ export function useUpdateDeal() {
   const { t } = useTranslation('deals')
   return useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<DealPayload> }) =>
-      updateDealRequest(id, payload),
+      getPlatform().data.deals.update(id, payload),
     onSuccess: (deal) => {
       invalidateDealCaches(queryClient, deal.id)
       toast.success(t('toast.updated'))
@@ -162,7 +163,7 @@ export function useDeleteDeal() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('deals')
   return useMutation({
-    mutationFn: (id: number) => deleteDealRequest(id),
+    mutationFn: (id: number) => getPlatform().data.deals.delete(id),
     onSuccess: () => {
       invalidateDealCaches(queryClient)
       toast.success(t('toast.deleted'))
@@ -176,7 +177,7 @@ export function useAssignDeal() {
   const { t } = useTranslation('deals')
   return useMutation({
     mutationFn: ({ id, ownerId }: { id: number; ownerId: number | null }) =>
-      assignDealRequest(id, ownerId),
+      getPlatform().data.deals.assign(id, ownerId),
     onSuccess: (deal) => {
       invalidateDealCaches(queryClient, deal.id)
       toast.success(t('toast.ownerAssigned'))

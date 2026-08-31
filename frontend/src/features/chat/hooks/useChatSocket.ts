@@ -18,7 +18,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { onConnectionStateChange, getEcho } from '../../../lib/echo'
 import type { EchoConnectionState } from '../../../lib/echo'
 import { useAuthStore } from '../../auth/store'
-import { markConversationDeliveredRequest, markConversationReadRequest } from '../api'
 import { advanceOwnTicks, removeMessage, tombstoneMessage, upsertIncomingMessage } from '../utils'
 import {
   bumpConversationPreview,
@@ -29,6 +28,7 @@ import {
 import { acquireConversationChannel, releaseConversationChannel } from './conversationChannel'
 import { useMessages } from './useMessages'
 import { useChatStore } from '../store'
+import { getPlatform } from '../../../platform'
 import type {
   ConversationUpdatedEvent,
   MessageCreatedEvent,
@@ -115,7 +115,7 @@ export function useChatSocket(conversationId: number | null): UseChatSocketResul
     const previous = deliveredSentRef.current
     if (target <= previous) return
     deliveredSentRef.current = target
-    void markConversationDeliveredRequest(conversationId, target).catch(() => {
+    void getPlatform().data.chat.markDelivered(conversationId, target).catch(() => {
       // Başarısızsa imleci geri al ki sonraki mesajda tekrar denensin — teslim bilgisi
       // kaybolursa karşı taraf mesajı sonsuza dek tek tikle görür.
       deliveredSentRef.current = previous
@@ -140,7 +140,7 @@ export function useChatSocket(conversationId: number | null): UseChatSocketResul
     const previous = readSentRef.current
     if (target <= previous) return
     readSentRef.current = target
-    void markConversationReadRequest(conversationId, target)
+    void getPlatform().data.chat.markRead(conversationId, target)
       .then((ack) => {
         // Rozet YEREL OLARAK SIFIRLANMAZ: sunucunun döndüğü `unread_count` uygulanır. Kısmi
         // okumada (daha yeni mesajlar varken imleç ortada kaldıysa) bu değer sıfır olmayabilir.

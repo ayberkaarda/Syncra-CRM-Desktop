@@ -4,6 +4,28 @@ import { toast } from '../components/ui'
 import i18n from '../i18n'
 
 /**
+ * How the `api` instance authenticates. `'cookie'`: Laravel Sanctum's SPA session + XSRF cookie
+ * (web). `'bearer'`: a static `Authorization` header, e.g. a desktop device token
+ * (`docs/DESKTOP-ARCHITECTURE.md` §3.5) — no consumer yet; this phase only adds the hook.
+ */
+export interface HttpAuthConfig {
+  baseURL: string
+  transport: 'cookie' | 'bearer'
+  getBearerToken?: () => string | undefined
+}
+
+/**
+ * Default matches today's (pre-platform-adapter) behavior exactly, so `api` works unchanged for
+ * any caller that never imports `platform/`. `platform/web.ts` calls `configureHttp()` with the
+ * same values, making the platform module — not this file — the declared single source
+ * (`SYNCDESKTOP.md` §7.1: "baseURL ... platform'dan gelsin").
+ */
+let httpConfig: HttpAuthConfig = {
+  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000',
+  transport: 'cookie',
+}
+
+/**
  * Shared axios instance configured for Laravel Sanctum's SPA (cookie-based)
  * authentication flow.
  *
@@ -12,13 +34,39 @@ import i18n from '../i18n'
  *   is actually attached as the `X-XSRF-TOKEN` header on requests.
  */
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000',
+  baseURL: httpConfig.baseURL,
   withCredentials: true,
   withXSRFToken: true,
   headers: {
     Accept: 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
   },
+})
+
+/**
+ * Lets a platform adapter supply the API base URL and auth transport instead of this module
+ * resolving them itself. Updates the live `api` instance's defaults in place; in-flight requests
+ * are unaffected. Calling this with `transport: 'cookie'` and the same `baseURL` (what
+ * `platform/web.ts` does) is behavior-neutral — it only matters once a `'bearer'` transport
+ * (desktop) is configured.
+ */
+export function configureHttp(config: HttpAuthConfig) {
+  httpConfig = config
+  api.defaults.baseURL = config.baseURL
+  api.defaults.withCredentials = config.transport === 'cookie'
+  api.defaults.withXSRFToken = config.transport === 'cookie'
+}
+
+// Bearer transport (desktop, later): attaches `Authorization` per request. No-op under the
+// default `'cookie'` transport — inert for web today.
+api.interceptors.request.use((config) => {
+  if (httpConfig.transport === 'bearer') {
+    const token = httpConfig.getBearerToken?.()
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+  }
+  return config
 })
 
 /**

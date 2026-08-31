@@ -5,6 +5,7 @@ import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
 import type { Activity, ActivitiesListResponse, ActivitiesQuery, ActivityPayload } from '../types'
+import { getPlatform } from '../../../platform'
 
 export const activitiesKeys = {
   all: ['activities'] as const,
@@ -13,7 +14,7 @@ export const activitiesKeys = {
   detail: (id: number) => ['activities', 'detail', id] as const,
 }
 
-async function fetchActivities(query: ActivitiesQuery): Promise<ActivitiesListResponse> {
+export async function fetchActivities(query: ActivitiesQuery): Promise<ActivitiesListResponse> {
   const { data } = await api.get<ActivitiesListResponse>('/api/activities', {
     params: {
       page: query.page,
@@ -31,24 +32,24 @@ async function fetchActivities(query: ActivitiesQuery): Promise<ActivitiesListRe
   return data
 }
 
-async function createActivityRequest(payload: ActivityPayload): Promise<Activity> {
+export async function createActivityRequest(payload: ActivityPayload): Promise<Activity> {
   const { data } = await api.post<{ data: Activity }>('/api/activities', payload)
   return data.data
 }
 
-async function updateActivityRequest(id: number, payload: Partial<ActivityPayload>): Promise<Activity> {
+export async function updateActivityRequest(id: number, payload: Partial<ActivityPayload>): Promise<Activity> {
   const { data } = await api.patch<{ data: Activity }>(`/api/activities/${id}`, payload)
   return data.data
 }
 
-async function deleteActivityRequest(id: number): Promise<void> {
+export async function deleteActivityRequest(id: number): Promise<void> {
   await api.delete(`/api/activities/${id}`)
 }
 
 export function useActivities(query: ActivitiesQuery) {
   return useQuery({
     queryKey: activitiesKeys.list(query),
-    queryFn: () => fetchActivities(query),
+    queryFn: () => getPlatform().data.activities.list(query),
     placeholderData: keepPreviousData,
   })
 }
@@ -63,7 +64,7 @@ function invalidateActivityCaches(queryClient: ReturnType<typeof useQueryClient>
 export function useCreateActivity() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: createActivityRequest,
+    mutationFn: (payload: ActivityPayload) => getPlatform().data.activities.create(payload),
     onSuccess: () => {
       invalidateActivityCaches(queryClient)
       toast.success(i18n.t('activities:toast.created'))
@@ -76,7 +77,7 @@ export function useUpdateActivity() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<ActivityPayload> }) =>
-      updateActivityRequest(id, payload),
+      getPlatform().data.activities.update(id, payload),
     onSuccess: (activity) => {
       invalidateActivityCaches(queryClient, activity.id)
       toast.success(i18n.t('activities:toast.updated'))
@@ -88,7 +89,7 @@ export function useUpdateActivity() {
 export function useDeleteActivity() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deleteActivityRequest(id),
+    mutationFn: (id: number) => getPlatform().data.activities.delete(id),
     onSuccess: () => {
       invalidateActivityCaches(queryClient)
       toast.success(i18n.t('activities:toast.deleted'))

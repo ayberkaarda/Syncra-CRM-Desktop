@@ -10,10 +10,11 @@
 import { useMemo } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import type { UseInfiniteQueryResult } from '@tanstack/react-query'
-import { chatKeys, fetchMessages } from '../api'
+import { chatKeys } from '../api'
 import { flattenMessages, newestServerMessageId } from '../utils'
 import type { MessagesInfiniteData } from '../utils'
 import type { ChatMessage, MessagesPage } from '../types'
+import { getPlatform } from '../../../platform'
 
 /**
  * Sayfa imleci: ilk sayfa `undefined` (= en yeni), sonrakiler `before=<message_id>`.
@@ -54,7 +55,7 @@ export function useMessages(conversationId: number | null): UseMessagesResult {
   // Sıra sözleşmesi: <TQueryFnData, TError, TData, TQueryKey, TPageParam>.
   const query = useInfiniteQuery<MessagesPage, Error, MessagesInfiniteData, MessagesQueryKey, MessagesPageParam>({
     queryKey: chatKeys.messages(conversationId ?? -1),
-    queryFn: ({ pageParam }) => fetchMessages(conversationId as number, pageParam),
+    queryFn: ({ pageParam }) => getPlatform().data.chat.messages(conversationId as number, pageParam),
     initialPageParam: undefined,
     getNextPageParam: (lastPage) =>
       lastPage.meta.has_more ? (lastPage.meta.next_before ?? undefined) : undefined,

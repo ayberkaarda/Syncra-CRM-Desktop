@@ -12,10 +12,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getEcho, onConnectionStateChange } from '../../../lib/echo'
 import { useAuthStore } from '../../auth/store'
-import { chatKeys, fetchChatUnreadCount } from '../api'
+import { chatKeys } from '../api'
 import { bumpConversationPreview, hasConversationInLists } from './chatCache'
 import { useChatStore } from '../store'
 import type { ChatUnreadEvent } from '../types'
+import { getPlatform } from '../../../platform'
 
 const EVENT_NAME = '.chat.unread'
 
@@ -47,7 +48,7 @@ export function useChatUnread(): UseChatUnreadResult {
 
   const snapshotQuery = useQuery({
     queryKey: chatKeys.unreadCount,
-    queryFn: fetchChatUnreadCount,
+    queryFn: () => getPlatform().data.chat.unreadCount(),
     enabled: userId !== undefined,
     staleTime: 60_000,
   })

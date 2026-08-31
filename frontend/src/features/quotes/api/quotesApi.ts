@@ -9,6 +9,7 @@ import axios, { type AxiosRequestConfig } from 'axios'
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
+import { getPlatform } from '../../../platform'
 import type {
   DiscountType,
   Quote,
@@ -27,7 +28,7 @@ export const quotesKeys = {
   detail: (id: number) => ['quotes', 'detail', id] as const,
 }
 
-async function fetchQuotes(query: QuotesQuery): Promise<QuotesListResponse> {
+export async function fetchQuotes(query: QuotesQuery): Promise<QuotesListResponse> {
   const { data } = await api.get<QuotesListResponse>('/api/quotes', {
     params: {
       page: query.page,
@@ -46,36 +47,36 @@ async function fetchQuotes(query: QuotesQuery): Promise<QuotesListResponse> {
   return data
 }
 
-async function fetchQuote(id: number): Promise<Quote> {
+export async function fetchQuote(id: number): Promise<Quote> {
   const { data } = await api.get<{ data: Quote }>(`/api/quotes/${id}`)
   return data.data
 }
 
-async function createQuoteRequest(payload: QuotePayload): Promise<Quote> {
+export async function createQuoteRequest(payload: QuotePayload): Promise<Quote> {
   const { data } = await api.post<{ data: Quote }>('/api/quotes', payload)
   return data.data
 }
 
-async function updateQuoteRequest(id: number, payload: Partial<QuotePayload>): Promise<Quote> {
+export async function updateQuoteRequest(id: number, payload: Partial<QuotePayload>): Promise<Quote> {
   const { data } = await api.patch<{ data: Quote }>(`/api/quotes/${id}`, payload)
   return data.data
 }
 
-async function deleteQuoteRequest(id: number): Promise<void> {
+export async function deleteQuoteRequest(id: number): Promise<void> {
   await api.delete(`/api/quotes/${id}`)
 }
 
-async function sendQuoteRequest(id: number): Promise<Quote> {
+export async function sendQuoteRequest(id: number): Promise<Quote> {
   const { data } = await api.post<{ data: Quote }>(`/api/quotes/${id}/send`)
   return data.data
 }
 
-async function changeQuoteStatusRequest(id: number, status: QuoteStatus, reason?: string): Promise<Quote> {
+export async function changeQuoteStatusRequest(id: number, status: QuoteStatus, reason?: string): Promise<Quote> {
   const { data } = await api.patch<{ data: Quote }>(`/api/quotes/${id}/status`, { status, reason: reason || undefined })
   return data.data
 }
 
-async function reviseQuoteRequest(id: number): Promise<Quote> {
+export async function reviseQuoteRequest(id: number): Promise<Quote> {
   // 200 döner (201 DEĞİL): parent'ın zaten bir draft revizyonu varsa yeni kayıt açmadan
   // mevcut olanı döndürür (sözleşme §6).
   const { data } = await api.post<{ data: Quote }>(`/api/quotes/${id}/revise`)
@@ -152,7 +153,7 @@ function invalidateQuoteCaches(queryClient: ReturnType<typeof useQueryClient>, i
 export function useQuotes(query: QuotesQuery) {
   return useQuery({
     queryKey: quotesKeys.list(query),
-    queryFn: () => fetchQuotes(query),
+    queryFn: () => getPlatform().data.quotes.list(query),
     placeholderData: keepPreviousData,
   })
 }
@@ -160,7 +161,7 @@ export function useQuotes(query: QuotesQuery) {
 export function useQuote(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: quotesKeys.detail(id ?? -1),
-    queryFn: () => fetchQuote(id as number),
+    queryFn: () => getPlatform().data.quotes.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -169,7 +170,7 @@ export function useQuote(id: number | undefined, options?: { enabled?: boolean }
 export function useParentQuote(parentId: number | null | undefined) {
   return useQuery({
     queryKey: quotesKeys.detail(parentId ?? -1),
-    queryFn: () => fetchQuote(parentId as number),
+    queryFn: () => getPlatform().data.quotes.get(parentId as number),
     enabled: parentId !== null && parentId !== undefined,
     staleTime: 60_000,
   })
@@ -188,7 +189,7 @@ function rootQuoteNumber(quoteNumber: string): string {
   return quoteNumber.replace(/-R\d+$/, '')
 }
 
-async function fetchQuoteRevisionFamily(rootNumber: string): Promise<Quote[]> {
+export async function fetchQuoteRevisionFamily(rootNumber: string): Promise<Quote[]> {
   const { data } = await api.get<QuotesListResponse>('/api/quotes', {
     params: { q: rootNumber, per_page: 50, sort: 'quote_number' },
   })
@@ -202,7 +203,7 @@ export function useQuoteRevisionFamily(quote: Quote | undefined) {
   const rootNumber = quote ? rootQuoteNumber(quote.quote_number) : null
   return useQuery({
     queryKey: ['quotes', 'revision-family', rootNumber],
-    queryFn: () => fetchQuoteRevisionFamily(rootNumber as string),
+    queryFn: () => getPlatform().data.quotes.revisionFamily(rootNumber as string),
     enabled: rootNumber !== null,
     staleTime: 30_000,
   })
@@ -211,7 +212,7 @@ export function useQuoteRevisionFamily(quote: Quote | undefined) {
 export function useCreateQuote() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: createQuoteRequest,
+    mutationFn: (payload: QuotePayload) => getPlatform().data.quotes.create(payload),
     onSuccess: (quote) => {
       invalidateQuoteCaches(queryClient, quote.id)
       toast.success(i18n.t('quotes:toast.created'))
@@ -223,7 +224,7 @@ export function useCreateQuote() {
 export function useUpdateQuote() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<QuotePayload> }) => updateQuoteRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<QuotePayload> }) => getPlatform().data.quotes.update(id, payload),
     onSuccess: (quote) => {
       invalidateQuoteCaches(queryClient, quote.id)
       toast.success(i18n.t('quotes:toast.updated'))
@@ -235,7 +236,7 @@ export function useUpdateQuote() {
 export function useDeleteQuote() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deleteQuoteRequest(id),
+    mutationFn: (id: number) => getPlatform().data.quotes.delete(id),
     onSuccess: () => {
       invalidateQuoteCaches(queryClient)
       toast.success(i18n.t('quotes:toast.deleted'))
@@ -247,7 +248,7 @@ export function useDeleteQuote() {
 export function useSendQuote() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => sendQuoteRequest(id),
+    mutationFn: (id: number) => getPlatform().data.quotes.send(id),
     onSuccess: (quote) => {
       invalidateQuoteCaches(queryClient, quote.id)
       toast.success(i18n.t('quotes:toast.sent'))
@@ -260,7 +261,7 @@ export function useChangeQuoteStatus() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, status, reason }: { id: number; status: QuoteStatus; reason?: string }) =>
-      changeQuoteStatusRequest(id, status, reason),
+      getPlatform().data.quotes.status(id, status, reason),
     onSuccess: (quote) => {
       invalidateQuoteCaches(queryClient, quote.id)
       toast.success(i18n.t('quotes:toast.statusChanged'))
@@ -272,7 +273,7 @@ export function useChangeQuoteStatus() {
 export function useReviseQuote() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => reviseQuoteRequest(id),
+    mutationFn: (id: number) => getPlatform().data.quotes.revise(id),
     onSuccess: (revised, originalId) => {
       invalidateQuoteCaches(queryClient, revised.id)
       invalidateQuoteCaches(queryClient, originalId)
