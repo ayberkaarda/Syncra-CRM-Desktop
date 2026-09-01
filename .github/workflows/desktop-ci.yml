@@ -50,6 +50,20 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+  # Disk, not taste. The 2026-09-01 run died on ubuntu-24.04 with
+  # `failed to build archive ...: No space left on device` while compiling `tauri-utils` —
+  # a GitHub-hosted Linux runner has roughly 14 GB free on `/`, and this workspace does not
+  # fit in it unless both of these are set. Measured on a full local debug tree (45.6 GB):
+  #   incremental/  23.9 GB   <- CARGO_INCREMENTAL=0 removes it outright
+  #   deps/         15.7 GB   <- of which debug info is the largest single share
+  #   build/         3.4 GB
+  # Incremental artifacts are worthless on a fresh runner (nothing to be incremental FROM,
+  # and rust-cache does not restore them), and nothing in CI attaches a debugger, so the
+  # debug info is paid for and never read. Backtraces lose line numbers; that is the whole
+  # cost, and a CI failure is reproduced locally anyway.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+
 jobs:
   # ---------------------------------------------------------------------------
   # syncra-sync crate: cargo test + clippy, 3-OS matrix (SYNCDESKTOP.md §5.7, §0.4)
@@ -125,6 +139,18 @@ jobs:
       # against WebKitGTK/GTK headers at compile time — even for `cargo test`/`cargo clippy`,
       # not only `tauri build`. Same package list and source as the Linux step in
       # `desktop-tauri-build` (Tauri v2 Linux prerequisites) — keep the two lists identical.
+      # Reports before reclaiming, so the next person has a number instead of a guess —
+      # the run that forced this step had no idea how much headroom it actually had.
+      # The four directories below are the largest preinstalled toolchains this repo never
+      # touches (Android SDK/NDK, .NET, GHC/cabal, CodeQL bundles). Nothing here is a build
+      # dependency; if a future job needs one of them, this step is where it disappeared.
+      - name: Report and reclaim disk (Linux runners are ~14 GB)
+        if: runner.os == 'Linux'
+        run: |
+          echo "--- before ---"; df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          echo "--- after ---"; df -h /
+
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -397,6 +423,18 @@ jobs:
       # of them had already linked in the failing run. Exactly one package is added, for a
       # reason that was measured. A padded list would permanently hide which dependencies are
       # real; a missing apt package fails loudly, by name, in seconds.
+      # Reports before reclaiming, so the next person has a number instead of a guess —
+      # the run that forced this step had no idea how much headroom it actually had.
+      # The four directories below are the largest preinstalled toolchains this repo never
+      # touches (Android SDK/NDK, .NET, GHC/cabal, CodeQL bundles). Nothing here is a build
+      # dependency; if a future job needs one of them, this step is where it disappeared.
+      - name: Report and reclaim disk (Linux runners are ~14 GB)
+        if: runner.os == 'Linux'
+        run: |
+          echo "--- before ---"; df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          echo "--- after ---"; df -h /
+
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
