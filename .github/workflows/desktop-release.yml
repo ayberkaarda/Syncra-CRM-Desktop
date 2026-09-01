@@ -155,9 +155,16 @@ jobs:
         env:
           DESKTOP_RELEASE_ENV: ${{ secrets.DESKTOP_RELEASE_ENV }}
         run: |
+          # Length, never the value: a secret that exists but arrived empty is indistinguishable
+          # from an unset one at `[ -n ]`, and the 2026-09-01 release run failed exactly there —
+          # the secret had been created 54 seconds before the run started and the wiring was
+          # correct, yet this step still took the fallback. The byte count settles which of the
+          # two it was on the next attempt instead of leaving it to inference.
+          echo "DESKTOP_RELEASE_ENV byte length: ${#DESKTOP_RELEASE_ENV}"
           if [ -n "$DESKTOP_RELEASE_ENV" ]; then
             printf '%s\n' "$DESKTOP_RELEASE_ENV" > .env
             echo "frontend/.env written from secrets.DESKTOP_RELEASE_ENV"
+            echo "seeded $(grep -c '^VITE_' .env) VITE_* lines into frontend/.env"
           else
             cp .env.example .env
             echo "::warning::secrets.DESKTOP_RELEASE_ENV is not set; fell back to the localhost frontend/.env.example. The release-host assert below will fail this job on purpose."
