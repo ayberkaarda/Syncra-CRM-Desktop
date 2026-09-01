@@ -70,9 +70,23 @@ const CONTRACT = {
     'bootstrap',
     'handle_realtime',
   ],
-  storage: ['storage_stats', 'update_settings', 'storage_settings', 'clear_local'],
+  // `data_location` / `move_data_dir` are the F8/1 (K15) pair: the mirror + cache root became a
+  // user choice, and §6.2's storage line was extended with both on 2026-09-01. This transcription
+  // had not caught up, which is the exact drift this table exists to make impossible — a contract
+  // command absent from here is a command the check cannot notice is undelivered.
+  storage: [
+    'storage_stats',
+    'update_settings',
+    'storage_settings',
+    'clear_local',
+    'data_location',
+    'move_data_dir',
+  ],
   files: ['cache_quote_pdf', 'open_cached', 'attach_from_paths', 'screenshot_to_ticket'],
-  os: ['set_badge', 'register_hotkey', 'set_autostart', 'get_autostart', 'notify', 'set_tray_language'],
+  // `record_opened` (O85) landed in §6.2 on 2026-09-01, together with the prose note that
+  // explains why the title and the category heading cross the boundary from the webview
+  // rather than being read out of the mirror in Rust.
+  os: ['set_badge', 'register_hotkey', 'set_autostart', 'get_autostart', 'notify', 'set_tray_language', 'record_opened'],
 }
 
 /**
@@ -105,10 +119,16 @@ const DEFERRED_COMMANDS = {
 // verified like every other command. An entry here is a documented gap, never a way to quiet
 // the check — leaving a stale one would mean the check stops caring if the spec later drops
 // that command again.
-// Empty again. `set_tray_language` sat here while §6.2 did not list it; the spec line was
-// corrected this round, so the command is verified like every other one instead of excused.
-// An entry here is a documented gap, never a way to quiet the check.
-const UNDOCUMENTED_COMMANDS = {}
+// `set_tray_language` sat here while §6.2 did not list it; the spec line was corrected in F5, so
+// that command is now verified like every other one instead of excused. An entry here is a
+// documented gap, never a way to quiet the check — it names the command, why it exists, and who
+// owes the spec line.
+const UNDOCUMENTED_COMMANDS = {
+  // Empty on purpose, and that is the healthy state. `record_opened` (O85) lived here for
+  // exactly as long as it took the tech lead to write its `SYNCDESKTOP.md` §6.2 line —
+  // which is what this map is for: naming a real gap and who owes the spec, never quieting
+  // the check. The §6.2 entry landed 2026-09-01, so the entry came straight back out.
+}
 
 /**
  * Files whose `invoke` argument is a parameter rather than a name this script can resolve.

@@ -25,7 +25,10 @@
     "INVALID_CREDENTIALS": "E-posta veya şifre hatalı.",
     "PENDING_MUTATIONS": "Senkronize edilmemiş değişiklikleriniz var. Önce senkronize edin veya zorla çıkış yapın.",
     "ROW_NOT_LOCAL": "Bu kayıt cihazınızdaki yerel kopyada yok; saklama süresinin dışında kalmış olabilir. Çevrimiçi olduğunuzda görüntülenebilir.",
-    "unknown": "Bilinmeyen bir hata oluştu."
+    "unknown": "Bilinmeyen bir hata oluştu.",
+    "DATA_DIR_INVALID": "Seçilen klasör kullanılamıyor. Boş bir klasör seçin; verileriniz değişmedi.",
+    "DATA_DIR_UNSUPPORTED": "Bu sürücü desteklenmiyor. Yerel veritabanı yalnızca sabit diskte tutulabilir.",
+    "DATA_DIR_MOVE_FAILED": "Veriler taşınamadı. Veri konumunuz değişmedi."
   },
   "onlineOnly": {
     "leads": {
@@ -148,6 +151,17 @@
       "description": "Bu işlem GERİ ALINAMAZ. Bu cihazdaki tüm yerel veriler silinecek ve bir sonraki senkronda sunucudan yeniden indirilecek.",
       "confirmSuffix": "yerel verileri temizlemek istediğinize emin misiniz?"
     },
+    "dataLocation": {
+      "label": "Veri konumu",
+      "description": "Şifreli yerel veritabanı ve dosya önbelleği bu klasörde tutulur.",
+      "change": "Konumu değiştir…",
+      "title": "Veri Konumunu Taşı",
+      "confirm": "Bir klasör seçmeniz istenecek. Taşıma sırasında senkronizasyon durur ve uygulama kısa süre yanıt vermeyebilir. Veriler kopyalanıp doğrulandıktan sonra eski klasör silinir.",
+      "fixedDiskOnly": "Yalnızca sabit disk seçilebilir: çıkarılabilir ve ağ sürücülerinde SQLite WAL kipi güvenilir değildir.",
+      "success": "Veriler {{path}} konumuna taşındı.",
+      "leftover": "Veriler taşındı, ancak eski klasör silinemedi. Şifreli bir kopya hâlâ burada duruyor: {{path}}",
+      "unavailable": "Ayarlanan veri klasörüne ulaşılamadı ({{path}}). Uygulama varsayılan konumdan çalışıyor; gönderilmemiş değişiklikleriniz eski klasörde olabilir. Sürücüyü bağlayıp uygulamayı yeniden başlatın."
+    },
     "saveSuccess": "Depolama ayarları kaydedildi.",
     "saveError": "Depolama ayarları kaydedilirken bir hata oluştu."
   },
@@ -259,6 +273,10 @@
       "notificationTitle": "Syncra arka planda çalışıyor",
       "notificationBody": "Uygulama tray'de çalışmaya devam ediyor. Tamamen çıkmak için tray menüsünden Çık'ı kullanın."
     }
+  },
+  "jumpList": {
+    "category": "Son kayıtlar",
+    "fallbackTitle": "{{entity}} #{{id}}"
   },
   "recordBadge": {
     "pending": "Bekliyor",

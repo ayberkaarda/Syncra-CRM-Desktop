@@ -23,6 +23,25 @@
 // forces that decision to show up as an explicit edit to EXPECTED_IDENTIFIER, not a drive-by
 // rename.
 //
+// ## Second assert: the AppUserModelID (F7, defter O85)
+//
+// The same string has a second job since the Windows JumpList landed. Windows files a jump list
+// by AppUserModelID, and it shows a custom list only when the AUMID the PROCESS declares matches
+// the AUMID stamped on the SHORTCUT the user launched from. Three places therefore have to hold
+// one value:
+//
+//   1. `tauri.conf.json`'s `identifier`      — what NSIS writes onto `Syncra.lnk` as `${BUNDLEID}`
+//   2. `src-tauri/src/jump_list.rs`'s
+//      `APP_USER_MODEL_ID`                   — what `SetCurrentProcessExplicitAppUserModelID` declares
+//   3. EXPECTED_IDENTIFIER below             — the reviewed, pinned value
+//
+// A mismatch between 1 and 2 fails EXACTLY like the storage-key drift this script was written
+// for: nothing crashes, every COM call returns `S_OK`, and the user right-clicks the taskbar to
+// find an empty menu. `jump_list.rs`'s own `the_aumid_is_the_bundle_identifier` test holds 1
+// against 2 from the Rust side; this holds both against 3, so changing the config and the
+// constant together — the change that would pass a same-file test — still has to be declared
+// here.
+//
 // Run: `npm run check:identifier` (from `desktop/`).
 
 import { readFileSync } from 'node:fs'
@@ -33,6 +52,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const DESKTOP = join(HERE, '..')
 
 const TAURI_CONF = join(DESKTOP, 'src-tauri/tauri.conf.json')
+const JUMP_LIST_RS = join(DESKTOP, 'src-tauri/src/jump_list.rs')
 
 // Pinned from the value actually in `tauri.conf.json` at the time this check was written —
 // transcribed, not invented. Changing this line IS the "I meant to do this" signal; anyone
@@ -89,6 +109,47 @@ if (actual === undefined) {
   )
 } else {
   notes.push(`identifier                  : '${actual}' (matches pinned value)`)
+}
+
+// ------------------------------------------------------------------------------------------------
+// 3. Assert the AppUserModelID constant is the same string
+// ------------------------------------------------------------------------------------------------
+
+// Matched against the SOURCE rather than against a compiled artefact on purpose: this check runs
+// in the Node lane, where no Rust toolchain is assumed, and the value is a literal in a `const`
+// declaration that `cargo` would not compare to anything anyway.
+const AUMID_DECLARATION = /pub const APP_USER_MODEL_ID:\s*&str\s*=\s*"([^"]*)"\s*;/
+
+let jumpListSource
+try {
+  jumpListSource = read(JUMP_LIST_RS)
+} catch (error) {
+  fail(
+    `src-tauri/src/jump_list.rs: could not read the file (${error.message}) — the AUMID this ` +
+      'process declares cannot be compared to the bundle identifier the installer stamps',
+  )
+  jumpListSource = null
+}
+
+const aumid = jumpListSource === null ? undefined : jumpListSource.match(AUMID_DECLARATION)?.[1]
+
+if (jumpListSource !== null && aumid === undefined) {
+  fail(
+    "src-tauri/src/jump_list.rs: no `pub const APP_USER_MODEL_ID: &str = \"...\";` declaration " +
+      'found. Either the constant was renamed or this check went blind — a blind check here ' +
+      'means an AUMID/identifier mismatch ships as an empty JumpList with no error anywhere.',
+  )
+} else if (aumid !== undefined && aumid !== EXPECTED_IDENTIFIER) {
+  fail(
+    `src-tauri/src/jump_list.rs: APP_USER_MODEL_ID is '${aumid}' but the bundle identifier is ` +
+      `'${EXPECTED_IDENTIFIER}'. Windows files a JumpList by AppUserModelID and shows a custom ` +
+      'list only when the process and the Start-menu shortcut declare the SAME one; the ' +
+      'installer stamps the bundle identifier onto the shortcut, so a different constant here ' +
+      'commits the list where no shortcut can find it — every COM call succeeds and the menu is ' +
+      'empty.',
+  )
+} else if (aumid !== undefined) {
+  notes.push(`jump_list APP_USER_MODEL_ID  : '${aumid}' (matches the bundle identifier)`)
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -487,3 +487,128 @@ async fn shutdown_ends_the_background_loop_without_the_scheduler_handle() {
         "the background loop must return once shutdown raises the stop flag"
     );
 }
+
+/// `SYNCDESKTOP.md` §10 F8/1 in miniature: "engine closed, WAL checkpoint, copy the
+/// `syncra.db` family and `cache/`, verify, **delete the old directory**".
+///
+/// The last step is the one that needs proving. On Windows `remove_dir_all` fails with a
+/// sharing violation while *anything* still holds a handle on a file inside the directory, so
+/// "the engine is closed" has to mean "every handle is released", not merely "nobody intends to
+/// use it again". That distinction is not academic: it is exactly what leaked 245 mirror
+/// directories under `%LOCALAPPDATA%\Temp` (defter O104), where `TempDir::drop` hit the same
+/// failure and swallowed it. A migration cannot swallow it — it would leave the user's old,
+/// still-encrypted database sitting in the abandoned location.
+///
+/// So this does on purpose what F8 will do for real, and it doubles as the measurement of the
+/// file list F8 has to copy: after a clean close the `-wal` and `-shm` siblings are gone and the
+/// family is the single `syncra.db`. On non-Windows platforms an open handle would not block the
+/// unlink, so the test simply passes there without asserting anything false.
+#[tokio::test]
+async fn shutdown_frees_the_data_directory_for_the_f8_migration() {
+    // The engine's directory sits *inside* a temp dir so the test can delete it outright, the
+    // way F8 does, and still leave nothing behind for the developer to sweep up.
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let data_dir = tmp.path().join("syncra");
+    let db_path = data_dir.join("syncra.db");
+
+    let engine = syncra_sync::SyncEngine::open_ephemeral(syncra_sync::SyncConfig::new(
+        url::Url::parse("http://127.0.0.1/api/").expect("url"),
+        db_path.clone(),
+    ))
+    .await
+    .expect("open engine");
+
+    // Real work, so the WAL carries something and the checkpoint below is not vacuous.
+    engine
+        .mutate(LocalMutation::create(
+            Entity::Company,
+            Uuid::now_v7(),
+            json!({ "name": "F8 handle test" }),
+        ))
+        .expect("mutate");
+
+    // The other half of what F8 moves: the blob cache next to the database.
+    let cache = data_dir.join("cache");
+    std::fs::create_dir_all(&cache).expect("cache dir");
+    std::fs::write(cache.join("quote.pdf"), b"%PDF-1.7 fake").expect("blob");
+
+    let wal = data_dir.join("syncra.db-wal");
+    let shm = data_dir.join("syncra.db-shm");
+    assert!(
+        wal.exists(),
+        "WAL mode (K3) must leave a -wal sibling while the engine is open, or the checkpoint \
+         assertion below proves nothing"
+    );
+
+    engine.shutdown().expect("shutdown");
+
+    // The F8 copy list, measured rather than assumed.
+    assert!(db_path.exists(), "the main database must survive shutdown");
+    assert!(
+        !wal.exists(),
+        "a checkpointed, cleanly closed connection takes -wal with it; it is still there"
+    );
+    assert!(
+        !shm.exists(),
+        "a cleanly closed last connection takes -shm with it; it is still there"
+    );
+
+    // Every remaining file individually first, so a failure names the file that is still open
+    // instead of only saying the directory is busy.
+    for entry in std::fs::read_dir(&data_dir).expect("read data dir") {
+        let path = entry.expect("dir entry").path();
+        if path.is_file() {
+            std::fs::remove_file(&path).unwrap_or_else(|err| {
+                panic!(
+                    "{} is still held open after shutdown: {err}",
+                    path.display()
+                )
+            });
+        }
+    }
+
+    std::fs::remove_dir_all(&data_dir).expect(
+        "F8/1 ends by deleting the old data directory; a leaked file handle makes this fail on \
+         Windows",
+    );
+    assert!(!data_dir.exists(), "the old data directory must be gone");
+}
+
+/// The same guarantee for the path F8 does *not* take, so a regression cannot hide there:
+/// dropping the last `SyncEngine` without calling `shutdown` must also release the files.
+///
+/// This is the case the leak was really about — the four background-loop tests never called
+/// `shutdown`, they just let the harness fall out of scope while a tokio task still held an
+/// engine clone. With no clone outstanding the connection closes in `Inner`'s drop glue, and
+/// SQLite's own close path checkpoints and removes the siblings; asserting it here pins that
+/// behaviour so `Harness`'s `Drop` stays a belt-and-braces measure rather than the only thing
+/// standing between the suite and a leaking temp directory.
+#[tokio::test]
+async fn dropping_the_last_engine_clone_also_releases_the_database_files() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let data_dir = tmp.path().join("syncra");
+    let db_path = data_dir.join("syncra.db");
+
+    {
+        let engine = syncra_sync::SyncEngine::open_ephemeral(syncra_sync::SyncConfig::new(
+            url::Url::parse("http://127.0.0.1/api/").expect("url"),
+            db_path.clone(),
+        ))
+        .await
+        .expect("open engine");
+        engine
+            .mutate(LocalMutation::create(
+                Entity::Company,
+                Uuid::now_v7(),
+                json!({ "name": "drop test" }),
+            ))
+            .expect("mutate");
+        // A clone that also goes out of scope here: the connection must close when the *last*
+        // one does, not when the first does.
+        let _clone = engine.clone();
+    }
+
+    std::fs::remove_dir_all(&data_dir)
+        .expect("dropping the last engine clone must release every handle on the database");
+    assert!(!data_dir.exists());
+}

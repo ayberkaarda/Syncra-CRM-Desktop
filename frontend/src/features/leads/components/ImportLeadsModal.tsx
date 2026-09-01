@@ -17,6 +17,7 @@ import { AlertCircle, CheckCircle2, Download, UploadCloud } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { Button, Modal } from '../../../components/ui'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { cn } from '../../../lib/cn'
 import { getErrorMessage } from '../../../lib/axios'
 import { leadsKeys } from '../api/leadsApi'
@@ -62,6 +63,8 @@ export function ImportLeadsModal({ open, onClose }: ImportLeadsModalProps) {
   const { t } = useTranslation('leads')
   const queryClient = useQueryClient()
   const importLeads = useImportLeads()
+  // SYNCDESKTOP §8 (O102): `POST /api/leads/import` has no offline path at all.
+  const importGuard = useOnlineOnly('leads.import')
   const cancelledRef = useRef(false)
   const DUPLICATE_MODE_OPTIONS = duplicateModeOptions(t)
 
@@ -165,7 +168,13 @@ export function ImportLeadsModal({ open, onClose }: ImportLeadsModalProps) {
             <Button type="button" variant="secondary" onClick={onClose}>
               {t('leads:importModal.cancel')}
             </Button>
-            <Button type="button" disabled={!file} loading={importLeads.isPending} onClick={handleUpload}>
+            <Button
+              type="button"
+              disabled={!file || importGuard.offline}
+              title={importGuard.title}
+              loading={importLeads.isPending}
+              onClick={handleUpload}
+            >
               {t('leads:importModal.upload')}
             </Button>
           </div>

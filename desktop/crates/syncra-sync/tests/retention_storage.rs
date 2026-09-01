@@ -184,8 +184,10 @@ async fn settings_are_persisted() {
         url::Url::parse(&format!("{}/api/", h.server.uri())).unwrap(),
         h.db_path.clone(),
     );
-    // The engine holds the file; drop the first one before reopening.
-    drop(h.engine);
+    // The engine holds the file; close it before reopening.
+    // `shutdown`, not `drop`: dropping an engine only closes the connection when it holds
+    // the last `Arc<Inner>`, while `shutdown` closes it outright (defter O104).
+    h.engine.shutdown().expect("shutdown");
     let keystore = std::sync::Arc::new(syncra_sync::MemoryKeyStore::new());
     keystore
         .set(&cfg.keychain_service, syncra_sync::keystore::KEY_DB, &h.db_key)

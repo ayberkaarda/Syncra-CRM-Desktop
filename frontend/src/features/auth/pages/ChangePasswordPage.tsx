@@ -11,6 +11,7 @@ import { Check, Eye, EyeOff, LogOut, X } from 'lucide-react'
 import { Button, Card, CardBody, Input, toast } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
 import { getErrorMessage, getFieldErrors } from '../../../lib/axios'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { PASSWORD_MIN_LENGTH, evaluatePassword } from '../../../features/users/utils/password'
 import type { PasswordRuleId } from '../../../features/users/utils/password'
 import { useAuth, useChangePassword } from '../hooks/useAuth'
@@ -52,6 +53,12 @@ export function ChangePasswordPage() {
 
   const currentPasswordRef = useRef<HTMLInputElement>(null)
 
+  // SYNCDESKTOP §8 (O102) — "password change". `POST /api/password/change` has no offline path:
+  // the server is the only holder of the credential. Declared with the other hooks, ABOVE the
+  // `must_change_password` early return, because a hook after a conditional `return` breaks the
+  // call order (`react-hooks/rules-of-hooks`). Web build: `offline` is always false.
+  const passwordGuard = useOnlineOnly('password.change')
+
   useEffect(() => {
     currentPasswordRef.current?.focus()
   }, [])
@@ -69,8 +76,9 @@ export function ChangePasswordPage() {
     return <Navigate to="/" replace />
   }
 
+
   const evaluation = evaluatePassword(password)
-  const submitDisabled = changePassword.isPending || lockoutSeconds > 0
+  const submitDisabled = changePassword.isPending || lockoutSeconds > 0 || passwordGuard.offline
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -221,7 +229,13 @@ export function ChangePasswordPage() {
                 required
               />
 
-              <Button type="submit" fullWidth loading={changePassword.isPending} disabled={submitDisabled}>
+              <Button
+                type="submit"
+                fullWidth
+                loading={changePassword.isPending}
+                disabled={submitDisabled}
+                title={passwordGuard.title}
+              >
                 {lockoutSeconds > 0
                   ? t('auth:login.retryIn', { seconds: lockoutSeconds })
                   : t('auth:changePassword.submit')}

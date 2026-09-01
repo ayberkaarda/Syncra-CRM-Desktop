@@ -19,6 +19,7 @@ import type {
 } from '@/platform/types'
 
 import { http } from '../http'
+import { requireOnline } from '../onlineOnly'
 import {
   listPage,
   MAX_PAGE,
@@ -466,8 +467,17 @@ export const quotesSource: QuotesSource = {
 
   delete: (id) => deleteRow('quote', id),
 
-  /** ONLINE-ONLY (`SYNCDESKTOP.md` §8) — `quote.send` is absent from the action whitelist. */
-  send: (id) => http.post<{ data: Quote }>(`/api/quotes/${id}/send`).then((body) => body.data),
+  /**
+   * ONLINE-ONLY (`SYNCDESKTOP.md` §8) — `quote.send` is absent from the action whitelist.
+   *
+   * `requireOnline` is §8's defence layer 2 (O102): offline the request is never issued and the
+   * caller gets `OnlineOnlyError` with `action: 'quotes.send'`, which the UI renders as the
+   * quote-specific sentence instead of the transport failure axios would otherwise have raised.
+   */
+  send: (id) =>
+    requireOnline('quotes.send', () =>
+      http.post<{ data: Quote }>(`/api/quotes/${id}/send`).then((body) => body.data),
+    ),
 
   /** `quote.status` IS whitelisted, so a status change survives being made offline. */
   status: async (id, status, reason): Promise<Quote> => {
@@ -477,7 +487,10 @@ export const quotesSource: QuotesSource = {
   },
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8) — the server decides whether a new revision is created. */
-  revise: (id) => http.post<{ data: Quote }>(`/api/quotes/${id}/revise`).then((body) => body.data),
+  revise: (id) =>
+    requireOnline('quotes.revise', () =>
+      http.post<{ data: Quote }>(`/api/quotes/${id}/revise`).then((body) => body.data),
+    ),
 
   revisionFamily: async (rootNumber): Promise<Quote[]> => {
     const rows = await runQuery(
@@ -494,18 +507,23 @@ export const quotesSource: QuotesSource = {
    * rounding long before anyone noticed it had.
    */
   calculate: (payload, options) =>
-    http
-      .post<{ data: QuoteCalculateResult }>('/api/quotes/calculate', payload, {
-        signal: options?.signal,
-      })
-      .then((body) => body.data),
+    requireOnline('quotes.calculate', () =>
+      http
+        .post<{ data: QuoteCalculateResult }>('/api/quotes/calculate', payload, {
+          signal: options?.signal,
+        })
+        .then((body) => body.data),
+    ),
 
   /**
    * ONLINE-ONLY when uncached (`SYNCDESKTOP.md` §8). The `files::cache_quote_pdf` /
    * `files::open_cached` pair that serves the cached copy is F5-5; until it exists this always
    * goes to the network, which fails loudly offline rather than showing a stale document.
    */
-  pdfBlob: (id) => http.get<Blob>(`/api/quotes/${id}/pdf`, { responseType: 'blob' }),
+  pdfBlob: (id) =>
+    requireOnline('quotes.pdf', () =>
+      http.get<Blob>(`/api/quotes/${id}/pdf`, { responseType: 'blob' }),
+    ),
 }
 
 /**

@@ -61,6 +61,13 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // signal, not a generic failure: a page that sees this code can say so instead of showing the
   // same sentence a real error would.
   'ROW_NOT_LOCAL',
+  // F8/1 (KARAR K15): `storage::move_data_dir`'s three refusals. They are separate codes
+  // because the user's next move differs for each — pick another folder, pick another drive,
+  // or nothing (the move failed and the previous location is still intact). A single
+  // `VALIDATION_ERROR` would collapse all three into one sentence that cannot say which.
+  'DATA_DIR_INVALID',
+  'DATA_DIR_UNSUPPORTED',
+  'DATA_DIR_MOVE_FAILED',
 ])
 
 /** `HTTP_403` and friends — `commands/auth.rs` builds this shape from any non-2xx response. */

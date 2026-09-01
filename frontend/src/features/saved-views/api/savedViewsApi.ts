@@ -2,6 +2,7 @@
 // `{ errors: { message, code, fields? } }` (bkz. `lib/axios.ts`).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import i18n from '../../../i18n'
+import { onlineOnlyMessage } from '../../../components/shared/onlineOnlyMessage'
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import type { SavedView, SavedViewModule, SavedViewPayload, UpdateSavedViewPayload } from '../types'
@@ -46,7 +47,7 @@ export function useCreateSavedView(module: SavedViewModule) {
     },
     // Ad benzersizliği (422) `SavedViewsBar`de `getFieldErrors()` ile SATIR İÇİ gösterilir —
     // bu jenerik toast onunla ÇELİŞMEZ, yalnızca genel bir "kaydetme başarısız" bildirimidir.
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error)),
   })
 }
 
@@ -63,7 +64,7 @@ export function useUpdateSavedView(module: SavedViewModule) {
       void queryClient.invalidateQueries({ queryKey: savedViewsKeys.list(module) })
       toast.success(i18n.t('common:toast.saveSuccess'))
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error)),
   })
 }
 

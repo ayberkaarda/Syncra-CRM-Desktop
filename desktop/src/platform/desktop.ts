@@ -21,102 +21,28 @@ import type {
   AppNotification,
   Capability,
   ConnState,
-  OnlineOnlyError,
   Platform,
 } from '@/platform/types'
 
-import { invokeCommand } from '../bridge/invoke'
 import { realtimeChannel, startRealtimeBridge, stopRealtimeBridge } from '../bridge/realtime'
-import type { SyncStatus as EngineSyncStatus } from '../ui/commands'
 import { desktopData } from './data'
 import { http } from './http'
+import { onlineOnly } from './onlineOnly'
+import {
+  STATUS_POLL_MS,
+  isEngineOnline,
+  readStatus,
+  subscribeToEngineStatus,
+} from './status'
 
 export { setDeviceToken } from './http'
 
-// ------------------------------------------------------------------------------------------------
-// Engine status
-// ------------------------------------------------------------------------------------------------
-
-/**
- * Wire shape of `syncra_sync::types::SyncStatus` (serde keeps the Rust field names).
- * Declared once in `ui/commands.ts` alongside the other command wire types.
- */
-type SyncStatus = EngineSyncStatus
-
-/**
- * How often `connectivity.subscribe` re-reads the engine's status.
- *
- * `sync::status` is documented as a "cheap, synchronous snapshot — safe to poll"
- * (`src-tauri/src/commands/sync.rs`). The authoritative feed is `EngineEvent::StatusChanged`
- * through `bridge/events.ts`, which the entry point subscribes to; this poll is the backstop
- * for the window between process start and that subscription landing.
- */
-const STATUS_POLL_MS = 5000
-
-/**
- * Last status read from the engine. Starts `online: true` so the shell does not flash "offline"
- * before the first read lands.
- *
- * `navigator.onLine` is deliberately NOT used anywhere in this file (§3.5): it reports "online"
- * for a machine that has a LAN but cannot reach the API host, which is the most common failure
- * mode in the closed-network deployments this product targets. The engine is the authority.
- */
-let lastStatus: SyncStatus = {
-  online: true,
-  syncing: false,
-  pending: 0,
-  conflicts: 0,
-  last_sync_at: null,
-  write_blocked: null,
-}
-
-/**
- * Everything that wants to RENDER the engine's status, as opposed to the `connectivity`
- * adapter's coarse online/offline callback.
- *
- * The desktop chrome (`ui/ConnectivityBar.tsx`) needs `syncing`, `pending`, `conflicts`,
- * `last_sync_at` and `write_blocked`, not just a `ConnState`. It subscribes HERE rather than
- * opening its own `invoke('status')` poll, because a second poller would drift out of step
- * with this one and the two would disagree on screen — the authoritative feed is
- * `EngineEvent::StatusChanged`, which lands in `applyEngineStatus` below, and there is exactly
- * one place it can be observed from.
- */
-const statusListeners = new Set<(status: SyncStatus) => void>()
-
-function publishStatus(next: SyncStatus): void {
-  lastStatus = next
-  for (const listener of statusListeners) listener(next)
-}
-
-async function readStatus(): Promise<SyncStatus> {
-  publishStatus(await invokeCommand<SyncStatus>('status'))
-  return lastStatus
-}
-
-/** Adopt a status the engine pushed, so the poll and the event feed agree. */
-export function applyEngineStatus(status: unknown): void {
-  if (status && typeof status === 'object' && 'online' in status) {
-    publishStatus(status as SyncStatus)
-  }
-}
-
-/** Last known engine status. Never `null`: the optimistic default stands until the first read. */
-export function getEngineStatus(): SyncStatus {
-  return lastStatus
-}
-
-/** Observe {@link getEngineStatus}. Returns the unsubscribe handle. */
-export function subscribeToEngineStatus(listener: (status: SyncStatus) => void): () => void {
-  statusListeners.add(listener)
-  return () => {
-    statusListeners.delete(listener)
-  }
-}
-
-/** Force one status read — after a manual sync, or when a screen that shows it opens. */
-export function refreshEngineStatus(): Promise<SyncStatus> {
-  return readStatus()
-}
+// The engine-status store moved to `./status` so `platform/data/*` can read the online verdict
+// for §8 without closing an import cycle through this module (see that file's header). It is
+// re-exported here because `main.desktop.tsx`, `ui/ConnectivityBar.tsx` and `ui/useEngineStatus.ts`
+// have always imported it from `platform/desktop` and nothing about their contract changed.
+export { applyEngineStatus, getEngineStatus, refreshEngineStatus } from './status'
+export { subscribeToEngineStatus }
 
 // Reverb over a bearer token. `/api/broadcasting/auth` (note the `/api` prefix) is the
 // stateless route F1 registers; the web app's cookie-authenticated `/broadcasting/auth` is a
@@ -142,22 +68,37 @@ configureRealtimeAuth({
 // ------------------------------------------------------------------------------------------------
 
 const connectivity: Platform['connectivity'] = {
-  isOnline: () => lastStatus.online,
+  isOnline: isEngineOnline,
   subscribe(callback) {
-    let previous: ConnState = lastStatus.online ? 'online' : 'offline'
+    let previous: ConnState = isEngineOnline() ? 'online' : 'offline'
+
+    const emit = (online: boolean): void => {
+      const next: ConnState = online ? 'online' : 'offline'
+      if (next === previous) return
+      previous = next
+      callback(next)
+    }
+
+    // The engine's own push feed (`EngineEvent::StatusChanged` -> `applyEngineStatus`). Without
+    // it this adapter learned about a transition only on the next poll tick, i.e. up to
+    // `STATUS_POLL_MS` late — tolerable for a status pill, NOT for §8's "disabled + tooltip":
+    // for those five seconds every online-only trigger stayed enabled while the verb behind it
+    // would already have refused. `emit` de-duplicates, so the poll below is now purely a
+    // backstop and the two feeds cannot double-report a transition.
+    const unsubscribe = subscribeToEngineStatus((status) => emit(status.online))
+
     const timer = setInterval(() => {
       void readStatus()
-        .then((status) => {
-          const next: ConnState = status.online ? 'online' : 'offline'
-          if (next === previous) return
-          previous = next
-          callback(next)
-        })
+        .then((status) => emit(status.online))
         // A failed status read means the engine did not answer, which is not the same as the
         // server being unreachable — the last known value stands rather than being flipped.
         .catch(() => undefined)
     }, STATUS_POLL_MS)
-    return () => clearInterval(timer)
+
+    return () => {
+      unsubscribe()
+      clearInterval(timer)
+    }
   },
 }
 
@@ -186,21 +127,6 @@ const realtime: Platform['realtime'] = {
 // are F5-2. In-app toasts match the web's behaviour and need no plugin permission.
 function notify({ level, message }: AppNotification): void {
   toast[level](message)
-}
-
-/**
- * `SYNCDESKTOP.md` §8, defence layer 2: offline, `fn` is never called — the caller gets an
- * `OnlineOnlyError` whose `action` resolves the `desktop.onlineOnly.<action>` tooltip key (S9).
- */
-function onlineOnly<T>(action: string, fn: () => T): T | OnlineOnlyError {
-  if (!connectivity.isOnline()) {
-    return {
-      code: 'ONLINE_ONLY',
-      action,
-      message: `"${action}" requires a connection.`,
-    }
-  }
-  return fn()
 }
 
 // `clipboard` is absent by design: K10 makes clipboard capture opt-in and default-off, and this

@@ -29,6 +29,7 @@ import type {
 } from '@/platform/types'
 
 import { http } from '../http'
+import { requireOnline } from '../onlineOnly'
 import { sessionUserId } from '../session'
 import { listPage, MAX_PAGE, num, rowId, runQuery, str, text, type LocalRow } from './engine'
 import { loadCounts, loadRefs } from './refs'
@@ -259,11 +260,15 @@ export const savedViewsSource: SavedViewsSource = {
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8) — and `saved_views` is read-only in the sync scope. */
   create: (payload) =>
-    http.post<{ data: SavedView }>('/api/saved-views', payload).then((body) => body.data),
+    requireOnline('savedViews.create', () =>
+      http.post<{ data: SavedView }>('/api/saved-views', payload).then((body) => body.data),
+    ),
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8), same reason as `create`. */
   update: (id, payload) =>
-    http.patch<{ data: SavedView }>(`/api/saved-views/${id}`, payload).then((body) => body.data),
+    requireOnline('savedViews.update', () =>
+      http.patch<{ data: SavedView }>(`/api/saved-views/${id}`, payload).then((body) => body.data),
+    ),
 
   /**
    * ONLINE-ONLY. Not named in §8 (which lists create/update), but `saved_views` is read-only
@@ -283,39 +288,64 @@ export const savedViewsSource: SavedViewsSource = {
 // ------------------------------------------------------------------------------------------------
 
 export const usersSource: UsersSource = {
-  /** ONLINE-ONLY (`SYNCDESKTOP.md` §8). */
+  /**
+   * ONLINE-ONLY (`SYNCDESKTOP.md` §8).
+   *
+   * All seven `users.*` verbs report `action: 'users'`, not a per-verb action: §8 writes the
+   * item as `users.*` and the dictionary has exactly one sentence for it
+   * (`desktop:onlineOnly.users`). A per-verb action would need seven new keys in four
+   * languages, which is a dictionary change this item does not make.
+   */
   list: (query) =>
-    http.get<UsersListResponse>('/api/users', {
-      params: {
-        page: query.page,
-        per_page: query.per_page,
-        sort: query.sort || undefined,
-        q: query.q || undefined,
-        'filter[role]': query.role || undefined,
-        'filter[is_active]': query.is_active,
-      },
-    }),
+    requireOnline('users', () =>
+      http.get<UsersListResponse>('/api/users', {
+        params: {
+          page: query.page,
+          per_page: query.per_page,
+          sort: query.sort || undefined,
+          q: query.q || undefined,
+          'filter[role]': query.role || undefined,
+          'filter[is_active]': query.is_active,
+        },
+      }),
+    ),
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8). */
-  get: (id) => http.get<{ data: User }>(`/api/users/${id}`).then((body) => body.data),
+  get: (id) =>
+    requireOnline('users', () => http.get<{ data: User }>(`/api/users/${id}`).then((body) => body.data)),
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8). */
-  create: (payload) => http.post<{ data: User }>('/api/users', payload).then((body) => body.data),
+  create: (payload) =>
+    requireOnline('users', () =>
+      http.post<{ data: User }>('/api/users', payload).then((body) => body.data),
+    ),
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8). */
   update: (id, payload) =>
-    http.patch<{ data: User }>(`/api/users/${id}`, payload).then((body) => body.data),
+    requireOnline('users', () =>
+      http.patch<{ data: User }>(`/api/users/${id}`, payload).then((body) => body.data),
+    ),
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8). */
-  delete: (id) => http.delete<void>(`/api/users/${id}`),
+  delete: (id) => requireOnline('users', () => http.delete<void>(`/api/users/${id}`)),
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8). */
   setActive: (id, isActive) =>
-    http.patch<{ data: User }>(`/api/users/${id}/active`, { is_active: isActive }).then((body) => body.data),
+    requireOnline('users', () =>
+      http
+        .patch<{ data: User }>(`/api/users/${id}/active`, { is_active: isActive })
+        .then((body) => body.data),
+    ),
 
   /** ONLINE-ONLY (`SYNCDESKTOP.md` §8). */
-  resetPassword: (id, password) => http.post<void>(`/api/users/${id}/reset-password`, { password }),
+  resetPassword: (id, password) =>
+    requireOnline('users', () => http.post<void>(`/api/users/${id}/reset-password`, { password })),
 
-  /** ONLINE-ONLY (`SYNCDESKTOP.md` §8 lists `roles`); roles are not mirrored at all. */
-  roles: () => http.get<{ data: Role[] }>('/api/roles').then((body) => body.data),
+  /**
+   * ONLINE-ONLY (`SYNCDESKTOP.md` §8 lists `roles`); roles are not mirrored at all.
+   *
+   * `action: 'roles'` and not `'users'` — §8 lists the two separately and so does the
+   * dictionary, and the role list is what a permissions screen is missing when this refuses.
+   */
+  roles: () => requireOnline('roles', () => http.get<{ data: Role[] }>('/api/roles').then((body) => body.data)),
 }

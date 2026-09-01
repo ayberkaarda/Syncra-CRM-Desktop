@@ -270,6 +270,124 @@ npm run tauri -- build
 
 `desktop/src-tauri/tauri.conf.json` sets `bundle.targets` to `"all"`, i.e. it asks Tauri for every bundle format available for the host OS rather than naming specific ones. This repository has not run a packaged build yet — a parallel workstream is exercising it for the first time as this section is being written — so no artifact list or size is claimed here; see `docs/PROGRESS.md` for current status once that lands.
 
+## Self-hosting
+
+**Boundary (KARAR K14, binding):** the desktop client is **always** a client of a Laravel backend — there is no standalone/offline-only mode, and the backend is never embedded into the installer (K14 rejected both permanently: authorization, quote financials, the ticket state machine and SLA all live server-side, and the local mirror is deliberately incomplete outside its retention window, so it cannot be a source of truth). This section is a **"run your own backend"** guide, not a **"run without a backend"** guide — if you install everything below and skip the last step (pointing a desktop build at your server), you'll have a working web app and an app that still expects `http://localhost:8000`.
+
+### 1. Dependencies
+
+| Component | Requirement | Note |
+| --- | --- | --- |
+| PHP | `^8.2` (`backend/composer.json:8`) | Laravel 12 requires 8.2+. Verified in this repo's own dev environment at 8.2.12 (`docs/PROGRESS.md` "Ortam Durumu"). |
+| PHP extensions | `zip` (enforced), `intl` (optional) | Neither is listed in `backend/composer.json`'s own `require`, but they behave differently and the difference matters. **`zip` is enforced anyway**: four packages in `composer.lock` declare `ext-zip`, so `composer install` refuses to proceed without it — you cannot get a broken install this way. **`intl` is genuinely optional by design**: `app/Support/LocaleNumberFormatter.php:53` guards every use behind `class_exists(NumberFormatter::class)` and falls back when it is absent, so a server without `intl` installs and runs — quote-PDF number formatting simply stops being locale-aware (`resources/views/pdf/quote.blade.php` is the one consumer). Enable it if you care about that formatting; nothing breaks if you don't. |
+| Composer | 2.x | 2.10.2 verified. |
+| MariaDB / MySQL | 10.4+ (MariaDB) or MySQL 8+ | Collation **must** be set via `DB_COLLATION=utf8mb4_unicode_ci` — Laravel's own default (`utf8mb4_0900_ai_ci`) is MySQL-8-specific and MariaDB rejects it (`backend/config/database.php:52`, `backend/.env.example:42`). |
+| Redis | Any recent version | `REDIS_CLIENT=predis` (a pure-PHP client) works without the `redis` C extension — this repo's own environment doesn't have that extension installed either. |
+| Node.js / npm | Node with npm 11+ | v26.7.0 / 11.19.0 verified. Needed for both `frontend/` and `desktop/`. |
+
+Full verified-version table (PHP, Composer, MariaDB, Redis, Node, Laravel, Reverb, dompdf, ...): `docs/PROGRESS.md` → "Ortam Durumu".
+
+### 2. Database
+
+```
+mysql -u root -e "CREATE DATABASE <your_db_name> CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+The database name doesn't have to be `syncra_crm` — that's just this repo's own dev convention; whatever you use goes into `DB_DATABASE` below.
+
+### 3. Backend `.env`
+
+```
+cd backend
+cp .env.example .env
+php artisan key:generate
+```
+
+What actually needs to change from the example for a real deployment (everything else has a working default):
+
+| Variable(s) | Why it matters |
+| --- | --- |
+| `APP_URL`, `FRONTEND_URL` | Point these at your real hosts, not `localhost`. |
+| `DB_HOST`/`PORT`/`DATABASE`/`USERNAME`/`PASSWORD`, `DB_COLLATION` | Your database from step 2. Keep `DB_COLLATION=utf8mb4_unicode_ci` on MariaDB. |
+| `REDIS_HOST`/`PORT`/`PASSWORD` | Your Redis instance. |
+| `REVERB_APP_ID`/`APP_KEY`/`APP_SECRET` | Change from the example's placeholder values for anything beyond local dev. |
+| `REVERB_HOST`/`PORT`/`SCHEME` vs `REVERB_SERVER_HOST`/`SERVER_PORT` | These are **not the same thing** and the example's defaults (`backend/.env.example:101-108`) only match on a single machine: `REVERB_SERVER_HOST`/`SERVER_PORT` is the local bind address `reverb:start` listens on; `REVERB_HOST`/`PORT`/`SCHEME` is what you tell clients (the SPA and the desktop client) to connect to — behind a reverse proxy or TLS termination these diverge (e.g. server binds `127.0.0.1:8080`, clients connect to `wss://reverb.example.com`). |
+| `DESKTOP_ORIGINS` | **Desktop-specific and easy to miss** — not covered by `FRONTEND_URL`. Add the desktop webview's origin(s) here (`http://tauri.localhost` on Windows, `tauri://localhost` on Linux — see the comment at `backend/.env.example:9-20`). |
+| `SESSION_DOMAIN`, `SANCTUM_STATEFUL_DOMAINS` | Set to your real web domain in production. **Never add a desktop origin to `SANCTUM_STATEFUL_DOMAINS`** — that list is for the SPA's cookie session only; the desktop client authenticates with a bearer token. Mixing them makes `EnsureFrontendRequestsAreStateful` treat desktop requests as session requests, and every desktop `POST` (starting with `/api/broadcasting/auth`) fails `419 CSRF_TOKEN_MISMATCH` while carrying a perfectly valid token — see the full warning at `backend/.env.example:65-78` (KARAR A12). |
+
+### 4. Install, migrate, seed
+
+```
+cd backend
+composer install
+php artisan migrate --seed
+```
+
+⚠️ **`--seed` is destructive on anything but a fresh database.** It inserts the default roles/permissions and creates the Super Admin account (`admin@syncra.local` / `SyncraAdmin!2026`, `must_change_password=true`) — only run it against an empty schema. Running it again against a database that already has this data will fail on unique-constraint violations (or duplicate lookup data, depending on the seeder). Change the seeded Super Admin's password on first login — the app forces this — and again before any real use; it is a published default, not a secret.
+
+### 5. Processes that must stay running
+
+| Process | Command | Note |
+| --- | --- | --- |
+| API | `php artisan serve` (or a real web server — see below) | `artisan serve`'s single-threaded dev server is what this repo's own tooling exercises; a production deployment should front it with nginx/php-fpm or equivalent, which is outside this repo's scope. |
+| WebSocket (Reverb) | `php artisan reverb:start` | Binds `REVERB_SERVER_HOST`/`SERVER_PORT` (see step 3). |
+| Queue worker | `php artisan queue:work` | |
+| Scheduler | `php artisan schedule:work` | **Must run continuously** — it's what actually fires the four scheduled commands in `backend/routes/console.php`: `logs:prune` (daily 03:17), `tasks:dispatch-reminders` (every minute), `tickets:scan-sla` (every 5 minutes), `exchange:fetch-tcmb` (daily 16:00, matching TCMB's ~15:30 publish time). Without it, reminders/SLA warnings/exchange-rate refresh silently stop — nothing errors, things just don't happen. |
+
+`attachments:prune-orphans` exists as a command but is **not** registered in `routes/console.php` — scheduling it is left to the operator (a deliberate scope decision, `docs/ENGINEERING-RULES.md` §6), not something this repo's tooling does for you.
+
+`dev.bat` (repo root) is a Windows/XAMPP convenience script that checks/starts MySQL and Redis and opens five windows for Reverb/API/queue/scheduler/frontend — it is not a process supervisor. For a real self-hosted deployment, reproduce that same process list (API, Reverb, queue, scheduler) under whatever supervisor your platform uses (systemd, supervisord, NSSM, pm2, Docker, ...).
+
+### 6. Point the desktop client at your server
+
+This is the step K14's boundary is really about, and it has one hard constraint: **`frontend/.env`'s `VITE_API_URL` and `VITE_REVERB_*` are compiled into the desktop binary at build time, not read at runtime.** `desktop/scripts/tauri.mjs` derives two things from them before every `tauri dev`/`build` (via `desktop/scripts/build-env.mjs`):
+
+- `SYNCRA_API_URL` — baked in through `option_env!("SYNCRA_API_URL")` in `desktop/src-tauri/src/state.rs`, the base URL every HTTP call the app makes resolves against;
+- the packaged webview's Content-Security-Policy `connect-src` — so a build literally cannot talk to a different host without a CSP violation.
+
+There is **no in-app settings screen** to repoint an already-built installer at a different backend. Making this runtime-configurable is tracked as its own decision round (`SYNCDESKTOP.md` §10 F8/3) and has **not** been implemented — today, changing the backend address means editing `frontend/.env` and rebuilding.
+
+> **⚠️ Before you ship your own build to anyone: disable the updater, or it will replace your build with ours.**
+>
+> `desktop/src-tauri/tauri.conf.json` carries **one fixed** updater endpoint (this project's GitHub Releases `latest.json`) and **this project's** minisign public key. A build you produce from this repository inherits both. So the moment an official Syncra release is published, your installation checks *our* endpoint, finds an update signed by a key it already trusts, and — with `windows.installMode: "passive"` — installs it. Your users end up running a binary compiled against whatever backend *we* built for, and their client stops reaching your server.
+>
+> This is not hypothetical; it is what the current configuration does by design, and it is the strongest practical argument against the per-backend build model (`SYNCDESKTOP.md` §10 F8/3 decided to replace it with launch-time configuration, which is not implemented yet). Until then, if your build leaves your own machine, do one of these before building:
+>
+> - remove the `plugins.updater` block from `tauri.conf.json`, **or**
+> - replace `endpoints` with your own update server and `pubkey` with your own minisign key (`npm run tauri -- signer generate`).
+>
+> A build that stays on machines you administer and never publishes an update is unaffected in practice, but the check runs regardless — the endpoint is reachable from any network.
+
+```
+cd frontend
+cp .env.example .env
+# edit .env: VITE_API_URL, VITE_REVERB_HOST/PORT/SCHEME -> your real server, not localhost/127.0.0.1
+cd ../desktop
+npm install
+npm run tauri -- build
+```
+
+If you're producing a build meant to leave your own machine, run the release-host gate first: `cd desktop && npm run check:release-host`. It reads the same `frontend/.env` the build would and fails loudly if `VITE_API_URL`/`VITE_REVERB_HOST` still resolve to a loopback or link-local host (`localhost`, `127.0.0.0/8`, `::1`, a `.local` mDNS name) — exactly the mistake that produces a signed installer that quietly talks to the machine that built it. This project's own CI release workflow (`.github/workflows/desktop-release.yml`) enforces the same gate and sources its production `frontend/.env` from `secrets.DESKTOP_RELEASE_ENV`; that's only relevant if you're adapting that workflow for your own CI, not for a manual build.
+
+### 7. Non-Windows platforms
+
+This repository was developed and verified on Windows — `dev.bat`, the XAMPP/WSL2-Redis setup, and every version number in this guide are Windows measurements (`docs/PROGRESS.md`). For Linux/macOS:
+
+- **Linux:** CI compiles a debug package on `ubuntu-24.04` (`desktop-ci.yml`) and a release package on `ubuntu-22.04` (`desktop-release.yml`, held back deliberately — see that workflow's matrix comment on the glibc floor), both against `libwebkit2gtk-4.1-dev`. That's a compile check, not a running-app verification: this repo has no record of the desktop shell's OS features (tray, notifications, deep links, etc.) actually being exercised on a live Linux WebKitGTK build. SYNCDESKTOP K11 names Linux (Ubuntu 22.04+/Fedora 39+, WebKitGTK 2.42+) a first-class target equal to Windows, but that verification pass hadn't landed in this repo's docs as of this guide.
+- **macOS:** SYNCDESKTOP K11 states macOS is compile-only, deliberately not tested. A macOS release leg exists in `desktop-release.yml` (`macos-latest`), but there are no macOS-specific setup or runtime notes anywhere in this repo.
+- The backend/frontend themselves (PHP/Node/MariaDB/Redis) are an ordinary cross-platform Laravel + Vite stack with no Windows-specific requirement beyond the CORS/CSRF notes in step 3 above. `dev.bat`'s automation (starting MySQL/Redis, opening windows) is the one genuinely Windows-only piece here — substitute your platform's own service management for it.
+
+### 8. Common errors
+
+- **Missing `zip`/`intl` PHP extension:** a fatal error before Laravel even boots (something like `Uncaught Error: Class "ZipArchive" not found`, not a clean Laravel error page). Enable both in `php.ini` and restart PHP.
+- **Redis reachable inside WSL2 but "connection refused" from Windows/the host:** WSL2's `127.0.0.1` port forwarding drops when the distro goes idle — this broke 12 tests during this project's own Faz 12 (`docs/PROGRESS.md` "Ortam Durumu", Redis row) and hits an app the same way outside tests. Keep a long-lived WSL process open (`dev.bat` does this for you), or run `redis-cli ping` before assuming the app itself is broken.
+- **Frontend's own Vite dev server (port 5173) unreachable at `127.0.0.1:5173` while `localhost:5173` works:** it listens on `localhost` (IPv6 `::1`) only, not `127.0.0.1` — a script or browser hard-coded to `127.0.0.1:5173` gets a connection failure that looks like the server isn't running (`docs/PROGRESS.md`).
+- **CORS/`419` errors specifically from the desktop client, web app unaffected:** `DESKTOP_ORIGINS` is missing or `SANCTUM_STATEFUL_DOMAINS` was (incorrectly) given a desktop origin — see the `DESKTOP_ORIGINS`/`SANCTUM_STATEFUL_DOMAINS` row in step 3 above.
+- **Backend unreachable specifically when another local service (e.g. Docker Desktop) is also listening on port 8000:** use `127.0.0.1` rather than `localhost` for `VITE_API_URL` — `localhost` can resolve to `::1` first and silently hit the other service instead of Laravel (`frontend/.env.example:1-6`).
+- **"The app opens but nothing loads" after installing a self-built package:** almost always the step-6 trap — the binary was built against a `frontend/.env` that doesn't point at a reachable server (including the localhost default). Fix `frontend/.env` and rebuild; run `npm run check:release-host` first next time to catch it before packaging.
+
+**Not verified on this machine:** a from-scratch `composer install`/`npm install` against a brand-new database (this pass measured the existing, already-provisioned repo — PHP 8.2.12 with `zip`/`intl` enabled and Node v26.7.0/npm 11.19.0 were re-checked live; the install/migrate/seed sequence itself was not re-run end to end here to avoid touching the working dev database). The steps above are transcribed from `backend/.env.example`, `backend/composer.json`, `backend/routes/console.php`, `desktop/scripts/*.mjs`, and `dev.bat`, cross-checked against `docs/PROGRESS.md`'s verified-environment log — not freshly executed start to finish.
+
 ## Architecture (brief)
 
 | Path | What it is |

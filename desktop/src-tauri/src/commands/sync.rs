@@ -25,7 +25,7 @@ pub async fn bootstrap<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
 ) -> CommandResult<()> {
-    let engine = state.engine.clone();
+    let engine = state.engine();
     engine
         .bootstrap(move |progress| {
             if let Err(error) = app.emit(BOOTSTRAP_PROGRESS, &progress) {
@@ -43,7 +43,7 @@ pub async fn bootstrap<R: Runtime>(
 /// conflict), not a way to start or stop that loop.
 #[tauri::command]
 pub async fn sync_now(state: State<'_, AppState>) -> CommandResult<SyncReport> {
-    let engine = state.engine.clone();
+    let engine = state.engine();
     engine.sync_now().await.map_err(CommandError::from)
 }
 
@@ -58,21 +58,21 @@ pub async fn sync_now(state: State<'_, AppState>) -> CommandResult<SyncReport> {
 pub fn status(state: State<'_, AppState>) -> StatusWithPause {
     StatusWithPause {
         paused: scheduler_is_paused(&state.scheduler),
-        status: state.engine.status(),
+        status: state.engine().status(),
     }
 }
 
 /// Everything waiting in the Conflict Inbox.
 #[tauri::command]
 pub fn conflicts(state: State<'_, AppState>) -> CommandResult<Vec<Conflict>> {
-    state.engine.conflicts().map_err(CommandError::from)
+    state.engine().conflicts().map_err(CommandError::from)
 }
 
 /// Settle one conflict (`Resolution::{KeepMine, TakeServer, Merge}`).
 #[tauri::command]
 pub fn resolve_conflict(state: State<'_, AppState>, id: Uuid, choice: Resolution) -> CommandResult<()> {
     state
-        .engine
+        .engine()
         .resolve_conflict(id, choice)
         .map_err(CommandError::from)
 }
@@ -80,7 +80,7 @@ pub fn resolve_conflict(state: State<'_, AppState>, id: Uuid, choice: Resolution
 /// Widen the retention window and re-download the extra history (K12).
 #[tauri::command]
 pub async fn download_archive(state: State<'_, AppState>, extra_days: u32) -> CommandResult<()> {
-    let engine = state.engine.clone();
+    let engine = state.engine();
     engine
         .download_archive(extra_days)
         .await
@@ -103,7 +103,7 @@ pub async fn download_archive(state: State<'_, AppState>, extra_days: u32) -> Co
 /// command taking `State<'_, _>` must return a `Result` for Tauri to generate the handler.
 #[tauri::command]
 pub async fn handle_realtime(state: State<'_, AppState>, event: RealtimeEvent) -> CommandResult<()> {
-    let engine = state.engine.clone();
+    let engine = state.engine();
     engine.handle_realtime(event).await;
     Ok(())
 }

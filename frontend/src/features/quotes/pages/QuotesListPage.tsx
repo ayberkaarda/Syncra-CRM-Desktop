@@ -27,6 +27,7 @@ import {
 import { cn } from '../../../lib/cn'
 import { recordSyncState } from '../../../components/shared/recordSyncState'
 import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { usePermission } from '../../auth/hooks/usePermission'
 import { SavedViewsBar } from '../../saved-views/components/SavedViewsBar'
 import { QuoteStatusBadge } from '../components/QuoteStatusBadge'
@@ -55,6 +56,10 @@ export function QuotesListPage() {
 
   const deleteQuoteMutation = useDeleteQuote()
   const reviseQuoteMutation = useReviseQuote()
+  // SYNCDESKTOP §8 (O102). Both are server-only; the row's detail/edit links are NOT guarded
+  // because the pages they open read from the local mirror and work offline.
+  const reviseGuard = useOnlineOnly('quotes.revise')
+  const pdfGuard = useOnlineOnly('quotes.pdf')
   const [revisingId, setRevisingId] = useState<number | null>(null)
 
   function updateParams(patch: Record<string, string | null>) {
@@ -345,19 +350,39 @@ export function QuotesListPage() {
                                   <Pencil className="size-4" aria-hidden="true" />
                                 </IconLinkButton>
                               )}
-                              <a
-                                href={buildQuotePdfUrl(quote.id)}
-                                target="_blank"
-                                rel="noreferrer"
-                                aria-label={t('quotes:actions.pdf')}
-                                title={t('quotes:actions.pdf')}
-                              >
-                                <IconButtonLike>
+                              {/* Offline the anchor is replaced by a disabled button: an `<a>` has
+                                  no disabled state, so keeping it would still navigate. Web build:
+                                  `pdfGuard.offline` is always false and the anchor is unchanged. */}
+                              {pdfGuard.offline ? (
+                                <IconButton
+                                  label={t('quotes:actions.pdf')}
+                                  disabled
+                                  title={pdfGuard.title}
+                                  onClick={() => undefined}
+                                >
                                   <Download className="size-4" aria-hidden="true" />
-                                </IconButtonLike>
-                              </a>
+                                </IconButton>
+                              ) : (
+                                <a
+                                  href={buildQuotePdfUrl(quote.id)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  aria-label={t('quotes:actions.pdf')}
+                                  title={t('quotes:actions.pdf')}
+                                >
+                                  <IconButtonLike>
+                                    <Download className="size-4" aria-hidden="true" />
+                                  </IconButtonLike>
+                                </a>
+                              )}
                               {canReviseRow && (
-                                <IconButton label={t('quotes:actions.revise')} onClick={() => handleRevise(quote)} loading={revisingId === quote.id}>
+                                <IconButton
+                                  label={t('quotes:actions.revise')}
+                                  onClick={() => handleRevise(quote)}
+                                  loading={revisingId === quote.id}
+                                  disabled={reviseGuard.offline}
+                                  title={reviseGuard.title}
+                                >
                                   <GitBranch className="size-4" aria-hidden="true" />
                                 </IconButton>
                               )}
@@ -445,20 +470,26 @@ function IconButton({
   children,
   danger,
   loading,
+  disabled,
+  title,
 }: {
   label: string
   onClick: () => void
   children: ReactNode
   danger?: boolean
   loading?: boolean
+  /** SYNCDESKTOP §8 (O102) — set while the action is refused offline. */
+  disabled?: boolean
+  /** Overrides the default `title={label}` so the refusal can name its own reason. */
+  title?: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={loading}
+      disabled={loading || disabled}
       aria-label={label}
-      title={label}
+      title={title ?? label}
       className={cn(
         'inline-flex size-8 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg',
         'transition-colors duration-150 motion-reduce:transition-none disabled:opacity-50',

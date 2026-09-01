@@ -37,6 +37,7 @@ import type {
 } from '@/features/deals/types'
 
 import { http } from '../http'
+import { requireOnline } from '../onlineOnly'
 import {
   bool,
   countRows,
@@ -724,9 +725,18 @@ export const leadsSource: LeadsSource = {
   checkDuplicates: (input) =>
     http.post<{ data: DuplicateCandidate[] }>('/api/leads/check-duplicates', input).then((body) => body.data),
 
-  /** ONLINE-ONLY (`SYNCDESKTOP.md` §8) — `lead.convert` is absent from the action whitelist. */
+  /**
+   * ONLINE-ONLY (`SYNCDESKTOP.md` §8) — `lead.convert` is absent from the action whitelist.
+   *
+   * `requireOnline` is §8's defence layer 2 (O102): offline the POST is never issued and the
+   * caller gets `OnlineOnlyError` with `action: 'leads.convert'`.
+   */
   convert: (id, payload) =>
-    http.post<{ data: ConvertLeadResult }>(`/api/leads/${id}/convert`, payload).then((body) => body.data),
+    requireOnline('leads.convert', () =>
+      http
+        .post<{ data: ConvertLeadResult }>(`/api/leads/${id}/convert`, payload)
+        .then((body) => body.data),
+    ),
 
   assign: async (id, ownerId): Promise<Lead> => {
     await runAction('lead', id, 'assign', { owner_id: ownerId })

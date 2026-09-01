@@ -33,7 +33,7 @@ const FINGERPRINT_HEX_LEN: usize = 64;
 /// Exchange credentials for a device token.
 #[tauri::command]
 pub async fn login(state: State<'_, AppState>, email: String, password: String) -> CommandResult<Session> {
-    let engine = state.engine.clone();
+    let engine = state.engine();
     let device = device_info(&state.keychain_service)?;
     engine
         .login(&email, &password, device)
@@ -44,7 +44,7 @@ pub async fn login(state: State<'_, AppState>, email: String, password: String) 
 /// Resume a stored session from the keychain token.
 #[tauri::command]
 pub async fn restore(state: State<'_, AppState>) -> CommandResult<Option<Session>> {
-    let engine = state.engine.clone();
+    let engine = state.engine();
     engine.restore_session().await.map_err(CommandError::from)
 }
 
@@ -54,10 +54,29 @@ pub async fn restore(state: State<'_, AppState>) -> CommandResult<Option<Session
 /// `LogoutOutcome::WipedLocalOnly(reason)` means the local wipe happened but the server token
 /// survived (the normal offline case). The webview should treat it as a successful logout and
 /// surface the reason — the recourse is the Devices page.
+///
+/// ## The jump list is cleared here too (defter O107)
+///
+/// A logout wipes the SQLCipher mirror, and until F7 that left five record **names** sitting in
+/// two plaintext stores the database wipe cannot reach: `<app_data_dir>/syncra/recent.json` and
+/// the shell's own `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations`, which survives even
+/// an uninstall. That is the same shape of leak F5 closed for the local wipe, and
+/// [`crate::jump_list::clear`] is the closing move: it deletes our file and calls
+/// `ICustomDestinationList::DeleteList`.
+///
+/// It runs only when the logout actually happened. `LogoutOutcome::PendingMutations` is a
+/// **refusal** — the session is still live and the user is still working — so clearing their
+/// jump list there would be a visible side effect of an operation that did nothing.
 #[tauri::command]
 pub async fn logout(state: State<'_, AppState>, force: bool) -> CommandResult<LogoutOutcome> {
-    let engine = state.engine.clone();
-    engine.logout(force).await.map_err(CommandError::from)
+    let engine = state.engine();
+    let outcome = engine.logout(force).await.map_err(CommandError::from)?;
+
+    if !matches!(outcome, LogoutOutcome::PendingMutations(_)) {
+        crate::jump_list::clear(&state.root_dir());
+    }
+
+    Ok(outcome)
 }
 
 /// The session the engine currently holds, plus the bearer token behind it.
@@ -91,7 +110,7 @@ pub struct SessionSnapshot {
 /// happen is it being written to disk or a log — `logging.rs` (§9/9) masks the log side.
 #[tauri::command]
 pub fn session(state: State<'_, AppState>) -> CommandResult<SessionSnapshot> {
-    let Some(session) = state.engine.session() else {
+    let Some(session) = state.engine().session() else {
         return Ok(SessionSnapshot {
             session: None,
             token: None,

@@ -25,7 +25,10 @@
     "INVALID_CREDENTIALS": "Incorrect email or password.",
     "PENDING_MUTATIONS": "You have changes that haven't synced yet. Sync first, or sign out anyway.",
     "ROW_NOT_LOCAL": "This record isn't in your local copy — it may be outside the retention period. It becomes visible once you're back online.",
-    "unknown": "An unknown error occurred."
+    "unknown": "An unknown error occurred.",
+    "DATA_DIR_INVALID": "That folder cannot be used. Choose an empty folder; your data was not changed.",
+    "DATA_DIR_UNSUPPORTED": "That drive is not supported. The local database can only be kept on a fixed disk.",
+    "DATA_DIR_MOVE_FAILED": "The data could not be moved. Your data location is unchanged."
   },
   "onlineOnly": {
     "leads": {
@@ -148,6 +151,17 @@
       "description": "This action CANNOT BE UNDONE. All local data on this device will be deleted and re-downloaded from the server on the next sync.",
       "confirmSuffix": "Are you sure you want to clear the local data?"
     },
+    "dataLocation": {
+      "label": "Data location",
+      "description": "The encrypted local database and the file cache are kept in this folder.",
+      "change": "Change location…",
+      "title": "Move Data Location",
+      "confirm": "You will be asked to choose a folder. Syncing stops while the data is moved and the application may not respond for a moment. The old folder is deleted once the copy has been verified.",
+      "fixedDiskOnly": "Fixed disks only: SQLite’s WAL mode is not reliable on removable or network drives.",
+      "success": "The data was moved to {{path}}.",
+      "leftover": "The data was moved, but the old folder could not be deleted. An encrypted copy is still at: {{path}}",
+      "unavailable": "The configured data folder could not be reached ({{path}}). The application is running from the default location and any unsent changes may still be in the old folder. Reconnect the drive and restart the application."
+    },
     "saveSuccess": "Storage settings saved.",
     "saveError": "An error occurred while saving storage settings."
   },
@@ -259,6 +273,10 @@
       "notificationTitle": "Syncra is running in the background",
       "notificationBody": "The app keeps running in the tray. Use Quit from the tray menu to exit completely."
     }
+  },
+  "jumpList": {
+    "category": "Recent records",
+    "fallbackTitle": "{{entity}} #{{id}}"
   },
   "recordBadge": {
     "pending": "Pending",

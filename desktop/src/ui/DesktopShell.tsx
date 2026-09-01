@@ -18,6 +18,7 @@ import { DesktopPanel, type DesktopPanelTab } from './DesktopPanel'
 import { FileDrop } from './FileDrop'
 import { LogoutConfirm } from './LogoutConfirm'
 import { useEngineStatus } from './useEngineStatus'
+import { useRecentRecord } from './useRecentRecord'
 
 /**
  * Which tab the connectivity bar opens onto.
@@ -35,6 +36,11 @@ function tabForStatus(conflicts: number, writeBlocked: string | null): DesktopPa
 export function DesktopShell({ children }: { children: ReactNode }) {
   const status = useEngineStatus()
   const [openTab, setOpenTab] = useState<DesktopPanelTab | null>(null)
+
+  // §6.4 "JumpList: son 5 kayıt". A hook rather than a component because it renders nothing and
+  // owns no DOM; it lives here for the same reason `FileDrop` does — the chrome is the only
+  // layer that sees every route, since it is mounted OUTSIDE `RouterProvider` (KARAR A27).
+  useRecentRecord()
 
   // AFTER `App`'s own `registerAuthRedirect()` — `App` is this component's child and child
   // effects run first, so this overwrite lands last and stays. See `installUnauthorizedGuard`

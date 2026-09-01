@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
+import { onlineOnlyMessage } from '../../../components/shared/onlineOnlyMessage'
 import type { Role, User, UsersQuery } from '../types'
 import { getPlatform } from '../../../platform'
 
@@ -126,7 +127,7 @@ export function useCreateUser() {
       toast.success(i18n.t('users:toast.created'))
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error))
+      toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error))
     },
   })
 }
@@ -141,7 +142,7 @@ export function useUpdateUser() {
       toast.success(i18n.t('users:toast.updated'))
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error))
+      toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error))
     },
   })
 }
@@ -155,7 +156,7 @@ export function useDeleteUser() {
       toast.success(i18n.t('users:toast.deleted'))
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error))
+      toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error))
     },
   })
 }
@@ -170,7 +171,7 @@ export function useToggleActive() {
       toast.success(updatedUser.is_active ? i18n.t('users:toast.activated') : i18n.t('users:toast.deactivated'))
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error))
+      toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error))
     },
   })
 }
@@ -182,7 +183,7 @@ export function useResetPassword() {
       toast.success(i18n.t('users:toast.passwordReset'))
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error))
+      toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error))
     },
   })
 }

@@ -120,3 +120,39 @@ custom-protocol = ["tauri/custom-protocol"]
 # in transitively by `syncra-sync`'s SQLCipher build ships object files without PDBs.
 [lints.rust]
 linker_messages = "allow"
+
+# Windows JumpList (`SYNCDESKTOP.md` §6.4, defter O85 — `src/jump_list.rs`).
+#
+# `ICustomDestinationList` has no Tauri wrapper and no third-party crate this project would
+# rather trust, so the shell API is called directly. This adds NO package to the tree: `windows
+# 0.61.3` is already in `Cargo.lock` as a dependency of `tao`/`wry`/`tauri`, so the only effect
+# of declaring it here is a wider feature union on a crate that is compiled either way.
+#
+# Feature-by-feature, all of them named because `windows` compiles only what is asked for:
+#   Win32_UI_Shell                    ICustomDestinationList, IShellLinkW, the CLSIDs,
+#                                     SetCurrentProcessExplicitAppUserModelID, SHStrDupW
+#   Win32_UI_Shell_Common             IObjectArray / IObjectCollection (and it is what gates
+#                                     `ICustomDestinationList::AppendCategory` itself)
+#   Win32_UI_Shell_PropertiesSystem   IPropertyStore — where a link's visible title lives
+#   Win32_System_Com                  CoInitializeEx / CoCreateInstance / CoUninitialize
+#   Win32_System_Com_StructuredStorage PROPVARIANT and PropVariantClear
+#   Win32_System_Variant              VT_LPWSTR (PROPVARIANT's `vt` is a `VARENUM`)
+#   Win32_Storage_EnhancedStorage     PKEY_Title — windows-rs emits the PKEY_* constants here
+#   Win32_Foundation                  PROPERTYKEY, E_FAIL
+#
+# F8/1 (K15) adds one more, for `src/data_dir.rs`:
+#   Win32_Storage_FileSystem          GetDriveTypeW and the DRIVE_* constants — the check that
+#                                     refuses to put a WAL-mode SQLite database on a removable
+#                                     or network volume.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_EnhancedStorage",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
+] }

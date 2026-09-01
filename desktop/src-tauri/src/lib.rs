@@ -16,12 +16,19 @@
 
 mod clipboard;
 mod commands;
+// F8/1 (KARAR K15): where the mirror and the blob cache live, and how that is changed.
+mod data_dir;
 mod deep_link;
 mod events;
+mod jump_list;
 mod logging;
 mod quick_capture;
 mod state;
 mod tray;
+// No production code — `SYNCDESKTOP.md` §9 item 8's evidence: the plugin's signature-
+// verification path cited file:line, plus tests that run this app's own `plugins.updater`
+// block through the plugin's own `Config` deserializer (a keyless config is rejected).
+mod updater;
 
 use tauri::{AppHandle, Manager, RunEvent, Runtime, WindowEvent};
 #[cfg(desktop)]
@@ -37,6 +44,15 @@ use state::AppState;
 /// scope.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // FIRST, before any window, plugin or webview exists. Windows files a jump list by
+    // AppUserModelID, the installer stamps `com.syncra.desktop` onto the Start-menu shortcut,
+    // and this process declared nothing at all until F7 — so every list it committed would have
+    // been filed under a system-derived id the shortcut does not share, and the menu would be
+    // empty with every COM call returning `S_OK`. Microsoft's rule is that the id must be set
+    // before the process shows any UI, which is why this is the first statement of `run` and
+    // not a line inside `.setup()`. See `crate::jump_list` for the whole story.
+    jump_list::set_process_aumid();
+
     let mut builder = tauri::Builder::default();
 
     // Must be the first plugin registered (`docs/DESKTOP-ARCHITECTURE.md` §5.1) — desktop
@@ -153,6 +169,14 @@ pub fn run() {
             commands::storage::update_settings,
             commands::storage::storage_settings,
             commands::storage::clear_local,
+            // F8/1 (KARAR K15): the mirror + cache root is a user choice, and moving it is a
+            // whole procedure (close the engine, copy, verify, record, delete, reopen) rather
+            // than a setting — see `storage::move_data_dir`'s doc comment. Written without the
+            // `commands::` prefix on purpose: `check-command-wiring.mjs` reads registrations
+            // out of this block with a `commands::<mod>::<fn>` regex, and a prose mention in
+            // the fully-qualified form reads as a second registration of the same name.
+            commands::storage::data_location,
+            commands::storage::move_data_dir,
             // F5-5 / F5-8 (§6.4 drag-drop, PDF cache, screenshot). All file IO lives in Rust:
             // `Shell::open`'s Rust path passes no scope, so `open_cached` does its own
             // containment check rather than leaning on `shell:allow-open` (which only binds JS).
@@ -171,6 +195,9 @@ pub fn run() {
             // NOT a §6.2 command — see its doc comment and `check-command-wiring.mjs`'s
             // `UNDOCUMENTED_COMMANDS` entry (defter C1).
             commands::os::set_tray_language,
+            // §6.4 "JumpList: son 5 kayıt" (F7, defter O85). NOT a §6.2 command yet — see its
+            // doc comment and `check-command-wiring.mjs`'s `UNDOCUMENTED_COMMANDS` entry.
+            commands::os::record_opened,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -178,7 +205,7 @@ pub fn run() {
             // Must start before the state is moved into the app: `TablesChanged` is what
             // keeps the UI's query cache honest, and an event emitted before the bridge
             // exists is simply lost (the channel only replays to live subscribers).
-            events::forward_engine_events(handle.clone(), &state.engine);
+            events::forward_engine_events(handle.clone(), &state.engine());
 
             // O46 B2 — "open" is the first trigger in `SYNCDESKTOP.md` §5.5. The loop syncs on
             // its 60 second timer while online and probes for the network while offline, which
@@ -196,7 +223,7 @@ pub fn run() {
             // purpose and visibly, and leaves `SyncScheduler::stop` reachable if a later phase
             // needs it (a "pause sync" setting, a teardown path).
             let scheduler =
-                tauri::async_runtime::block_on(async { state.engine.start_background_sync() });
+                tauri::async_runtime::block_on(async { state.engine().start_background_sync() });
             *state
                 .scheduler
                 .lock()
@@ -242,6 +269,28 @@ pub fn run() {
             // log") is guaranteed structurally rather than by care.
             clipboard::start(&handle);
 
+            // §6.4 "JumpList: son 5 kayıt" — restore the list this install last committed.
+            //
+            // The shell persists a jump list itself, so this is not what makes the menu survive
+            // a restart; it is what makes it survive the things that silently drop it (a
+            // `DeleteList` from a previous `clear`, an AUMID that only started being declared
+            // this version, a `CustomDestinations` file the shell discarded). Rebuilding from
+            // our own store on every launch means the menu converges on the truth instead of
+            // waiting for the user to open a record.
+            //
+            // Best-effort and non-fatal: `.setup()` returning `Err` means the app does not
+            // open, and no jump list is worth that. A fresh install has no stored category
+            // label and `jump_list::rebuild` returns `Ok(())` without touching the shell — see
+            // `RecentStore::category`.
+            {
+                let store = jump_list::load_recent(&jump_list::recent_path(
+                    &app.state::<AppState>().root_dir(),
+                ));
+                if let Err(error) = jump_list::rebuild(&store) {
+                    tracing::warn!(code = %error.code, message = %error.message, "jump list: the startup rebuild failed");
+                }
+            }
+
             // D-8 / §6.4 "Pencere kapatma → tray'e (ayar)" — a setting, and now actually one.
             //
             // `DesktopSettings::close_to_tray` is the flag (defaulting to `true`, which is the
@@ -285,7 +334,7 @@ pub fn run() {
 /// letting it close when the user asked for the opposite is not.
 fn close_to_tray<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.try_state::<AppState>()
-        .map(|state| state.engine.settings().close_to_tray)
+        .map(|state| state.engine().settings().close_to_tray)
         .unwrap_or(true)
 }
 
@@ -330,7 +379,11 @@ fn teardown<R: Runtime>(app: &AppHandle<R>) {
         Err(error) => tracing::warn!(%error, "scheduler mutex poisoned; skipping the task half"),
     }
 
-    if let Err(error) = state.engine.shutdown() {
+    // Bound rather than chained off `state.engine()` so the clone this shuts down is dropped
+    // at the end of the function and not held for the rest of it — the same reason
+    // `commands::storage::move_data_dir` scopes its own `shutdown` call.
+    let engine = state.engine();
+    if let Err(error) = engine.shutdown() {
         tracing::warn!(%error, "the sync engine did not shut down cleanly");
     }
 }

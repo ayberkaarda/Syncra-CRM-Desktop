@@ -30,6 +30,7 @@ import { formatDateTime } from '../../../lib/datetime'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { usePermission } from '../../auth/hooks/usePermission'
 import { SavedViewsBar } from '../../saved-views/components/SavedViewsBar'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { useDeleteUser, useRoles, useToggleActive, useUsers } from '../api/usersApi'
 import { UserFormModal } from '../components/UserFormModal'
 import { ResetPasswordModal } from '../components/ResetPasswordModal'
@@ -53,21 +54,29 @@ function IconButton({
   onClick,
   children,
   danger,
+  disabled,
+  title,
 }: {
   label: string
   onClick: () => void
   children: ReactNode
   danger?: boolean
+  /** SYNCDESKTOP §8 (O102) — set while the action is refused offline. */
+  disabled?: boolean
+  /** Overrides the default `title={label}` so the refusal can name its own reason. */
+  title?: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
-      title={label}
+      title={title ?? label}
       className={cn(
         'inline-flex size-8 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg',
         'transition-colors duration-150 motion-reduce:transition-none',
+        'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-muted',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1',
         danger && 'hover:text-danger'
       )}
@@ -158,6 +167,10 @@ export function UsersPage() {
   const users = data?.data ?? []
   const total = data?.meta.pagination.total ?? 0
   const isEmpty = !isLoading && !isError && users.length === 0
+  // SYNCDESKTOP §8 (O102): the whole `users.*` family is online-only, and §8 gives it ONE
+  // sentence (`desktop:onlineOnly.users`) rather than one per verb — see
+  // `frontend/src/platform/onlineOnly.ts`. The six mutating triggers on this page all read it.
+  const usersGuard = useOnlineOnly('users')
 
   return (
     <div className="flex flex-col gap-4">
@@ -175,7 +188,12 @@ export function UsersPage() {
             <div className="flex items-center gap-2">
               <SavedViewsBar module="users" filterKeys={['role', 'is_active']} />
               {can('users.create') && (
-                <Button leftIcon={<Plus className="size-4" aria-hidden="true" />} onClick={() => setFormModal({ mode: 'create' })}>
+                <Button
+                  leftIcon={<Plus className="size-4" aria-hidden="true" />}
+                  disabled={usersGuard.offline}
+                  title={usersGuard.title}
+                  onClick={() => setFormModal({ mode: 'create' })}
+                >
                   {t('users:list.createButton')}
                 </Button>
               )}
@@ -287,18 +305,30 @@ export function UsersPage() {
                           <Td align="right">
                             <div className="flex items-center justify-end gap-1">
                               {can('users.update') && (
-                                <IconButton label={t('users:list.actions.edit')} onClick={() => setFormModal({ mode: 'edit', user: u })}>
+                                <IconButton
+                                  label={t('users:list.actions.edit')}
+                                  disabled={usersGuard.offline}
+                                  title={usersGuard.title}
+                                  onClick={() => setFormModal({ mode: 'edit', user: u })}
+                                >
                                   <Pencil className="size-4" aria-hidden="true" />
                                 </IconButton>
                               )}
                               {can('users.reset_password') && (
-                                <IconButton label={t('users:list.actions.resetPassword')} onClick={() => setResetPasswordUser(u)}>
+                                <IconButton
+                                  label={t('users:list.actions.resetPassword')}
+                                  disabled={usersGuard.offline}
+                                  title={usersGuard.title}
+                                  onClick={() => setResetPasswordUser(u)}
+                                >
                                   <KeyRound className="size-4" aria-hidden="true" />
                                 </IconButton>
                               )}
                               {!isSelf && can('users.toggle_active') && (
                                 <IconButton
                                   label={u.is_active ? t('users:list.actions.deactivate') : t('users:list.actions.activate')}
+                                  disabled={usersGuard.offline}
+                                  title={usersGuard.title}
                                   onClick={() => {
                                     if (u.is_active) setConfirmDeactivateUser(u)
                                     else toggleActive.mutate({ id: u.id, is_active: true })
@@ -312,7 +342,13 @@ export function UsersPage() {
                                 </IconButton>
                               )}
                               {!isSelf && can('users.delete') && (
-                                <IconButton label={t('users:list.actions.delete')} danger onClick={() => setConfirmDeleteUser(u)}>
+                                <IconButton
+                                  label={t('users:list.actions.delete')}
+                                  danger
+                                  disabled={usersGuard.offline}
+                                  title={usersGuard.title}
+                                  onClick={() => setConfirmDeleteUser(u)}
+                                >
                                   <Trash2 className="size-4" aria-hidden="true" />
                                 </IconButton>
                               )}

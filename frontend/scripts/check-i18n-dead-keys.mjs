@@ -374,13 +374,41 @@ function main() {
     return false;
   }
 
+  /**
+   * Reachable ONLY through a template prefix — no call site names this key.
+   *
+   * O102 is why this bucket exists. Sixteen `desktop:onlineOnly.*` keys were wired that round
+   * and the report went 17 -> 0, which read as "all seventeen are live". Four of them
+   * (`settings`, `reports`, `dashboard`, `logs`) had no call site at all: the one template,
+   * `` t(`desktop:onlineOnly.${action}`) ``, marks the whole family used, so the four that
+   * nothing ever passes are indistinguishable from the thirteen that something does.
+   *
+   * The prefix rule itself is correct and stays — dropping it would flood the report with false
+   * positives from `notificationText.ts` and friends. What was wrong is that it made a family
+   * DISAPPEAR from the output entirely. These keys are now counted and, on request, listed: not
+   * dead, not proven live, and the report no longer implies the second.
+   */
+  function isPrefixOnly(ns, key) {
+    if (usedKeys.get(ns)?.has(key)) return false;
+    const prefixes = usedPrefixes.get(ns);
+    if (!prefixes) return false;
+    for (const prefix of prefixes) {
+      if (prefix !== '' && key.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+
   const dead = new Map();
+  const prefixOnly = new Map();
   let totalKeys = 0;
   for (const [ns, keys] of [...dictionary.entries()].sort()) {
     totalKeys += keys.size;
     const unreachable = [...keys].filter((key) => !isUsed(ns, key)).sort();
     if (unreachable.length > 0) dead.set(ns, unreachable);
+    const viaPrefix = [...keys].filter((key) => isPrefixOnly(ns, key)).sort();
+    if (viaPrefix.length > 0) prefixOnly.set(ns, viaPrefix);
   }
+  const prefixOnlyTotal = [...prefixOnly.values()].reduce((sum, list) => sum + list.length, 0);
 
   const deadTotal = [...dead.values()].reduce((sum, list) => sum + list.length, 0);
   const wildcardNamespaces = [...usedPrefixes.entries()]
@@ -399,6 +427,14 @@ function main() {
   console.log(`  wholly dynamic namespaces : ${wildcardNamespaces.length} (${wildcardNamespaces.join(', ') || '-'})`);
   console.log(`dynamic keys unresolved     : ${dynamicSkipped} (skipped, not swallowed)`);
   console.log(`unreferenced keys           : ${deadTotal} in ${dead.size} namespace(s)`);
+  console.log(`reached ONLY via a prefix   : ${prefixOnlyTotal} in ${prefixOnly.size} namespace(s) — counted live, not proven live`);
+  if (process.argv.includes('--list-prefix-only') && prefixOnlyTotal > 0) {
+    console.log('');
+    for (const [ns, keys] of [...prefixOnly.entries()].sort()) {
+      console.log(`${ns}.json — ${keys.length} (prefix-only)`);
+      for (const key of keys) console.log(`  ~ ${ns}:${key}`);
+    }
+  }
 
   if (deadTotal > 0) {
     console.log('');

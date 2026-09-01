@@ -32,6 +32,8 @@ import type {
 } from '@/platform/types'
 
 import { http } from '../http'
+import { requireOnline } from '../onlineOnly'
+import { isEngineOnline } from '../status'
 import { sessionUserId } from '../session'
 import {
   countRows,
@@ -329,21 +331,27 @@ export const chatSource: ChatSource = {
   uploadAttachment: (file, onProgress, signal) => {
     const formData = new FormData()
     formData.append('file', file)
-    return http
-      .post<{ data: Attachment }>('/api/attachments', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        signal,
-        onUploadProgress: (event: { loaded: number; total?: number }) => {
-          if (!onProgress || !event.total) return
-          onProgress(Math.min(100, Math.round((event.loaded * 100) / event.total)))
-        },
-      })
-      .then((body) => {
-        // The one place the client ever learns an attachment's metadata. Remembered here so
-        // the send that follows can write it onto the message row — see below.
-        rememberAttachmentMeta(body.data)
-        return body.data
-      })
+    // §8 defence layer 2 (O102). Until `files::attach_from_paths` (F5-5) exists there IS no
+    // queue, so offline this refuses with `action: 'attachments.upload'` rather than letting
+    // axios fail on a transport error — the dictionary sentence for this action is the one that
+    // tells the user what happens to the file, which a generic HTTP failure cannot.
+    return requireOnline('attachments.upload', () =>
+      http
+        .post<{ data: Attachment }>('/api/attachments', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          signal,
+          onUploadProgress: (event: { loaded: number; total?: number }) => {
+            if (!onProgress || !event.total) return
+            onProgress(Math.min(100, Math.round((event.loaded * 100) / event.total)))
+          },
+        })
+        .then((body) => {
+          // The one place the client ever learns an attachment's metadata. Remembered here so
+          // the send that follows can write it onto the message row — see below.
+          rememberAttachmentMeta(body.data)
+          return body.data
+        }),
+    )
   },
 }
 
@@ -640,30 +648,27 @@ export async function unifiedSearch(
 /**
  * Whether the engine considers the API reachable.
  *
- * Deferred import on purpose. `platform/desktop.ts` imports `./data`, which imports THIS
- * module; a static `import { getEngineStatus } from '../desktop'` would close that cycle, and
- * if anything ever evaluated `data/index.ts` before `desktop.ts`, the top-level
- * `desktopPlatform = { data: desktopData, … }` would read `desktopData` in its TDZ and the app
- * would not boot. The dynamic form keeps the static graph acyclic; after the first call it is
- * a module-cache hit.
+ * This used to be `await import('../desktop')` — a DEFERRED import, because `desktop.ts` owned
+ * the status store and also imports `./data`, so a static import from here would have closed
+ * the cycle `desktop.ts -> data/index.ts -> comms.ts -> desktop.ts`; if anything ever evaluated
+ * `data/index.ts` first, `desktopPlatform = { data: desktopData, … }` would have read
+ * `desktopData` in its TDZ and the app would not boot. Rolldown reported
+ * `INEFFECTIVE_DYNAMIC_IMPORT` for it, which was accepted as the cost of breaking the cycle.
  *
- * Rolldown reports `INEFFECTIVE_DYNAMIC_IMPORT` for it, and that is the expected outcome, not
- * a problem to fix: `desktop.ts` is already in the entry chunk (`main.desktop.tsx` imports it
- * statically), so nothing is code-split off. The dynamic form is here for evaluation ORDER,
- * not for chunking — turning it back into a static import to silence the warning would
- * reintroduce the cycle it exists to break.
+ * O102 removed the cause: the store moved to `platform/status.ts`, which imports neither
+ * `desktop.ts` nor `./data`. A plain static import is now acyclic, so the deferral — and the
+ * warning it produced — are gone, and this reads the SAME predicate §8's `onlineOnly()` reads.
  *
  * `navigator.onLine` is NOT used, here or anywhere else in this tree
  * (`docs/DESKTOP-ARCHITECTURE.md` §3.5): it reports "online" for a machine that has a LAN but
  * cannot reach the API host, which is the common failure mode in the closed networks this
  * product is deployed into. The engine is the authority.
  */
-async function engineIsOnline(): Promise<boolean> {
-  const { getEngineStatus } = await import('../desktop')
-  return getEngineStatus().online
+function engineIsOnline(): boolean {
+  return isEngineOnline()
 }
 
 export const searchSource: SearchSource = {
   query: async (term): Promise<SearchResponse> =>
-    unifiedSearch(term, localSearchGroups, (await engineIsOnline()) ? serverSearchGroups : null),
+    unifiedSearch(term, localSearchGroups, engineIsOnline() ? serverSearchGroups : null),
 }

@@ -19,6 +19,7 @@ import { Badge, Button, Card, CardBody, CardHeader, Modal, Select, Skeleton, Tex
 import { usePermission } from '../../auth/hooks/usePermission'
 import { QuoteStatusBadge } from '../components/QuoteStatusBadge'
 import { QuoteTotalsPanel } from '../components/QuoteTotalsPanel'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { useQuotePdfPreview } from '../hooks/useQuotePdfPreview'
 import { formatDate, formatDateTime } from '../../../lib/datetime'
 import { formatMoney } from '../../../lib/money'
@@ -56,6 +57,11 @@ export function QuoteDetailPage() {
   const sendQuote = useSendQuote()
   const deleteQuote = useDeleteQuote()
   const reviseQuote = useReviseQuote()
+  // SYNCDESKTOP §8 (O102): send / revise / the PDF are all server-only. Inert on the web
+  // build — `platform/web.ts`'s `onlineOnly` is the identity, so `offline` is always false.
+  const sendGuard = useOnlineOnly('quotes.send')
+  const reviseGuard = useOnlineOnly('quotes.revise')
+  const pdfGuard = useOnlineOnly('quotes.pdf')
   const changeStatus = useChangeQuoteStatus()
 
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -186,7 +192,13 @@ export function QuoteDetailPage() {
                 </Button>
               )}
               {canSend && (
-                <Button leftIcon={<Send className="size-4" aria-hidden="true" />} loading={sendQuote.isPending} onClick={handleSend}>
+                <Button
+                  leftIcon={<Send className="size-4" aria-hidden="true" />}
+                  loading={sendQuote.isPending}
+                  disabled={sendGuard.offline}
+                  title={sendGuard.title}
+                  onClick={handleSend}
+                >
                   {t('quotes:actions.send')}
                 </Button>
               )}
@@ -200,16 +212,33 @@ export function QuoteDetailPage() {
                   variant="secondary"
                   leftIcon={<GitBranch className="size-4" aria-hidden="true" />}
                   loading={reviseQuote.isPending}
+                  disabled={reviseGuard.offline}
+                  title={reviseGuard.title}
                   onClick={handleRevise}
                 >
                   {t('quotes:actions.revise')}
                 </Button>
               )}
-              <a href={pdfUrl} target="_blank" rel="noreferrer">
-                <Button variant="secondary" leftIcon={<Download className="size-4" aria-hidden="true" />}>
+              {/* The anchor is DROPPED while offline rather than kept and disabled: a `<a>` has
+                  no disabled state, so a wrapped-but-disabled button would still navigate on a
+                  middle click or an Enter on the link itself. On the web build `pdfGuard.offline`
+                  is always false and this renders the exact anchor it always did. */}
+              {pdfGuard.offline ? (
+                <Button
+                  variant="secondary"
+                  leftIcon={<Download className="size-4" aria-hidden="true" />}
+                  disabled
+                  title={pdfGuard.title}
+                >
                   {t('quotes:actions.pdfDownload')}
                 </Button>
-              </a>
+              ) : (
+                <a href={pdfUrl} target="_blank" rel="noreferrer">
+                  <Button variant="secondary" leftIcon={<Download className="size-4" aria-hidden="true" />}>
+                    {t('quotes:actions.pdfDownload')}
+                  </Button>
+                </a>
+              )}
               {canDelete && (
                 <Button variant="danger" leftIcon={<Trash2 className="size-4" aria-hidden="true" />} onClick={() => setDeleteOpen(true)}>
                   {t('quotes:actions.delete')}
@@ -387,11 +416,23 @@ export function QuoteDetailPage() {
         <CardHeader
           title={t('quotes:detail.pdfPreviewTitle')}
           action={
-            <a href={pdfUrl} target="_blank" rel="noreferrer">
-              <Button variant="secondary" size="sm" leftIcon={<FileText className="size-4" aria-hidden="true" />}>
+            pdfGuard.offline ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<FileText className="size-4" aria-hidden="true" />}
+                disabled
+                title={pdfGuard.title}
+              >
                 {t('quotes:actions.openNewTab')}
               </Button>
-            </a>
+            ) : (
+              <a href={pdfUrl} target="_blank" rel="noreferrer">
+                <Button variant="secondary" size="sm" leftIcon={<FileText className="size-4" aria-hidden="true" />}>
+                  {t('quotes:actions.openNewTab')}
+                </Button>
+              </a>
+            )
           }
         />
         <CardBody noPadding>
@@ -411,7 +452,13 @@ export function QuoteDetailPage() {
               className="flex w-full flex-col items-center justify-center gap-1.5 rounded-b-lg bg-surface-2 px-6 text-center"
               style={{ height: 720 }}
             >
-              <p className="text-sm text-fg-secondary">{t('quotes:detail.pdfPreview.error', { message: pdfPreview.message })}</p>
+              {/* §8: an offline refusal gets the ACTION's sentence, not the generic PDF error —
+                  `onlineOnlyAction` is only ever set by the desktop adapter (see the hook). */}
+              <p className="text-sm text-fg-secondary">
+                {pdfPreview.onlineOnlyAction
+                  ? t(`desktop:onlineOnly.${pdfPreview.onlineOnlyAction}`)
+                  : t('quotes:detail.pdfPreview.error', { message: pdfPreview.message })}
+              </p>
               <p className="text-xs text-fg-muted">{t('quotes:detail.pdfPreview.errorHint')}</p>
             </div>
           )}

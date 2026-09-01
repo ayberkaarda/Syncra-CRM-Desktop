@@ -30,7 +30,9 @@ async fn the_database_file_has_no_plaintext_sqlite_header() {
         let conn = h.raw_conn();
         conn.pragma_update(None, "wal_checkpoint", "TRUNCATE").ok();
     }
-    drop(h.engine);
+    // `shutdown`, not `drop`: dropping an engine only closes the connection when it holds
+    // the last `Arc<Inner>`, while `shutdown` closes it outright (defter O104).
+    h.engine.shutdown().expect("shutdown");
 
     let bytes = std::fs::read(&h.db_path).expect("read database file");
     assert!(bytes.len() > 16, "database file is suspiciously small");
@@ -53,7 +55,9 @@ async fn the_database_file_has_no_plaintext_sqlite_header() {
 async fn a_wrong_key_cannot_open_the_database() {
     let h = Harness::start().await;
     h.login().await;
-    drop(h.engine);
+    // `shutdown`, not `drop`: dropping an engine only closes the connection when it holds
+    // the last `Arc<Inner>`, while `shutdown` closes it outright (defter O104).
+    h.engine.shutdown().expect("shutdown");
 
     let conn = rusqlite::Connection::open(&h.db_path).expect("open");
     conn.pragma_update(None, "key", "f".repeat(64)).expect("key");

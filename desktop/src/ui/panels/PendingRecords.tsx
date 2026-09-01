@@ -18,6 +18,7 @@ import type { EntityName, LocalRow } from '../../platform/data/engine'
 import { listPendingRows, syncStateOf, WRITABLE_ENTITIES } from '../commands'
 import { errorCodeOf, errorMessage } from '../errors'
 import { PendingIcon } from '../icons'
+import { recordLabel } from '../record-label'
 import { useEngineStatus } from '../useEngineStatus'
 import { useT } from '../useT'
 
@@ -28,22 +29,6 @@ import { useT } from '../useT'
  */
 const ROWS_PER_ENTITY = 25
 
-/**
- * Columns that carry a human-readable name, most specific first.
- *
- * These are mirror column names, transcribed from the sync scope — not derived. A row that
- * matches none of them falls back to its `client_id`, which is at least stable and copyable.
- */
-const LABEL_COLUMNS = [
-  'title',
-  'name',
-  'subject',
-  'quote_number',
-  'ticket_number',
-  'email',
-  'body',
-] as const
-
 interface PendingEntry {
   entity: EntityName
   clientId: string
@@ -51,15 +36,15 @@ interface PendingEntry {
   row: LocalRow
 }
 
+/**
+ * This screen's fallback is the `client_id`: `recordLabel` returns `''` for a row whose known
+ * name columns are all empty, and a blank cell in a list of unsent changes tells the user
+ * nothing. The id is at least stable and copyable. (The jump list makes a different choice for
+ * the same `''` — see `recent-records.ts`.)
+ */
 function labelOf(row: LocalRow): string {
-  for (const column of LABEL_COLUMNS) {
-    const value = row[column]
-    if (typeof value === 'string' && value.trim() !== '') return value
-  }
-  const first = typeof row.first_name === 'string' ? row.first_name : ''
-  const last = typeof row.last_name === 'string' ? row.last_name : ''
-  const full = `${first} ${last}`.trim()
-  if (full !== '') return full
+  const label = recordLabel(row)
+  if (label !== '') return label
   return typeof row.client_id === 'string' ? row.client_id : ''
 }
 

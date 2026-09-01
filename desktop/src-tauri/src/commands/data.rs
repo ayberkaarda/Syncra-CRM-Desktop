@@ -18,13 +18,13 @@ pub fn query(
     query: NamedQuery,
     params: QueryParams,
 ) -> CommandResult<Vec<Row>> {
-    state.engine.query(query, params).map_err(CommandError::from)
+    state.engine().query(query, params).map_err(CommandError::from)
 }
 
 /// Apply a mutation locally and queue it for the next `sync::sync_now`.
 #[tauri::command]
 pub fn mutate(state: State<'_, AppState>, mutation: LocalMutation) -> CommandResult<Uuid> {
-    state.engine.mutate(mutation).map_err(CommandError::from)
+    state.engine().mutate(mutation).map_err(CommandError::from)
 }
 
 /// Local full-text search.
@@ -36,7 +36,7 @@ pub fn search(
     limit: u16,
 ) -> CommandResult<Vec<SearchHit>> {
     state
-        .engine
+        .engine()
         .search(&fts, &entities, limit)
         .map_err(CommandError::from)
 }

@@ -270,7 +270,7 @@ pub fn set_language_override<R: Runtime>(app: &AppHandle<R>, language: &str) -> 
 fn current_language<R: Runtime>(app: &AppHandle<R>) -> &'static str {
     let session_locale = app
         .try_state::<AppState>()
-        .and_then(|state| state.engine.session())
+        .and_then(|state| state.engine().session())
         .and_then(|session| {
             session
                 .user
@@ -525,7 +525,7 @@ fn is_paused<R: Runtime>(app: &AppHandle<R>) -> bool {
 
 fn status_snapshot<R: Runtime>(app: &AppHandle<R>) -> SyncStatus {
     app.try_state::<AppState>()
-        .map(|state| state.engine.status())
+        .map(|state| state.engine().status())
         .unwrap_or_default()
 }
 
@@ -579,7 +579,7 @@ fn toggle_pause<R: Runtime>(app: &AppHandle<R>) {
             // a menu event handler runs on the main thread, outside any runtime context. The
             // closure never awaits, so this returns immediately.
             let scheduler =
-                tauri::async_runtime::block_on(async { state.engine.start_background_sync() });
+                tauri::async_runtime::block_on(async { state.engine().start_background_sync() });
             *slot = Some(scheduler);
             tracing::info!("background sync resumed from the tray menu");
         }
@@ -688,7 +688,7 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                     // A manual trigger of §5.5. Spawned rather than awaited: the menu handler
                     // runs on the main thread and a round takes seconds.
                     if let Some(state) = app.try_state::<AppState>() {
-                        let engine = state.engine.clone();
+                        let engine = state.engine();
                         tauri::async_runtime::spawn(async move {
                             if let Err(error) = engine.sync_now().await {
                                 tracing::warn!(%error, "tray 'Sync now' round failed");
@@ -708,7 +708,7 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                     // current snapshot through the same bridge `StatusChanged` uses, now
                     // carrying the new `paused` value.
                     if let Some(state) = app.try_state::<AppState>() {
-                        emit_status_changed(app, state.engine.status());
+                        emit_status_changed(app, state.engine().status());
                     }
                 }
                 ID_QUIT => {

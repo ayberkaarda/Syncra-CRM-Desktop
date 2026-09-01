@@ -14,13 +14,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button, Input, Modal, toast } from '@/components/ui'
 import { cn } from '@/lib/cn'
 
-import type { DesktopSettings, StorageStats } from '../commands'
+import type { DataLocation, DesktopSettings, StorageStats } from '../commands'
 import {
   clearLocal,
   downloadArchive,
   MIN_MAX_DB_SIZE_MB,
   MIN_MAX_OUTBOX,
   MIN_RETENTION_DAYS,
+  moveDataDir,
+  readDataLocation,
   readStorageSettings,
   readStorageStats,
   updateStorageSettings,
@@ -52,12 +54,25 @@ export function StorageSettings() {
   const [maxOutbox, setMaxOutbox] = useState<number>(MIN_MAX_OUTBOX)
   const [busy, setBusy] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
+  // F8/1 (K15). `location` is where the mirror lives; `leftover` is the one outcome of a
+  // SUCCESSFUL move that still needs saying — the old directory survived its own deletion, so
+  // a second encrypted copy of the mirror is on disk somewhere the user has not been told
+  // about. It is kept in state rather than shown as a toast because a toast that scrolls away
+  // is not how you tell someone where their data still is.
+  const [location, setLocation] = useState<DataLocation | null>(null)
+  const [leftover, setLeftover] = useState<string | null>(null)
+  const [confirmMove, setConfirmMove] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      const [next, persisted] = await Promise.all([readStorageStats(), readStorageSettings()])
+      const [next, persisted, where] = await Promise.all([
+        readStorageStats(),
+        readStorageSettings(),
+        readDataLocation(),
+      ])
       setStats(next)
       setSettings(persisted)
+      setLocation(where)
       setMaxDbSizeMb(Math.round(next.max_db_bytes / BYTES_PER_MB))
       setMaxOutbox(next.max_outbox)
       setRetentionDays(persisted.retention_days)
@@ -114,6 +129,30 @@ export function StorageSettings() {
         await load()
       }
     })()
+  }
+
+  /**
+   * Open the folder picker (it runs in Rust) and move the data if the user chooses one.
+   *
+   * Deliberately NOT routed through `run()`: that helper toasts on every failure and reloads
+   * afterwards, and a dismissed picker is neither a failure nor a change. The engine is closed
+   * for the duration of the call, so `busy` has to gate the whole panel — a second command
+   * issued mid-move would reject against a database that is not open.
+   */
+  async function handleMove(): Promise<void> {
+    setConfirmMove(false)
+    setBusy(true)
+    try {
+      const outcome = await moveDataDir()
+      if (!outcome.moved) return
+      setLeftover(outcome.old_dir_remaining)
+      toast.success(t('desktop:storage.dataLocation.success', { path: outcome.path }))
+    } catch (error) {
+      toast.error(errorMessage(t, errorCodeOf(error)))
+    } finally {
+      setBusy(false)
+      await load()
+    }
   }
 
   const usagePercent = stats ? Math.min(100, stats.db_usage_percent) : 0
@@ -174,6 +213,47 @@ export function StorageSettings() {
         />
       </section>
 
+      {/*
+        `SYNCDESKTOP.md` §10 F8 item 1 (KARAR K15) — "Veri konumu", in the Storage tab rather
+        than in a panel of its own, which the spec spells out: `DesktopPanel.tsx` already
+        carries a `storage` tab and this belongs to it.
+      */}
+      <section className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-fg">
+            {t('desktop:storage.dataLocation.label')}
+          </span>
+          <span className="text-sm text-fg-muted">
+            {t('desktop:storage.dataLocation.description')}
+          </span>
+        </div>
+
+        <p className="break-all rounded-md bg-surface-2 px-3 py-2 font-mono text-xs text-fg-secondary">
+          {location ? location.path : t('common:states.loading')}
+        </p>
+
+        {location?.unavailable_path && (
+          <p className="rounded-md bg-danger-tint px-3 py-2 text-sm text-danger">
+            {t('desktop:storage.dataLocation.unavailable', { path: location.unavailable_path })}
+          </p>
+        )}
+
+        {leftover && (
+          <p className="rounded-md bg-warning-tint px-3 py-2 text-sm text-warning">
+            {t('desktop:storage.dataLocation.leftover', { path: leftover })}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" disabled={busy} onClick={() => setConfirmMove(true)}>
+            {t('desktop:storage.dataLocation.change')}
+          </Button>
+          <span className="text-xs text-fg-muted">
+            {t('desktop:storage.dataLocation.fixedDiskOnly')}
+          </span>
+        </div>
+      </section>
+
       <div className="flex flex-wrap items-center gap-2">
         <Button disabled={busy} onClick={handleSave}>
           {t('common:actions.save')}
@@ -205,6 +285,28 @@ export function StorageSettings() {
           {t('desktop:storage.clearLocal.button')}
         </Button>
       </div>
+
+      <Modal
+        open={confirmMove}
+        onClose={() => setConfirmMove(false)}
+        title={t('desktop:storage.dataLocation.title')}
+        description={t('desktop:storage.dataLocation.confirm')}
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirmMove(false)}>
+              {t('common:actions.cancel')}
+            </Button>
+            <Button loading={busy} onClick={() => void handleMove()}>
+              {t('common:actions.confirm')}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-fg-secondary">
+          {t('desktop:storage.dataLocation.fixedDiskOnly')}
+        </p>
+      </Modal>
 
       <Modal
         open={confirmClear}

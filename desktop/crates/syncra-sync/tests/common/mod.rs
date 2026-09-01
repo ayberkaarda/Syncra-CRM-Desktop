@@ -150,6 +150,37 @@ impl Harness {
     }
 }
 
+/// Close the engine's database connection **before** `dir` is removed.
+///
+/// Rust drops struct fields in declaration order, so `engine` already goes before `dir` — but
+/// that only closes the connection when this `SyncEngine` happens to hold the last
+/// `Arc<Inner>`. `SyncEngine::start_background_sync` moves a clone into a tokio task, and
+/// `SyncScheduler::stop` merely *aborts* that task: the runtime drops its future — and the
+/// engine clone captured inside it — after `block_on` returns, which is strictly after the test
+/// body dropped this harness. The connection therefore outlived `dir`, `TempDir::drop` hit
+/// Windows' sharing violation on `remove_dir_all`, and because `TempDir` deliberately swallows
+/// that error the directory silently stayed behind with its `syncra.db` in it.
+///
+/// Measured (defter O104, `%LOCALAPPDATA%\Temp`): before this impl, `cargo test --test
+/// engine_loop` left **4** abandoned directories per run — one for each test that starts the
+/// background loop and stops the scheduler without calling `shutdown` — while every other test
+/// binary in the crate leaked none. 245 such directories, 113.9 MB, had accumulated since
+/// 2026-08-15.
+///
+/// `SyncEngine::shutdown` is refcount-independent: it takes the `Connection` out of the
+/// engine's `Mutex<Option<..>>` and closes it, so the handle is released no matter who else
+/// still holds a clone. It is idempotent, so a test that already shut its engine down is
+/// unaffected, and it is the same call the F8/1 data-directory migration makes before it
+/// deletes the old directory (`SYNCDESKTOP.md` §10) — which means every test in the suite now
+/// exercises that precondition.
+impl Drop for Harness {
+    fn drop(&mut self) {
+        // A `Drop` must never panic: a failing shutdown while the test is already unwinding
+        // would replace the real assertion failure with an abort.
+        let _ = self.engine.shutdown();
+    }
+}
+
 /// Write a small real file under the temp dir of the harness and return its absolute path.
 ///
 /// Shared by every suite that has to prove a cached blob is actually gone from disk (defter

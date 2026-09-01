@@ -9,6 +9,7 @@ import axios, { type AxiosRequestConfig } from 'axios'
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
+import { onlineOnlyMessage } from '../../../components/shared/onlineOnlyMessage'
 import { getPlatform } from '../../../platform'
 import type {
   DiscountType,
@@ -253,7 +254,7 @@ export function useSendQuote() {
       invalidateQuoteCaches(queryClient, quote.id)
       toast.success(i18n.t('quotes:toast.sent'))
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error)),
   })
 }
 
@@ -279,6 +280,6 @@ export function useReviseQuote() {
       invalidateQuoteCaches(queryClient, originalId)
       toast.success(i18n.t('quotes:toast.revised', { number: revised.quote_number }))
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error) => toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error)),
   })
 }

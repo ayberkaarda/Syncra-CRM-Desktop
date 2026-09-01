@@ -327,14 +327,14 @@ pub async fn cache_quote_pdf(
     revision: u32,
     refresh: bool,
 ) -> CommandResult<CachedPdf> {
-    let target = quote_pdf_path(&state.cache_dir, quote_id, revision);
+    let target = quote_pdf_path(&state.cache_dir(), quote_id, revision);
     let reference = quote_pdf_reference(quote_id, revision);
 
-    if let Some(hit) = cache_hit(&state.engine, &target, &reference, refresh)? {
+    if let Some(hit) = cache_hit(&state.engine(), &target, &reference, refresh)? {
         return Ok(hit);
     }
 
-    if !state.engine.status().online {
+    if !state.engine().status().online {
         return Err(CommandError::new(
             "ONLINE_ONLY",
             format!("quote {quote_id} revision {revision} is not cached and the app is offline"),
@@ -362,7 +362,7 @@ pub async fn cache_quote_pdf(
     blocking(move || write_atomically(&write_target, &body)).await??;
 
     state
-        .engine
+        .engine()
         .record_cached_file(QUOTE_PDF_CACHE_KIND, &reference, &target, bytes)
         .map_err(CommandError::from)?;
 
@@ -458,7 +458,7 @@ pub fn open_cached<R: Runtime>(
     state: State<'_, AppState>,
     path: String,
 ) -> CommandResult<()> {
-    let resolved = resolve_cached_path(&state.cache_dir, &path)?;
+    let resolved = resolve_cached_path(&state.cache_dir(), &path)?;
     #[allow(deprecated)]
     app.shell()
         .open(path_string(&resolved), None)
@@ -481,7 +481,7 @@ pub async fn attach_from_paths(
     paths: Vec<String>,
     target: AttachTarget,
 ) -> CommandResult<Vec<AttachOutcome>> {
-    let queue = attachments_dir(&state.cache_dir);
+    let queue = attachments_dir(&state.cache_dir());
     let sources: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
 
     let staging_queue = queue.clone();
@@ -522,7 +522,7 @@ pub async fn screenshot_to_ticket(
         }
     }
 
-    let queue = attachments_dir(&state.cache_dir);
+    let queue = attachments_dir(&state.cache_dir());
     let target = AttachTarget::Record {
         record: RecordKind::Ticket,
         id: ticket_id,
@@ -949,7 +949,7 @@ fn now_rfc3339() -> String {
 /// the bytes are already on disk, so the honest answer to "the server refused right now" is
 /// "it is waiting", not "it is gone".
 async fn deliver(state: &AppState, queue: &Path, queued: QueuedAttachment) -> AttachOutcome {
-    if !state.engine.status().online {
+    if !state.engine().status().online {
         return queued_outcome(queued, "OFFLINE");
     }
     match send(state, queue, &queued).await {

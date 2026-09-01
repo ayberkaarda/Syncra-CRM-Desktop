@@ -182,6 +182,76 @@ export function clearLocal(): Promise<void> {
   return invokeCommand<void>('clear_local')
 }
 
+/**
+ * `commands::storage::DataLocation` — where the encrypted mirror and the blob cache live
+ * (`SYNCDESKTOP.md` §10 F8 item 1, KARAR K15).
+ *
+ * Paths are display strings. Nothing in the UI may derive a filesystem operation from them:
+ * every path that travels back to Rust is re-validated there (`crate::data_dir::validate_target`),
+ * so this type carries information, never authority.
+ */
+export interface DataLocation {
+  /** The data root in use right now. */
+  path: string
+  /** `<app_data_dir>/syncra` — where an install that has never moved keeps its data. */
+  default_path: string
+  /** Whether `path` is that default. */
+  is_default: boolean
+  /**
+   * A configured root that was NOT reachable at startup.
+   *
+   * Non-null means the app fell back to the default and is running on a different (probably
+   * empty) mirror while the real one — possibly holding an outbox of unpushed changes — sits on
+   * a volume that is not attached. The Storage tab must surface this; it is not cosmetic.
+   */
+  unavailable_path: string | null
+}
+
+/** `commands::storage::MoveOutcome`. */
+export interface MoveDataDirOutcome {
+  /**
+   * `false` when the user dismissed the folder picker. Nothing was touched and this is NOT an
+   * error — a cancelled dialog must not raise a toast that reads like a failure.
+   */
+  moved: boolean
+  /** The data root in use after the call. */
+  path: string
+  /** The old data root, when one was actually vacated. */
+  previous_path: string | null
+  /**
+   * Set when everything succeeded EXCEPT deleting the old directory: a second, still-encrypted
+   * copy of the mirror is sitting at this path. Shown to the user, never swallowed.
+   */
+  old_dir_remaining: string | null
+}
+
+/** `storage::data_location` — cheap, synchronous on the Rust side; safe to call on mount. */
+export function readDataLocation(): Promise<DataLocation> {
+  return invokeCommand<DataLocation>('data_location')
+}
+
+/**
+ * `storage::move_data_dir` — move the mirror and the blob cache to another folder.
+ *
+ * Called with **no argument**, which is what opens the OS folder picker: the picker runs in
+ * Rust, because `desktop/package.json` carries `@tauri-apps/api` and no `@tauri-apps/plugin-dialog`
+ * (the `dialog:allow-open` capability gates the webview's route to that plugin, which this
+ * shell does not use — the same shape `capabilities/default.json` already records for the
+ * clipboard). The optional `target` exists for a caller that already has a path.
+ *
+ * Long-running: the whole mirror plus its cache is copied and then verified table by table.
+ * The engine is closed for the duration, so every other command will fail while it runs — the
+ * caller must block its own UI rather than let a second call in.
+ *
+ * Rejects with `DATA_DIR_INVALID` (bad folder), `DATA_DIR_UNSUPPORTED` (removable or network
+ * volume — SQLite's WAL mode is only trusted on a fixed disk) or `DATA_DIR_MOVE_FAILED`. In
+ * every one of those cases the previous data directory is intact and the engine has been
+ * reopened against it.
+ */
+export function moveDataDir(target?: string): Promise<MoveDataDirOutcome> {
+  return invokeCommand<MoveDataDirOutcome>('move_data_dir', { target: target ?? null })
+}
+
 /** `auth::list_devices` — `GET /api/me/devices`; needs the network. */
 export function listDevices(): Promise<DeviceSummary[]> {
   return invokeCommand<DeviceSummary[]>('list_devices')
@@ -340,4 +410,39 @@ export function notify(notification: NativeNotification): Promise<void> {
  */
 export function setBadge(count: number): Promise<void> {
   return invokeCommand<void>('set_badge', { count })
+}
+
+// ------------------------------------------------------------------------------------------------
+// The Windows JumpList (`SYNCDESKTOP.md` §6.4 item "JumpList: son 5 kayıt", defter O85)
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * `os::record_opened` — remember that this record was opened, and rebuild the taskbar jump list.
+ *
+ * Not a `SYNCDESKTOP.md` §6.2 command *yet*; it is declared in `check-command-wiring.mjs`'s
+ * `UNDOCUMENTED_COMMANDS` with that reason, the same way `set_tray_language` and `auth::session`
+ * were before the spec caught up. Adding the §6.2 line is the tech lead's call.
+ *
+ * `id` is a **string**, not a number: it goes straight back out as a `syncra://<entity>/<id>`
+ * path segment on the Rust side, and round-tripping it through a number would rewrite `0042` as
+ * `42`. `DeepLinkTarget.id` is a string for the same reason.
+ *
+ * `title` and `categoryLabel` are already-resolved text, never i18n keys — the shell has no
+ * dictionary (§0.6), exactly as with `notify`. Rust validates the entity against the eight §6.4
+ * names, the id against `^[0-9]{1,12}$` and both strings against a length/control-character
+ * rule before anything reaches disk.
+ *
+ * Rejects with `VALIDATION_ERROR` or `OS_ERROR`. Callers treat both as non-fatal: nothing the
+ * user asked for has failed if a taskbar menu did not update.
+ *
+ * Windows-only in effect. On macOS and Linux the command exists, validates, and does nothing —
+ * the same shape `set_badge` uses for a platform difference behind one name.
+ */
+export function recordOpened(
+  entity: string,
+  id: string,
+  title: string,
+  categoryLabel: string
+): Promise<void> {
+  return invokeCommand<void>('record_opened', { entity, id, title, categoryLabel })
 }

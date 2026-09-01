@@ -453,6 +453,61 @@ pub fn set_tray_language<R: Runtime>(app: AppHandle<R>, language: String) -> Com
     }
 }
 
+// ------------------------------------------------------------------------------------------------
+// record_opened — the Windows JumpList (`SYNCDESKTOP.md` §6.4 "son 5 kayıt", defter O85)
+// ------------------------------------------------------------------------------------------------
+
+/// Remember that the user opened `entity`/`id`, and rebuild the taskbar jump list.
+///
+/// Called by `desktop/src/ui/useRecentRecord.ts` on every navigation to a record detail route.
+/// Everything about the list itself — the five-entry cap, the `syncra://` url each entry
+/// launches with, the plaintext store under `<app_data_dir>/syncra/recent.json`, and the COM
+/// work — lives in [`crate::jump_list`]; this is the thin command over it, like every other
+/// entry in this module.
+///
+/// ## Both text arguments come from the webview, and both are validated here
+///
+/// `title` is the record's display name and `category_label` is the menu heading; neither can
+/// be produced in Rust (§0.6 forbids hard-coded UI text, and the i18n dictionaries are only
+/// reachable from the webview — the same reasoning as [`notification_text`]). They are
+/// therefore untrusted-shaped input from this process's own UI, and
+/// [`crate::jump_list::validated_record`] refuses anything outside the eight §6.4 entity names,
+/// the `^[0-9]{1,12}$` id pattern, or the title length/character rules **before** a byte is
+/// written to disk.
+///
+/// ## Errors
+///
+/// * `VALIDATION_ERROR` — the entity, id, title or category did not pass;
+/// * `OS_ERROR` — the store could not be written, or the shell refused the list.
+///
+/// A rejected call changes nothing: the store is written only after validation, and the list is
+/// rebuilt only after the store is written, so a failure at any step leaves the previous list
+/// intact rather than half-updated. The caller treats a rejection as non-fatal — a jump list
+/// that did not update must not interrupt the navigation that triggered it.
+///
+/// ## macOS and Linux
+///
+/// The command exists, validates identically, and then keeps nothing
+/// ([`crate::jump_list::has_jump_list`]) — the same one-name-two-behaviours shape
+/// [`set_badge`] uses, and for a stronger reason: §6.4 asks for the Windows jump list and
+/// nothing else, and writing record titles to a plaintext file no menu on that machine can read
+/// would be the feature's privacy cost without the feature. Validation still runs everywhere
+/// because a `{code, message}` contract that differs by platform is one callers debug on the
+/// wrong machine.
+#[tauri::command]
+pub fn record_opened(
+    state: tauri::State<'_, crate::state::AppState>,
+    entity: String,
+    id: String,
+    title: String,
+    category_label: String,
+) -> CommandResult<()> {
+    let record = crate::jump_list::validated_record(&entity, &id, &title)?;
+    let category = crate::jump_list::validated_category(&category_label)?;
+
+    crate::jump_list::remember(&state.root_dir(), record, category)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

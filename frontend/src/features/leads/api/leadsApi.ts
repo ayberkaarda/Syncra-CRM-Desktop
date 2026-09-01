@@ -5,6 +5,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
+import { onlineOnlyMessage } from '../../../components/shared/onlineOnlyMessage'
 import { getPlatform } from '../../../platform'
 import type {
   ConvertLeadPayload,
@@ -205,7 +206,7 @@ export function useConvertLead() {
       toast.success(i18n.t('leads:toast.converted'))
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error))
+      toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error))
     },
   })
 }

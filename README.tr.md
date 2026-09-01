@@ -270,6 +270,124 @@ npm run tauri -- build
 
 `desktop/src-tauri/tauri.conf.json`, `bundle.targets`'ı `"all"` olarak ayarlar — yani belirli formatları adlandırmak yerine Tauri'den host işletim sistemi için mevcut olan her paket formatını ister. Bu repoda henüz paketlenmiş bir build çalıştırılmadı — bu bölüm yazılırken paralel bir şerit onu ilk kez çalıştırıyor — bu yüzden burada artefakt listesi veya boyutu iddia edilmiyor; o iş inince güncel durum için `docs/PROGRESS.md`'ye bakın.
 
+## Kendi Sunucunda Barındırma
+
+**Sınır (KARAR K14, bağlayıcı):** masaüstü istemcisi **her zaman** bir Laravel backend'inin istemcisidir — standalone/offline-only bir mod yoktur ve backend hiçbir zaman kuruluma gömülmez (K14 ikisini de kalıcı olarak reddetti: yetkilendirme, teklif finansalları, ticket durum makinesi ve SLA tamamen sunucu tarafındadır, ve yerel ayna bilinçli olarak eksiktir — retention penceresi dışındaki kayıtlar hiç inmez — dolayısıyla kaynak olamaz). Bu bölüm bir **"kendi backend'ini kur"** rehberidir, **"backend'siz çalıştır"** rehberi değildir — aşağıdakilerin tamamını kurup son adımı (masaüstü build'ini kendi sunucunuza yönlendirmeyi) atlarsanız, çalışan bir web uygulamanız olur ama masaüstü uygulaması yine de `http://localhost:8000`'i bekler.
+
+### 1. Bağımlılıklar
+
+| Bileşen | Gereksinim | Not |
+| --- | --- | --- |
+| PHP | `^8.2` (`backend/composer.json:8`) | Laravel 12, 8.2+ ister. Bu reponun kendi geliştirme ortamında 8.2.12 olarak doğrulandı (`docs/PROGRESS.md` "Ortam Durumu"). |
+| PHP eklentileri | `zip` (zorlanıyor), `intl` (isteğe bağlı) | İkisi de `backend/composer.json`'ın kendi `require`'ında yok, ama davranışları farklı ve bu fark önemli. **`zip` yine de zorlanıyor**: `composer.lock`'ta dört paket `ext-zip` bildiriyor, yani `composer install` o eklenti olmadan devam etmiyor — bu yoldan bozuk bir kurulum elde edemezsiniz. **`intl` ise tasarım gereği isteğe bağlı**: `app/Support/LocaleNumberFormatter.php:53` her kullanımı `class_exists(NumberFormatter::class)` arkasına alıyor ve eklenti yoksa geri düşüyor; yani `intl`'siz bir sunucu kurulur ve çalışır — yalnızca teklif PDF'lerindeki sayı biçimlendirmesi yerel-duyarlı olmaktan çıkar (tek tüketici `resources/views/pdf/quote.blade.php`). O biçimlendirme sizin için önemliyse açın; açmazsanız hiçbir şey kırılmaz. |
+| Composer | 2.x | 2.10.2 doğrulandı. |
+| MariaDB / MySQL | 10.4+ (MariaDB) veya MySQL 8+ | Collation `DB_COLLATION=utf8mb4_unicode_ci` ile **mutlaka** ayarlanmalı — Laravel'in kendi varsayılanı (`utf8mb4_0900_ai_ci`) MySQL 8'e özgüdür ve MariaDB bunu reddeder (`backend/config/database.php:52`, `backend/.env.example:42`). |
+| Redis | Herhangi bir güncel sürüm | `REDIS_CLIENT=predis` (saf PHP istemci) `redis` C eklentisi olmadan çalışır — bu reponun kendi ortamında da bu eklenti kurulu değil. |
+| Node.js / npm | npm 11+ ile Node | v26.7.0 / 11.19.0 doğrulandı. Hem `frontend/` hem `desktop/` için gerekli. |
+
+Tam doğrulanmış sürüm tablosu (PHP, Composer, MariaDB, Redis, Node, Laravel, Reverb, dompdf, ...): `docs/PROGRESS.md` → "Ortam Durumu".
+
+### 2. Veritabanı
+
+```
+mysql -u root -e "CREATE DATABASE <veritabani_adiniz> CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+Veritabanı adı `syncra_crm` olmak zorunda değil — bu yalnızca bu reponun kendi geliştirme kuralı; ne kullanırsanız aşağıda `DB_DATABASE`'e girer.
+
+### 3. Backend `.env`
+
+```
+cd backend
+cp .env.example .env
+php artisan key:generate
+```
+
+Gerçek bir dağıtım için örnekten gerçekten değişmesi gereken şeyler (geri kalanının çalışan bir varsayılanı var):
+
+| Değişken(ler) | Neden önemli |
+| --- | --- |
+| `APP_URL`, `FRONTEND_URL` | Bunları `localhost` değil, gerçek adreslerinize yönlendirin. |
+| `DB_HOST`/`PORT`/`DATABASE`/`USERNAME`/`PASSWORD`, `DB_COLLATION` | 2. adımdaki veritabanınız. MariaDB'de `DB_COLLATION=utf8mb4_unicode_ci` kalmalı. |
+| `REDIS_HOST`/`PORT`/`PASSWORD` | Redis örneğiniz. |
+| `REVERB_APP_ID`/`APP_KEY`/`APP_SECRET` | Yerel geliştirme dışındaki her şey için örneğin yer tutucu değerlerinden değiştirin. |
+| `REVERB_HOST`/`PORT`/`SCHEME` vs `REVERB_SERVER_HOST`/`SERVER_PORT` | Bunlar **aynı şey değildir** ve örneğin varsayılanları (`backend/.env.example:101-108`) yalnızca tek makinede eşleşir: `REVERB_SERVER_HOST`/`SERVER_PORT`, `reverb:start`'ın dinlediği yerel bind adresidir; `REVERB_HOST`/`PORT`/`SCHEME` ise istemcilere (SPA ve masaüstü istemcisi) bağlanmalarını söylediğiniz adrestir — bir reverse proxy veya TLS sonlandırma arkasında bunlar ayrışır (ör. sunucu `127.0.0.1:8080`'e bind olur, istemciler `wss://reverb.example.com`'a bağlanır). |
+| `DESKTOP_ORIGINS` | **Masaüstüne özgü ve kolayca gözden kaçar** — `FRONTEND_URL` bunu kapsamaz. Masaüstü webview'inin origin'(lerini) buraya ekleyin (Windows'ta `http://tauri.localhost`, Linux'ta `tauri://localhost` — bkz. `backend/.env.example:9-20`'deki yorum). |
+| `SESSION_DOMAIN`, `SANCTUM_STATEFUL_DOMAINS` | Üretimde gerçek web domain'inize ayarlayın. **Bir masaüstü origin'ini asla `SANCTUM_STATEFUL_DOMAINS`'e eklemeyin** — o liste yalnızca SPA'nın çerez oturumu içindir; masaüstü istemcisi bearer token ile kimlik doğrular. İkisini karıştırmak `EnsureFrontendRequestsAreStateful`'ın masaüstü isteklerini oturum isteği sanmasına yol açar, ve her masaüstü `POST`'u (ilki `/api/broadcasting/auth`) geçerli bir token taşırken bile `419 CSRF_TOKEN_MISMATCH` ile başarısız olur — tam uyarı için `backend/.env.example:65-78`'e bakın (KARAR A12). |
+
+### 4. Kurulum, migration, seed
+
+```
+cd backend
+composer install
+php artisan migrate --seed
+```
+
+⚠️ **`--seed`, temiz olmayan herhangi bir veritabanında yıkıcıdır.** Varsayılan rolleri/izinleri ekler ve Super Admin hesabını oluşturur (`admin@syncra.local` / `SyncraAdmin!2026`, `must_change_password=true`) — yalnızca boş bir şemaya karşı çalıştırın. Bu veriye zaten sahip bir veritabanına karşı tekrar çalıştırmak unique-constraint ihlalleriyle başarısız olur (veya seeder'a göre lookup verisini yineler). Seed edilen Super Admin şifresini ilk girişte değiştirin — uygulama bunu zorunlu kılar — ve herhangi bir gerçek kullanımdan önce tekrar değiştirin; bu yayınlanmış bir varsayılandır, gizli değil.
+
+### 5. Ayakta kalması gereken süreçler
+
+| Süreç | Komut | Not |
+| --- | --- | --- |
+| API | `php artisan serve` (veya gerçek bir web sunucusu — aşağıya bakın) | `artisan serve`'in tek-iş-parçacıklı dev sunucusu bu reponun kendi araçlarının kullandığı şeydir; üretim dağıtımı bunu nginx/php-fpm veya eşdeğeriyle önden geçirmelidir, bu reponun kapsamı dışındadır. |
+| WebSocket (Reverb) | `php artisan reverb:start` | `REVERB_SERVER_HOST`/`SERVER_PORT`'a bind olur (3. adıma bakın). |
+| Queue worker | `php artisan queue:work` | |
+| Scheduler | `php artisan schedule:work` | **Sürekli çalışmalıdır** — `backend/routes/console.php`'deki dört zamanlanmış komutu gerçekten tetikleyen budur: `logs:prune` (günlük 03:17), `tasks:dispatch-reminders` (dakikada bir), `tickets:scan-sla` (5 dakikada bir), `exchange:fetch-tcmb` (günlük 16:00, TCMB'nin ~15:30 yayın saatine uygun). O olmadan hatırlatıcılar/SLA uyarıları/kur güncellemesi sessizce durur — hiçbir hata vermez, sadece olmaz. |
+
+`attachments:prune-orphans` bir komut olarak var ama `routes/console.php`'ye **kayıtlı değil** — zamanlaması operatöre bırakılmıştır (bilinçli bir kapsam kararı, `docs/ENGINEERING-RULES.md` §6), bu reponun araçlarının sizin yerinize yaptığı bir şey değil.
+
+`dev.bat` (repo kökü), MySQL ve Redis'i kontrol edip başlatan ve Reverb/API/queue/scheduler/frontend için beş pencere açan bir Windows/XAMPP kolaylık script'idir — bir süreç denetleyicisi değildir. Gerçek bir self-host dağıtımı için aynı süreç listesini (API, Reverb, queue, scheduler) platformunuzun kullandığı herhangi bir denetleyiciyle (systemd, supervisord, NSSM, pm2, Docker, ...) yeniden üretin.
+
+### 6. Masaüstü istemcisini kendi sunucunuza yönlendirme
+
+K14'ün sınırının gerçekten anlattığı adım budur, ve tek bir katı kısıtı var: **`frontend/.env`'in `VITE_API_URL` ve `VITE_REVERB_*` değerleri, çalışma anında değil, derleme zamanında masaüstü ikili dosyasına gömülür.** `desktop/scripts/tauri.mjs`, her `tauri dev`/`build`'den önce bunlardan iki şey türetir (`desktop/scripts/build-env.mjs` aracılığıyla):
+
+- `SYNCRA_API_URL` — `desktop/src-tauri/src/state.rs`'teki `option_env!("SYNCRA_API_URL")` ile gömülür, uygulamanın yaptığı her HTTP çağrısının çözüldüğü temel URL;
+- paketlenmiş webview'in Content-Security-Policy `connect-src`'i — dolayısıyla bir build, bir CSP ihlali olmadan başka bir host ile kelimenin tam anlamıyla konuşamaz.
+
+Zaten build edilmiş bir kurulumu farklı bir backend'e yönlendirecek **hiçbir uygulama-içi ayarlar ekranı yoktur**. Bunu çalışma anında yapılandırılabilir kılmak kendi karar turu olarak izlenir (`SYNCDESKTOP.md` §10 F8/3) ve **henüz uygulanmadı** — bugün backend adresini değiştirmek `frontend/.env`'i düzenleyip yeniden build almak demektir.
+
+> **⚠️ Kendi build'inizi başkasına dağıtmadan önce: updater'ı kapatın, yoksa sizin build'inizin yerini bizimki alır.**
+>
+> `desktop/src-tauri/tauri.conf.json` **tek ve sabit** bir updater endpoint'i (bu projenin GitHub Releases `latest.json`'ı) ve **bu projenin** minisign public key'ini taşıyor. Bu depodan ürettiğiniz bir build ikisini de devralır. Yani resmî bir Syncra sürümü yayınlandığı anda sizin kurulumunuz *bizim* endpoint'imizi yoklar, zaten güvendiği bir anahtarla imzalanmış bir güncelleme bulur ve `windows.installMode: "passive"` ile onu kurar. Kullanıcılarınız *bizim* derlediğimiz backend'e göre derlenmiş bir binary çalıştırmaya başlar ve istemcileri sizin sunucunuza ulaşamaz.
+>
+> Bu varsayım değil, mevcut konfigürasyonun tasarım gereği yaptığı şey — ve per-backend build modeline karşı en güçlü pratik argüman (`SYNCDESKTOP.md` §10 F8/3 bunu launch-time yapılandırmayla değiştirmeye karar verdi, ama henüz uygulanmadı). O gelene kadar, build'iniz kendi makinenizden çıkacaksa derlemeden önce şunlardan birini yapın:
+>
+> - `tauri.conf.json`'dan `plugins.updater` bloğunu kaldırın, **ya da**
+> - `endpoints`'i kendi güncelleme sunucunuzla, `pubkey`'i kendi minisign anahtarınızla değiştirin (`npm run tauri -- signer generate`).
+>
+> Yalnız kendi yönettiğiniz makinelerde kalan ve hiç güncelleme yayınlamayan bir build pratikte etkilenmez, ama kontrol yine de koşar — endpoint her ağdan erişilebilir.
+
+```
+cd frontend
+cp .env.example .env
+# .env'i düzenleyin: VITE_API_URL, VITE_REVERB_HOST/PORT/SCHEME -> gerçek sunucunuz, localhost/127.0.0.1 değil
+cd ../desktop
+npm install
+npm run tauri -- build
+```
+
+Kendi makinenizden çıkacak bir build üretiyorsanız önce release-host kapısını çalıştırın: `cd desktop && npm run check:release-host`. Bu, build'in kullanacağı aynı `frontend/.env`'i okur ve `VITE_API_URL`/`VITE_REVERB_HOST` hâlâ bir loopback veya link-local host'a (`localhost`, `127.0.0.0/8`, `::1`, bir `.local` mDNS adı) çözülüyorsa gürültülü şekilde başarısız olur — tam olarak, build eden makineye sessizce konuşan imzalı bir kurulum üreten hata. Bu projenin kendi CI release iş akışı (`.github/workflows/desktop-release.yml`) aynı kapıyı zorunlu kılar ve üretim `frontend/.env`'ini `secrets.DESKTOP_RELEASE_ENV`'den alır; bu yalnızca o iş akışını kendi CI'nız için uyarlıyorsanız ilgilidir, elle build için değil.
+
+### 7. Windows dışı platformlar
+
+Bu repo Windows üzerinde geliştirildi ve doğrulandı — `dev.bat`, XAMPP/WSL2-Redis kurulumu ve bu rehberdeki her sürüm numarası Windows ölçümleridir (`docs/PROGRESS.md`). Linux/macOS için:
+
+- **Linux:** CI, `ubuntu-24.04` üzerinde bir debug paketi (`desktop-ci.yml`) ve `ubuntu-22.04` üzerinde bir release paketi (`desktop-release.yml`, bilinçli olarak geride tutuluyor — o iş akışının matrix yorumundaki glibc tabanına bakın) derliyor, ikisi de `libwebkit2gtk-4.1-dev`'e karşı. Bu bir derleme kontrolüdür, çalışan-uygulama doğrulaması değil: bu repoda masaüstü kabuğunun OS özelliklerinin (tray, bildirimler, deep link'ler vb.) gerçekten canlı bir Linux WebKitGTK build'inde çalıştırıldığına dair bir kayıt yok. SYNCDESKTOP K11, Linux'u (Ubuntu 22.04+/Fedora 39+, WebKitGTK 2.42+) Windows ile eşit birinci sınıf hedef olarak adlandırıyor, ama bu doğrulama turu bu rehber yazıldığı sırada bu reponun dokümanlarına henüz inmemişti.
+- **macOS:** SYNCDESKTOP K11, macOS'un yalnızca derlendiğini, bilinçli olarak test edilmediğini belirtiyor. `desktop-release.yml`'de bir macOS release ayağı var (`macos-latest`), ama bu repoda macOS'a özgü hiçbir kurulum veya çalışma zamanı notu yok.
+- Backend/frontend'in kendisi (PHP/Node/MariaDB/Redis) yukarıdaki 3. adımdaki CORS/CSRF notları dışında Windows'a özgü bir gereksinimi olmayan sıradan bir cross-platform Laravel + Vite yığınıdır. `dev.bat`'in otomasyonu (MySQL/Redis başlatma, pencere açma) burada gerçekten Windows'a özgü tek parçadır — onun yerine platformunuzun kendi servis yönetimini kullanın.
+
+### 8. Sık hatalar
+
+- **Eksik `zip`/`intl` PHP eklentisi:** Laravel daha ayağa kalkmadan bir fatal error (temiz bir Laravel hata sayfası değil, `Uncaught Error: Class "ZipArchive" not found` benzeri bir şey). İkisini de `php.ini`'de açın ve PHP'yi yeniden başlatın.
+- **Redis WSL2 içinden erişilebilir ama Windows/host'tan "connection refused":** WSL2'nin `127.0.0.1` port aktarımı dağıtım boşta kalınca düşer — bu, projenin kendi Faz 12'sinde 12 testi kırdı (`docs/PROGRESS.md` "Ortam Durumu", Redis satırı) ve testlerin dışında bir uygulamayı da aynı şekilde vurur. Uzun ömürlü bir WSL süreci açık tutun (`dev.bat` bunu sizin için yapar), veya uygulamanın kendisinin bozuk olduğunu varsaymadan önce `redis-cli ping` çalıştırın.
+- **Frontend'in kendi Vite dev sunucusu (port 5173) `127.0.0.1:5173`'te erişilemezken `localhost:5173` çalışıyor:** yalnızca `localhost`'ta (IPv6 `::1`) dinliyor, `127.0.0.1`'de değil — `127.0.0.1:5173`'e sabitlenmiş bir script veya tarayıcı, sunucu çalışmıyormuş gibi görünen bir bağlantı hatası alır (`docs/PROGRESS.md`).
+- **Özellikle masaüstü istemcisinden CORS/`419` hataları, web uygulaması etkilenmiyor:** `DESKTOP_ORIGINS` eksik veya `SANCTUM_STATEFUL_DOMAINS`'e (yanlışlıkla) bir masaüstü origin'i verilmiş — yukarıdaki 3. adımdaki `DESKTOP_ORIGINS`/`SANCTUM_STATEFUL_DOMAINS` satırına bakın.
+- **Başka bir yerel servis (ör. Docker Desktop) de 8000 portunu dinlerken backend'e erişilememesi:** `VITE_API_URL` için `localhost` yerine `127.0.0.1` kullanın — `localhost` önce `::1`'e çözülüp sessizce Laravel yerine diğer servise gidebilir (`frontend/.env.example:1-6`).
+- **Kendi build ettiğiniz bir paketi kurduktan sonra "uygulama açılıyor ama hiçbir şey yüklenmiyor":** neredeyse her zaman 6. adımdaki tuzak — ikili dosya, erişilebilir bir sunucuyu göstermeyen bir `frontend/.env`'e (localhost varsayılanı dahil) karşı build edilmiş. `frontend/.env`'i düzeltip yeniden build alın; bir dahaki sefere paketlemeden önce `npm run check:release-host` çalıştırarak bunu erkenden yakalayın.
+
+**Bu makinede doğrulanmadı:** Sıfırdan bir veritabanına karşı sıfırdan `composer install`/`npm install` (bu tur mevcut, zaten kurulu reponun üzerinde ölçüm yaptı — PHP 8.2.12'nin `zip`/`intl` açık olduğu ve Node v26.7.0/npm 11.19.0 canlı olarak yeniden kontrol edildi; kurulum/migration/seed sırasının kendisi, çalışan geliştirme veritabanına dokunmamak için burada baştan sona yeniden çalıştırılmadı). Yukarıdaki adımlar `backend/.env.example`, `backend/composer.json`, `backend/routes/console.php`, `desktop/scripts/*.mjs` ve `dev.bat`'ten aktarılmış, `docs/PROGRESS.md`'nin doğrulanmış-ortam kaydına karşı çapraz kontrol edilmiştir — baştan sona taze çalıştırılmamıştır.
+
 ## Mimari (kısa)
 
 | Yol | Ne olduğu |

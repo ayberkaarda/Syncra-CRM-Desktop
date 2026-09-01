@@ -18,9 +18,19 @@
 //!    changed since the last tick, and the obvious way — keeping the previous text — would put
 //!    clipboard content in a long-lived process global. [`fingerprint`] reduces it to a `u64`
 //!    instead, which answers "did it change" and nothing else.
-//! 4. **No log line takes the text.** Asserted mechanically by
-//!    [`self::tests::no_log_or_file_write_can_reach_the_clipboard_text`], which reads this
-//!    module's own source.
+//! 4. **No sink takes the text.** Asserted mechanically, over this module's own source, by
+//!    three tests that approach the same property from both ends:
+//!    [`self::tests::no_sink_in_this_module_can_reach_the_clipboard_text`] walks every log
+//!    macro, `format!`, `emit`, toast field and process argument — as whole *calls*, so a
+//!    multi-line one cannot hide an argument on its second line;
+//!    [`self::tests::no_filesystem_write_path_exists_in_this_module`] forbids the filesystem
+//!    outright; and [`self::tests::the_clipboard_binding_is_only_ever_handed_to_the_allowed_callees`]
+//!    inverts the question — it starts from the clipboard binding and rejects *any* new use of
+//!    it, so a leak through a sink nobody thought to enumerate still fails.
+//! 5. **The webview never gets the clipboard either.** The capability file is parsed and its
+//!    `permissions` array asserted free of any `clipboard-manager:*` grant
+//!    ([`self::tests::the_webview_is_never_granted_clipboard_access`]) — the claim below is
+//!    checked, not just written down.
 //!
 //! `logging.rs`'s PII mask (§9 item 9) would already redact an e-mail or an E.164 number on the
 //! way out — but "it would be masked" is a weaker claim than "it is never passed", and §9 item 6
@@ -155,7 +165,7 @@ pub fn notification_text(_hint: ClipboardHint, labels: &ClipboardLabels) -> (Str
 /// an opt-in that cannot be verified is off.
 fn enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.try_state::<AppState>()
-        .is_some_and(|state| state.engine.settings().clipboard_capture)
+        .is_some_and(|state| state.engine().settings().clipboard_capture)
 }
 
 /// Start the poll loop. Called once from `.setup()`.
@@ -364,55 +374,272 @@ mod tests {
         assert_ne!(fingerprint("ada@example.com"), fingerprint("bob@example.com"));
     }
 
-    /// **§9 item 6, mechanically.** No log macro and no filesystem call in this module may take
-    /// the clipboard.
+    // --- §9 item 6, mechanically: the scanner -------------------------------------------------
+
+    /// This module's source with the whole `#[cfg(test)]` block and every comment removed.
+    ///
+    /// Both removals matter. The test module is not production code — its needles and its
+    /// deliberately leaky sample strings would match themselves and turn the scan into a
+    /// tautology. The comments are worse: the module doc *quotes* the identifiers the scan
+    /// hunts for ("the clipboard string is not one of its parameters"), so a prose sentence
+    /// would read as a leak. Scanning the stripped text is also what lets the needles below be
+    /// written as plain literals instead of `concat!` puzzles.
+    ///
+    /// The comment strip is the naive one — everything from the first `//` on a line — which is
+    /// wrong inside a string literal holding `//`. There is no such literal here, and
+    /// [`no_production_line_hides_a_slash_slash_in_a_string`] keeps it that way.
+    fn production_source() -> String {
+        let source = include_str!("clipboard.rs");
+        let marker = concat!("#[cfg(", "test)]");
+        let head = source.split(marker).next().unwrap_or(source);
+
+        head.lines()
+            .map(|line| match line.find("//") {
+                Some(at) => &line[..at],
+                None => line,
+            })
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Guards the naive comment strip in [`production_source`]: a `"https://…"` literal would
+    /// be truncated at the `//` and the rest of that line would silently stop being scanned.
+    #[test]
+    fn no_production_line_hides_a_slash_slash_in_a_string() {
+        let marker = concat!("#[cfg(", "test)]");
+        let raw = include_str!("clipboard.rs");
+        let head = raw.split(marker).next().unwrap_or(raw);
+
+        for line in head.lines() {
+            let code = line.split("//").next().unwrap_or(line);
+            assert_eq!(
+                code.matches('"').count() % 2,
+                0,
+                "a string literal spans the `//` on this line, so the comment strip would eat \
+                 live code: {line}"
+            );
+        }
+    }
+
+    /// Whether `haystack` mentions `ident` as a whole identifier rather than as a fragment of
+    /// a longer one.
+    ///
+    /// Without the boundary check, `notification_text` and `read_text` would both read as uses
+    /// of the `text` binding and every scan below would be permanently red.
+    fn mentions_identifier(haystack: &str, ident: &str) -> bool {
+        let is_word = |c: char| c.is_alphanumeric() || c == '_';
+        haystack.match_indices(ident).any(|(at, _)| {
+            let before = haystack[..at].chars().next_back();
+            let after = haystack[at + ident.len()..].chars().next();
+            !before.is_some_and(is_word) && !after.is_some_and(is_word)
+        })
+    }
+
+    /// The source of the call that starts at `at`: from the sink token to the `)` that closes
+    /// its argument list.
+    ///
+    /// Line-based scanning is what a multi-line call escapes, and this module already contains
+    /// one — the notification builder is spread over six lines. A `tracing::warn!(` with
+    /// `%text` on the *next* line would pass a per-line check and leak.
+    fn invocation_span(source: &str, at: usize) -> &str {
+        let tail = &source[at..];
+        let Some(open) = tail.find('(') else {
+            return tail;
+        };
+
+        let mut depth = 0usize;
+        for (offset, byte) in tail.bytes().enumerate().skip(open) {
+            match byte {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &tail[..=offset];
+                    }
+                }
+                _ => {}
+            }
+        }
+        tail
+    }
+
+    /// Every way a byte leaves this process, or becomes a string that could.
+    ///
+    /// Not only logging: a toast body is written into the Windows Action Center, an event
+    /// reaches the webview (and its console, and the log relay), a child process's argv is
+    /// visible to every other process on the machine, and a `format!` is the first half of all
+    /// three. `.title(`/`.body(` are on the list because they are the sink this module is one
+    /// keystroke away from — the builder is right there, already holding the hint.
+    const SINKS: [&str; 15] = [
+        "tracing::",
+        "log::",
+        "println!",
+        "eprintln!",
+        "print!",
+        "eprint!",
+        "dbg!",
+        "panic!",
+        "format!",
+        "write!",
+        "writeln!",
+        ".emit",
+        ".title(",
+        ".body(",
+        ".arg(",
+    ];
+
+    /// The bindings that hold, or could hold, the clipboard itself.
+    const CLIPBOARD_BINDINGS: [&str; 2] = ["text", "candidate"];
+
+    /// **§9 item 6, mechanically.** No sink in this module may take the clipboard.
     ///
     /// A source-level assertion because the property is "this line does not exist", which no
     /// behavioural test can demonstrate — running the loop and finding an empty log proves only
     /// that the sample did not trip a branch.
     ///
-    /// The needles are built with `concat!` rather than written as literals: this test reads the
-    /// file it is written in, so a literal `"tracing::"` here would match itself and the check
-    /// would pass for the wrong reason.
+    /// The scan is over whole *calls* ([`invocation_span`]), not lines, and over every sink in
+    /// [`SINKS`], not only `tracing::`. Both were holes in the first version of this test: a
+    /// `log::info!` and a `tracing::warn!(` with its argument on the next line each went
+    /// straight past it.
     #[test]
-    fn no_log_or_file_write_can_reach_the_clipboard_text() {
-        let source = include_str!("clipboard.rs");
-        let log_macro = concat!("tracing", "::");
+    fn no_sink_in_this_module_can_reach_the_clipboard_text() {
+        let source = production_source();
+        let mut scanned = 0usize;
 
-        // Every filesystem write path — none of them belongs in this module at all.
+        for sink in SINKS {
+            for (at, _) in source.match_indices(sink) {
+                scanned += 1;
+                let span = invocation_span(&source, at);
+
+                for binding in CLIPBOARD_BINDINGS {
+                    assert!(
+                        !mentions_identifier(span, binding),
+                        "`{binding}` reaches the sink `{sink}` (§9 item 6): {span}"
+                    );
+                }
+                assert!(
+                    !span.contains("read_text") && !span.contains("clipboard()"),
+                    "the clipboard is read straight into the sink `{sink}` (§9 item 6): {span}"
+                );
+            }
+        }
+
+        assert!(
+            scanned > 0,
+            "the scanner found no sink at all — it has stopped checking anything"
+        );
+    }
+
+    /// No filesystem write path belongs in this module in the first place, with or without the
+    /// clipboard on it. An `fs::write` here would mean someone decided the clipboard needed a
+    /// cache, a history or a crash dump.
+    #[test]
+    fn no_filesystem_write_path_exists_in_this_module() {
+        let source = production_source();
+
         for forbidden in [
-            concat!("fs", "::write"),
-            concat!("File", "::create"),
-            concat!("OpenOptions", "::new"),
-            concat!("write", "_all"),
-            concat!("std::fs", "::"),
+            "fs::write",
+            "File::create",
+            "OpenOptions",
+            "write_all",
+            "std::fs",
+            "tokio::fs",
+            "create_dir",
+            "app_data_dir",
+            "app_log_dir",
         ] {
             assert!(
                 !source.contains(forbidden),
                 "`{forbidden}` must not appear in the clipboard module (§9 item 6)"
             );
         }
+    }
 
-        // Every log call, and none of them may mention the clipboard binding.
-        let log_lines: Vec<&str> = source
-            .lines()
-            .filter(|line| line.contains(log_macro))
-            .filter(|line| !line.trim_start().starts_with("//"))
-            .filter(|line| !line.trim_start().starts_with("concat!"))
-            .collect();
+    /// The use-site lock: the clipboard binding may only ever be handed to the things that are
+    /// allowed to see it.
+    ///
+    /// [`no_sink_in_this_module_can_reach_the_clipboard_text`] enumerates the *known* ways out
+    /// and is therefore only as good as [`SINKS`]. This test inverts the question — it starts
+    /// from the clipboard and demands that every line mentioning it be one of the handful that
+    /// exist today. A new use, sink or not (`let copy = text.to_owned();`, `queue.push(text)`,
+    /// `send(&text)`), fails here without anyone having had to predict its shape.
+    #[test]
+    fn the_clipboard_binding_is_only_ever_handed_to_the_allowed_callees() {
+        // Read it, measure it, classify it, forget it. Nothing else may appear on such a line.
+        const ALLOWED: [&str; 12] = [
+            "fn detect",
+            "fn fingerprint",
+            "read_text",
+            "fingerprint(",
+            "detect(",
+            "drop(",
+            ".trim()",
+            ".hash(",
+            ".is_empty()",
+            ".len()",
+            "is_match(",
+            "MAX_EXAMINED_LEN",
+        ];
+
+        let source = production_source();
+        let mut checked = 0usize;
+
+        for line in source.lines() {
+            let mentions = CLIPBOARD_BINDINGS
+                .iter()
+                .any(|binding| mentions_identifier(line, binding));
+            if !mentions {
+                continue;
+            }
+
+            checked += 1;
+            assert!(
+                ALLOWED.iter().any(|allowed| line.contains(allowed)),
+                "a new use of the clipboard binding appeared and it is not one of the things \
+                 allowed to see it (§9 item 6): {line}"
+            );
+        }
 
         assert!(
-            !log_lines.is_empty(),
-            "the scanner found no log call at all — it has stopped checking anything"
+            checked >= 6,
+            "the scanner matched {checked} clipboard lines — it has stopped finding the \
+             binding and is no longer checking anything"
+        );
+    }
+
+    /// The webview is never granted clipboard access — asserted against the capability file
+    /// itself, not against the sentence in its `description`.
+    ///
+    /// The module doc and `docs/DESKTOP-THREAT-MODEL.md` §2/E2 both claim this. A claim in a
+    /// comment is exactly what drifts: adding `clipboard-manager:allow-read-text` to the list
+    /// is one line, and it would hand every script running in the webview the clipboard —
+    /// including anything that got in through XSS. Only the `permissions` array is inspected,
+    /// because the `description` prose deliberately *names* the permission it withholds.
+    #[test]
+    fn the_webview_is_never_granted_clipboard_access() {
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json"))
+                .expect("capabilities/default.json must be valid JSON");
+
+        let permissions = capability["permissions"]
+            .as_array()
+            .expect("the capability must carry a `permissions` array");
+        assert!(
+            !permissions.is_empty(),
+            "the permission list is empty — the scan is dead"
         );
 
-        for line in log_lines {
-            for needle in ["text", "candidate", "clipboard()"] {
-                assert!(
-                    !line.contains(needle),
-                    "a log line may not carry the clipboard: {line}"
-                );
-            }
+        for permission in permissions {
+            // An entry is either a bare string or an object carrying an `identifier`.
+            let identifier = permission
+                .as_str()
+                .or_else(|| permission["identifier"].as_str())
+                .unwrap_or_default();
+            assert!(
+                !identifier.contains("clipboard"),
+                "`{identifier}` grants the webview the clipboard (§9 item 6, §6.3)"
+            );
         }
     }
 }

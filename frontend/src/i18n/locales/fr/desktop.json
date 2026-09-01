@@ -25,7 +25,10 @@
     "INVALID_CREDENTIALS": "Adresse e-mail ou mot de passe incorrect.",
     "PENDING_MUTATIONS": "Vous avez des modifications qui n'ont pas encore été synchronisées. Synchronisez d'abord, ou déconnectez-vous quand même.",
     "ROW_NOT_LOCAL": "Cet enregistrement ne figure pas dans votre copie locale — il se trouve peut-être en dehors de la période de conservation. Il redevient visible dès que vous êtes de nouveau en ligne.",
-    "unknown": "Une erreur inconnue est survenue."
+    "unknown": "Une erreur inconnue est survenue.",
+    "DATA_DIR_INVALID": "Ce dossier ne peut pas être utilisé. Choisissez un dossier vide ; vos données n’ont pas été modifiées.",
+    "DATA_DIR_UNSUPPORTED": "Ce lecteur n’est pas pris en charge. La base de données locale ne peut être conservée que sur un disque fixe.",
+    "DATA_DIR_MOVE_FAILED": "Les données n’ont pas pu être déplacées. Votre emplacement de données est inchangé."
   },
   "onlineOnly": {
     "leads": {
@@ -148,6 +151,17 @@
       "description": "Cette action est IRRÉVERSIBLE. Toutes les données locales de cet appareil seront supprimées et retéléchargées depuis le serveur lors de la prochaine synchronisation.",
       "confirmSuffix": "Voulez-vous vraiment effacer les données locales ?"
     },
+    "dataLocation": {
+      "label": "Emplacement des données",
+      "description": "La base de données locale chiffrée et le cache de fichiers sont conservés dans ce dossier.",
+      "change": "Changer d’emplacement…",
+      "title": "Déplacer l’emplacement des données",
+      "confirm": "Un dossier vous sera demandé. La synchronisation s’arrête pendant le déplacement et l’application peut ne pas répondre un instant. L’ancien dossier est supprimé une fois la copie vérifiée.",
+      "fixedDiskOnly": "Disques fixes uniquement : le mode WAL de SQLite n’est pas fiable sur un lecteur amovible ou réseau.",
+      "success": "Les données ont été déplacées vers {{path}}.",
+      "leftover": "Les données ont été déplacées, mais l’ancien dossier n’a pas pu être supprimé. Une copie chiffrée se trouve toujours à : {{path}}",
+      "unavailable": "Le dossier de données configuré est inaccessible ({{path}}). L’application fonctionne depuis l’emplacement par défaut et vos modifications non envoyées peuvent se trouver dans l’ancien dossier. Reconnectez le lecteur puis redémarrez l’application."
+    },
     "saveSuccess": "Paramètres de stockage enregistrés.",
     "saveError": "Une erreur est survenue lors de l'enregistrement des paramètres de stockage."
   },
@@ -259,6 +273,10 @@
       "notificationTitle": "Syncra fonctionne en arrière-plan",
       "notificationBody": "L'application continue de fonctionner dans la barre système. Utilisez « Quitter » dans le menu pour la fermer complètement."
     }
+  },
+  "jumpList": {
+    "category": "Enregistrements récents",
+    "fallbackTitle": "{{entity}} #{{id}}"
   },
   "recordBadge": {
     "pending": "En attente",

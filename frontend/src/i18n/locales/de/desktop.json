@@ -25,7 +25,10 @@
     "INVALID_CREDENTIALS": "E-Mail-Adresse oder Passwort ist falsch.",
     "PENDING_MUTATIONS": "Sie haben Änderungen, die noch nicht synchronisiert wurden. Synchronisieren Sie zuerst oder melden Sie sich trotzdem ab.",
     "ROW_NOT_LOCAL": "Dieser Datensatz befindet sich nicht in Ihrer lokalen Kopie — er liegt möglicherweise außerhalb des Aufbewahrungszeitraums. Er wird sichtbar, sobald Sie wieder online sind.",
-    "unknown": "Ein unbekannter Fehler ist aufgetreten."
+    "unknown": "Ein unbekannter Fehler ist aufgetreten.",
+    "DATA_DIR_INVALID": "Dieser Ordner kann nicht verwendet werden. Wählen Sie einen leeren Ordner; Ihre Daten wurden nicht verändert.",
+    "DATA_DIR_UNSUPPORTED": "Dieses Laufwerk wird nicht unterstützt. Die lokale Datenbank kann nur auf einer Festplatte liegen.",
+    "DATA_DIR_MOVE_FAILED": "Die Daten konnten nicht verschoben werden. Ihr Datenspeicherort ist unverändert."
   },
   "onlineOnly": {
     "leads": {
@@ -148,6 +151,17 @@
       "description": "Diese Aktion kann NICHT RÜCKGÄNGIG gemacht werden. Alle lokalen Daten auf diesem Gerät werden gelöscht und beim nächsten Synchronisieren erneut vom Server heruntergeladen.",
       "confirmSuffix": "Möchten Sie die lokalen Daten wirklich löschen?"
     },
+    "dataLocation": {
+      "label": "Datenspeicherort",
+      "description": "Die verschlüsselte lokale Datenbank und der Dateicache werden in diesem Ordner abgelegt.",
+      "change": "Speicherort ändern…",
+      "title": "Datenspeicherort verschieben",
+      "confirm": "Sie werden aufgefordert, einen Ordner auszuwählen. Während des Verschiebens wird die Synchronisierung angehalten und die Anwendung reagiert möglicherweise kurz nicht. Der alte Ordner wird gelöscht, sobald die Kopie überprüft wurde.",
+      "fixedDiskOnly": "Nur Festplatten: Der WAL-Modus von SQLite ist auf Wechsel- und Netzlaufwerken nicht zuverlässig.",
+      "success": "Die Daten wurden nach {{path}} verschoben.",
+      "leftover": "Die Daten wurden verschoben, der alte Ordner konnte jedoch nicht gelöscht werden. Eine verschlüsselte Kopie liegt weiterhin unter: {{path}}",
+      "unavailable": "Der eingestellte Datenordner konnte nicht erreicht werden ({{path}}). Die Anwendung läuft am Standardspeicherort; noch nicht gesendete Änderungen können sich im alten Ordner befinden. Schließen Sie das Laufwerk an und starten Sie die Anwendung neu."
+    },
     "saveSuccess": "Speichereinstellungen gespeichert.",
     "saveError": "Beim Speichern der Speichereinstellungen ist ein Fehler aufgetreten."
   },
@@ -259,6 +273,10 @@
       "notificationTitle": "Syncra läuft im Hintergrund",
       "notificationBody": "Die App läuft weiterhin im Tray. Verwenden Sie „Beenden“ im Tray-Menü, um sie vollständig zu schließen."
     }
+  },
+  "jumpList": {
+    "category": "Zuletzt geöffnet",
+    "fallbackTitle": "{{entity}} #{{id}}"
   },
   "recordBadge": {
     "pending": "Ausstehend",

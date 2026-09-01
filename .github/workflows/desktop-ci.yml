@@ -459,17 +459,35 @@ jobs:
       # step, unlike desktop-rust's `cargo test`/`clippy`, opts back in explicitly. Confirmed
       # via `npm run tauri -- build --help`: `-f, --features [<FEATURES>...]` is a real CLI
       # flag, not an assumption.
+      # `--config scripts/ci-unsigned-bundle.json` turns `bundle.createUpdaterArtifacts` back
+      # OFF for this job, and only this job. The base config turns it ON (TM-F16 / open item
+      # O108): without it `tauri build` emitted no `.sig` and no updater artifact at all, so
+      # `desktop-release.yml`'s `includeUpdaterJson: true` had nothing to sign and the updater
+      # block added for O12 pointed at a manifest that could never exist. Measured, not
+      # assumed: the 2026-09-01 bundle held exactly one .msi and one -setup.exe, nothing else.
+      #
+      # But with it ON the bundler REFUSES to finish without a private key — "A public key has
+      # been found, but no private key", exit 1, measured on this exact command. This job must
+      # not have that key: it runs on every push and PR, and a release-signing secret has no
+      # business being reachable from there. So the job keeps proving what it exists to prove —
+      # that the app still bundles into an MSI and an NSIS installer on this OS — and leaves
+      # signing to `desktop-release.yml`, which holds the secret. Overriding here rather than
+      # passing `--no-bundle` keeps the bundler itself under test.
       - name: tauri build --debug
-        run: npm run tauri -- build --debug --features custom-protocol
+        run: npm run tauri -- build --debug --features custom-protocol --config scripts/ci-unsigned-bundle.json
 
   # ---------------------------------------------------------------------------
   # Release-profile smoke test (SYNCDESKTOP.md §6.5 / §10 F7).
   #
   # WHY THIS EXISTS — the blind spot it closes
   # `desktop-tauri-build` runs `tauri build --debug`, which keeps `debug_assertions` ON.
-  # `desktop/src-tauri/src/lib.rs` gates the updater plugin behind
-  # `#[cfg(not(debug_assertions))]`, so that block is never even compiled by the job above:
-  # the entire release-only configuration of this app is invisible to CI. The first real
+  # `desktop/src-tauri/src/lib.rs` USED TO gate the updater plugin behind
+  # `#[cfg(not(debug_assertions))]`, so that block was never even compiled by the job above:
+  # the entire release-only configuration of this app was invisible to CI. That `cfg` is gone
+  # as of O12 — registration is unconditional now, so every build exercises the same
+  # plugin-init path — but this job stays, because `debug_assertions` still changes real
+  # behaviour (log level, `debug_assert!`, optimisation) and a release profile is the only
+  # thing that proves the shipped binary starts. The first real
   # release build (F7, 2026-08-31) failed exactly there — `tauri-plugin-updater`'s `Config`
   # has a mandatory, default-less `pubkey`, so `.setup()` panicked and the binary exited 101
   # without ever opening a window. A shipped-artifact-does-not-start bug, and CI was green.
