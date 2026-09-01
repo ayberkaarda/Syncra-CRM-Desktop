@@ -660,15 +660,21 @@ mod tests {
                 .open(source.join(CACHE_SUBDIR).join("42-3.pdf"))
                 .expect("hold a cached blob open without delete sharing")
         };
+        // No binding on POSIX: the obstruction is a permission bit on the parent directory, not
+        // a value this scope owns. Binding the block's `()` to `held` so that the two arms look
+        // alike is what `clippy::let_unit_value` (and, at the `drop` below,
+        // `dropping_copy_types`) rejects on the macOS and Linux legs — and it would be a lie
+        // anyway, since dropping a unit releases nothing. The undo is the explicit restore at
+        // the end of the test.
         #[cfg(not(windows))]
-        let held = {
+        {
             let mut permissions = std::fs::metadata(source.parent().expect("parent"))
                 .expect("metadata")
                 .permissions();
             permissions.set_readonly(true);
             std::fs::set_permissions(source.parent().expect("parent"), permissions)
                 .expect("read-only parent");
-        };
+        }
 
         let remaining = transfer(&source, &destination, &anchor, &key).expect("transfer");
 
@@ -687,6 +693,9 @@ mod tests {
             "the surviving copy's path must reach the caller"
         );
 
+        // Release the obstruction so `TempDir`'s own cleanup can run: the handle on Windows,
+        // the parent directory's read-only bit on POSIX.
+        #[cfg(windows)]
         drop(held);
         #[cfg(not(windows))]
         {

@@ -98,6 +98,19 @@ pub enum Rejection {
     /// files that are not ours.
     Invalid(String),
     /// The volume is removable, remote, optical or unknown — see the module docs.
+    ///
+    /// Windows-only, because the classification that produces it is. The non-Windows arm of
+    /// [`reject_unsupported_volume`] accepts every volume — a declared gap, argued below it —
+    /// so off Windows this variant has no honest producer and is dead code that the macOS and
+    /// Linux CI legs reject under `-D warnings`. Gating the variant is the truthful shape:
+    /// "this refusal does not exist on this platform" rather than an `#[allow(dead_code)]`
+    /// pretending it might.
+    ///
+    /// The `desktop.errors.DATA_DIR_UNSUPPORTED` key stays in all four locale dictionaries and
+    /// in `KNOWN_ERROR_CODES` regardless. A dictionary key is not platform-conditional, and
+    /// `npm run check:errors` compares `desktop/src/ui/errors.ts` against `tr/desktop.json` —
+    /// it never reads this enum, so nothing here can drift the code contract.
+    #[cfg(windows)]
     UnsupportedVolume(String),
 }
 
@@ -106,6 +119,7 @@ impl Rejection {
     pub fn code(&self) -> &'static str {
         match self {
             Rejection::Invalid(_) => "DATA_DIR_INVALID",
+            #[cfg(windows)]
             Rejection::UnsupportedVolume(_) => "DATA_DIR_UNSUPPORTED",
         }
     }
@@ -113,7 +127,9 @@ impl Rejection {
     /// The log/diagnostic detail. Never rendered as-is — the UI owns the copy (§0.6).
     pub fn message(&self) -> &str {
         match self {
-            Rejection::Invalid(message) | Rejection::UnsupportedVolume(message) => message,
+            Rejection::Invalid(message) => message,
+            #[cfg(windows)]
+            Rejection::UnsupportedVolume(message) => message,
         }
     }
 }
