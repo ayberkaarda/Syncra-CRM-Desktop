@@ -212,6 +212,12 @@ const capabilities = new Set<Capability>([
   'tray',
   'files',
   'screenshot',
+  // F5-6. Declares that the SHELL can watch the clipboard, not that it currently is: the
+  // watch is opt-in and off by default (`DesktopSettings::clipboard_capture`, K10). The
+  // distinction is the same one every other entry makes — `files` does not mean a file is
+  // open — and `platform.capabilities` is read to decide whether a feature can be offered at
+  // all, which on this platform it can.
+  'clipboard',
 ])
 
 export const desktopPlatform: Platform = {

@@ -3,10 +3,10 @@
 use tauri::{AppHandle, Emitter, Runtime, State};
 use uuid::Uuid;
 
-use syncra_sync::{Conflict, RealtimeEvent, Resolution, SyncReport, SyncStatus};
+use syncra_sync::{Conflict, RealtimeEvent, Resolution, SyncReport};
 
 use super::{CommandError, CommandResult};
-use crate::events::BOOTSTRAP_PROGRESS;
+use crate::events::{scheduler_is_paused, StatusWithPause, BOOTSTRAP_PROGRESS};
 use crate::state::AppState;
 
 /// First full download (`SYNCDESKTOP.md` §5.5, K12): every granted table from cursor 0, inside
@@ -48,9 +48,18 @@ pub async fn sync_now(state: State<'_, AppState>) -> CommandResult<SyncReport> {
 }
 
 /// Cheap, synchronous snapshot of engine state — safe to poll.
+///
+/// Enriched with `paused`, which the engine itself has no concept of (defter O71): the loop
+/// is stopped by clearing `AppState::scheduler`, not by anything inside `syncra_sync`, so
+/// `paused` is read from that slot and layered onto the engine's own [`SyncStatus`] by
+/// [`StatusWithPause`] — see that type's doc comment for why this lives in `crate::events`
+/// rather than being duplicated here.
 #[tauri::command]
-pub fn status(state: State<'_, AppState>) -> SyncStatus {
-    state.engine.status()
+pub fn status(state: State<'_, AppState>) -> StatusWithPause {
+    StatusWithPause {
+        paused: scheduler_is_paused(&state.scheduler),
+        status: state.engine.status(),
+    }
 }
 
 /// Everything waiting in the Conflict Inbox.

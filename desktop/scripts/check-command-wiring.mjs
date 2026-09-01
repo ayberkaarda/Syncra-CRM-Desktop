@@ -50,6 +50,13 @@ const DESKTOP_SRC = join(DESKTOP, 'src')
  *
  * `handle_realtime` and `bootstrap` are in `sync` on the authority of the "ŞARTNAME
  * DÜZELTMESİ" note under §6.2 (KARAR A11 / defter U15), which adds both to the list.
+ *
+ * `os::get_autostart` is the fifth `os::*` command (ledger D1): `set_autostart` reads the OS
+ * back and returns it, but nothing could read it WITHOUT writing it first, so the settings
+ * screen had no way to render the toggle on open. It is listed here as a contract command
+ * rather than as an `UNDOCUMENTED_COMMANDS` exception because it belongs to the surface by
+ * decision, not by accident — the §6.2 prose edit that records it is the tech lead's, and
+ * this line is what makes the two sides comparable once it lands.
  */
 const CONTRACT = {
   auth: ['login', 'session', 'restore', 'logout', 'list_devices', 'revoke_device'],
@@ -65,7 +72,7 @@ const CONTRACT = {
   ],
   storage: ['storage_stats', 'update_settings', 'storage_settings', 'clear_local'],
   files: ['cache_quote_pdf', 'open_cached', 'attach_from_paths', 'screenshot_to_ticket'],
-  os: ['set_badge', 'register_hotkey', 'set_autostart', 'notify'],
+  os: ['set_badge', 'register_hotkey', 'set_autostart', 'get_autostart', 'notify', 'set_tray_language'],
 }
 
 /**
@@ -77,10 +84,14 @@ const CONTRACT = {
  * from §6.2 has to land here as a deliberate edit rather than pass unnoticed.
  */
 const DEFERRED_COMMANDS = {
-  // Seven of the original eight landed with F5-2/5/7/8 and were removed from this list. Only
-  // the hotkey is still deferred: it is F5-3 (quick capture), and unlike the others it needs
-  // setup-time registration, not just a command body.
-  register_hotkey: 'os::* — F5-3 scope (§6.4 global hotkey; needs setup-time registration)',
+  // EMPTY, and that is the point: all 29 commands of the §6.2 contract are delivered as of
+  // F5-3. `register_hotkey` was the last entry — the eighth of the original eight — and it
+  // landed with the quick-capture window (`src-tauri/src/quick_capture.rs`); the shortcut is
+  // claimed from `.setup()`, which is why it outlived the other seven here.
+  //
+  // Leaving the object in place rather than deleting it: an entry is how a future phase says
+  // "not built yet, and here is who owns it", and the checks above compare against it in both
+  // directions. Removing the constant would take that vocabulary away.
 }
 
 /**
@@ -88,12 +99,15 @@ const DEFERRED_COMMANDS = {
  * exists; an undeclared one fails, because "the spec does not know about it" is exactly how a
  * command surface drifts away from the document every other document quotes.
  */
-// Empty on purpose. `auth::session` lived here until 2026-08-31: it was registered and used
-// but absent from §6.2, so this exception kept the check honest without silently passing it.
-// The spec has since been corrected (SYNCDESKTOP.md §13, "session eksikti, stats yanlıştı"),
-// so the exception is gone and `session` is verified like every other command. An entry here
-// is a documented gap, never a way to quiet the check — leaving a stale one would mean the
-// check stops caring if the spec later drops that command again.
+// `auth::session` lived here until 2026-08-31: it was registered and used but absent from
+// §6.2, so this exception kept the check honest without silently passing it. The spec has since
+// been corrected (SYNCDESKTOP.md §13, "session eksikti, stats yanlıştı") and `session` is now
+// verified like every other command. An entry here is a documented gap, never a way to quiet
+// the check — leaving a stale one would mean the check stops caring if the spec later drops
+// that command again.
+// Empty again. `set_tray_language` sat here while §6.2 did not list it; the spec line was
+// corrected this round, so the command is verified like every other one instead of excused.
+// An entry here is a documented gap, never a way to quiet the check.
 const UNDOCUMENTED_COMMANDS = {}
 
 /**
@@ -354,8 +368,14 @@ for (const name of Object.keys(DEFERRED_COMMANDS)) {
 // another Rust path, or delivered one phase ahead of the screen that uses it). Silence would
 // be wrong too, so the count and the names are always printed.
 const deadCommands = [...registered.keys()].filter((name) => !invoked.has(name)).sort()
+// F5 closed this at zero: every registered command now has a caller in `desktop/src`. It is a
+// failure rather than a warning from here on, because the drift it describes is one-directional —
+// a command registered ahead of its consumer stays uncalled until somebody notices, and F5 spent
+// three rounds climbing out of exactly that state (seven unreachable commands). If a future phase
+// genuinely needs to land a command early, the honest move is a DEFERRED_COMMANDS entry with a
+// reason, not a warning nobody reads.
 for (const name of deadCommands) {
-  warnings.push(`'${name}' (commands::${registered.get(name)}): registered but nothing in desktop/src invokes it`)
+  fail(`'${name}' (commands::${registered.get(name)}): registered but nothing in desktop/src invokes it`)
 }
 
 // ------------------------------------------------------------------------------------------------

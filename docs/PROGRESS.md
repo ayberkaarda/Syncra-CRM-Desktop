@@ -13,17 +13,21 @@
 > | Faz | Durum |
 > |---|---|
 > | F0 Keşif + sözleşme | ✅ `docs/DESKTOP-SYNC-PROTOCOL.md`, `docs/DESKTOP-ARCHITECTURE.md` |
-> | F1 Backend | ✅ migration'lar, observer + trigger, device auth, 3 sync endpoint — **1411 test** |
+> | F1 Backend | ✅ migration'lar, observer + trigger, device auth, 3 sync endpoint — **1450 test / 10351 assertion** (2026-09-01) |
 > | F2 `syncra-sync` crate | ✅ SQLCipher + outbox + sync döngüsü |
-> | F3 Tauri kabuğu + adaptör | ⏳ uygulama açılıyor, 124/124 metot bağlı, A11 realtime köprüsü — **107 test** (crate + kabuk) |
-> | F4 Offline UX | ⏳ 5 ekranın 4'ü (Conflict Inbox, Storage, Devices, connectivity bar) |
-> | F5 OS özellikleri | ❌ başlamadı |
+> | F3 Tauri kabuğu + adaptör | ✅ 128/128 metot bağlı (A19), A11 realtime köprüsü, 30/30 Tauri komutu — crate **160** + kabuk **113** + vitest **278** |
+> | F4 Offline UX | ✅ 5 ekran + gerçek senaryo koşumu (16,3 sn, yeniden başlatma yok, 0 reddedilen) |
+> | F5 OS özellikleri | ✅ 8 maddenin 8'i Windows'ta **elle ölçüldü** — tray · native bildirim · hotkey quick-capture · deep link (soğuk başlangıç dahil) · drag-drop + PDF cache · pano opt-in · autostart/window-state/badge · screenshot→ticket. **JumpList "son 5 kayıt" F7'ye devredildi** (defter O85, SYNCDESKTOP §6.4/§10 güncellendi): paketlenmiş kurulum olmadan doğrulanamaz. Ölçüm 4 üretim hatası buldu, 4'ü de kapandı (O80/O81/O86/O88). |
 > | F6 Güvenlik | ⏳ `docs/DESKTOP-THREAT-MODEL.md` + §9/9 log filtresi |
 > | F7 Paketleme + CI | ⏳ workflow'lar yazıldı, **hiç çalıştırılmadı** |
 >
 > ### En kritik bilgi
 >
-> **Hiçbir şey uçtan uca doğrulanmadı.** Yukarıdaki bütün test sayıları kendi mock'una karşı yeşil (wiremock ↔ PHPUnit); iki mock'un aynı wire gerçeğini tarif ettiği kanıtlanmadı. Gerçek login/bootstrap ilk kez deneniyor.
+> **Artık uçtan uca doğrulandı — ve doğrulama pahalıya mal oldu.** Gerçek backend'e karşı ilk koşum 16 uyuşmazlık çıkardı (§5, AUTH-1); F4 senaryosu ve F5 ölçüm turları dört üretim hatası daha buldu. **Hiçbiri birim testleriyle görünmüyordu.**
+
+Karşı önlem: `wire-fixtures/` — kanonik JSON'u **üç tüketici** okuyor (crate `to_wire()`, PHPUnit endpoint, TS composer), böylece hiçbir taraf wire'ı tek başına değiştiremiyor.
+
+**Ama mekanizmanın bilinen bir kör noktası var (defter O82):** fikstürler bugün "rahat şekil" taşıyor (JSON alanı **nesne**, damga **ISO+Z**) — ayna ise ikisini de öyle saklamıyor (`data` **TEXT string**, `created_at` **boşluklu ve zaman dilimi eksiz**). O80 ve O81 tam bu boşluktan geçti ve **hiçbir log izi bırakmadı**. Yani RISK-1'in aynası crate ile webview arasında hâlâ açık.
 >
 > ### Oturum başında ayrıca oku
 >

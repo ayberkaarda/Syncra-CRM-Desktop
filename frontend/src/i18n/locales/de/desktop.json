@@ -189,6 +189,68 @@
       "conflict": "Syncra — Konflikt erkannt"
     }
   },
+  "clipboard": {
+    "addAsLeadTitle": "Syncra",
+    "addAsLeadBody": "Den kopierten Kontakt als Interessenten anlegen?",
+    "optIn": {
+      "label": "Zwischenablage beobachten und Interessenten vorschlagen",
+      "description": "Solange dies aus ist, wird die Zwischenablage nie gelesen. Ist es an, erscheint eine Benachrichtigung nur, wenn die Zwischenablage genau eine E-Mail-Adresse oder eine E.164-Telefonnummer enthält; der Inhalt wird niemals auf die Festplatte oder ins Protokoll geschrieben."
+    }
+  },
+  "quickCapture": {
+    "title": "Schnellerfassung",
+    "dismissHint": "Esc zum Schließen",
+    "types": {
+      "lead": "Interessent",
+      "note": "Notiz",
+      "task": "Aufgabe",
+      "activity": "Aktivität"
+    },
+    "activityTypes": {
+      "call": "Anruf",
+      "meeting": "Besprechung",
+      "email": "E-Mail",
+      "note": "Notiz"
+    }
+  },
+  "files": {
+    "attach": {
+      "uploaded": "{{name}} wurde dem Datensatz hinzugefügt.",
+      "queued": "{{name}} steht in der Warteschlange und wurde noch nicht gesendet.",
+      "rejected": "{{name}} konnte nicht hinzugefügt werden."
+    },
+    "drop": {
+      "started_one": "{{count}} Datei wird hinzugefügt…",
+      "started_other": "{{count}} Dateien werden hinzugefügt…",
+      "noTarget": "Öffnen Sie zuerst einen Deal oder ein Ticket und ziehen Sie die Dateien dann auf das Fenster.",
+      "failed": "Die abgelegten Dateien konnten nicht verarbeitet werden."
+    },
+    "quotePdf": {
+      "action": "Angebots-PDF öffnen",
+      "opened": "Das PDF wurde aus der Kopie auf diesem Gerät geöffnet.",
+      "downloaded": "Das PDF wurde heruntergeladen und geöffnet.",
+      "error": "Das PDF konnte nicht geöffnet werden."
+    },
+    "screenshot": {
+      "action": "Screenshot an das Ticket anhängen",
+      "error": "Der Screenshot konnte nicht erstellt werden."
+    }
+  },
+  "preferences": {
+    "title": "Einstellungen",
+    "hotkey": {
+      "label": "Tastenkürzel für die Schnellerfassung",
+      "description": "Zum Beispiel: CmdOrCtrl+Shift+Space. Mindestens eine Modifikatortaste ist erforderlich.",
+      "conflict": "Dieses Tastenkürzel wird bereits von einer anderen Anwendung verwendet. Das bisherige Kürzel bleibt aktiv.",
+      "saved": "Tastenkürzel gespeichert."
+    },
+    "autostart": {
+      "label": "Syncra beim Start des Computers ausführen",
+      "description": "Wenn aktiviert, startet die App bei Ihrer Anmeldung im Hintergrund und die Synchronisierung wird dort fortgesetzt, wo sie aufgehört hat. Diese Einstellung gehört zu diesem Computer, nicht zu Ihrem Konto.",
+      "saved": "Autostart-Einstellung gespeichert.",
+      "saveError": "Die Autostart-Einstellung konnte nicht geändert werden."
+    }
+  },
   "window": {
     "closeToTray": {
       "label": "Beim Schließen des Fensters im Tray weiterlaufen",

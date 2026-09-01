@@ -86,12 +86,29 @@ export interface StorageStats {
   db_usage_percent: number
 }
 
-/** `syncra_sync::DesktopSettings` — the user-tunable subset of `SyncConfig`. */
+/**
+ * `syncra_sync::DesktopSettings` — the user-tunable subset of `SyncConfig`.
+ *
+ * `update_settings` takes the WHOLE struct, so every screen that saves it has to send back the
+ * fields it does not own. `StorageSettings` used to hard-code `clipboard_capture: false`, which
+ * silently reset that opt-in on every retention change; both booleans are now read from
+ * `storage_settings` and passed through. Adding a field here without adding it to every save
+ * path re-creates that bug.
+ */
 export interface DesktopSettings {
   retention_days: number
   max_db_size_mb: number
   max_outbox: number
+  /** K10 — clipboard capture is opt-in and off by default. */
   clipboard_capture: boolean
+  /**
+   * §6.4 — whether closing the main window hides it to the tray instead (D-8).
+   *
+   * Defaults to `true`, both in `syncra_sync::DesktopSettings` and for a settings row written
+   * before the field existed: that is the behaviour every install already had, and a
+   * deserialisation default must not change how an app someone is already using behaves.
+   */
+  close_to_tray: boolean
 }
 
 /** `commands::auth::DeviceSummary` — one row of `GET /api/me/devices`. */
@@ -175,6 +192,70 @@ export function revokeDevice(tokenId: number): Promise<void> {
   return invokeCommand<void>('revoke_device', { tokenId })
 }
 
+/**
+ * `os::get_autostart` — whether launch-at-login is on, read from the OS.
+ *
+ * The settings toggle has to call this on open. Autostart is not part of `DesktopSettings`
+ * (the engine never sees it — it is a registry value on Windows, a launch agent on macOS, a
+ * `.desktop` file on Linux), so there is no local copy to render from, and `set_autostart`
+ * only reports the state it just wrote. Reading it from JS with an npm package was rejected:
+ * that would be a second source of truth for a value only the OS holds, reporting its errors
+ * outside the `{code, message}` shape §6.2 fixes for this whole surface.
+ */
+export function readAutostart(): Promise<boolean> {
+  return invokeCommand<boolean>('get_autostart')
+}
+
+/**
+ * `os::set_autostart` — turn launch-at-login on or off.
+ *
+ * Resolves with the state the OS **actually holds afterwards**, read back rather than echoed:
+ * a platform where the plugin cannot write the entry reports the unchanged value instead of a
+ * success the user would only discover was a lie at the next reboot. The settings screen must
+ * therefore render the RETURNED boolean, not the one it sent. Rejects with `OS_ERROR` when the
+ * registry key / launch agent / `.desktop` file could not be written.
+ *
+ * Opt-in and structurally so: registering `tauri_plugin_autostart` enables nothing, and this
+ * call is the only path in the whole shell to an enabled entry.
+ */
+export function setAutostart(enabled: boolean): Promise<boolean> {
+  return invokeCommand<boolean>('set_autostart', { enabled })
+}
+
+/**
+ * The quick-capture accelerator `SYNCDESKTOP.md` §6.4 names, and the one
+ * `src-tauri/src/quick_capture.rs` claims at `.setup()`.
+ *
+ * Transcribed rather than read from Rust — there is no channel that could carry it before the
+ * first command call — and `quick_capture::tests::the_default_accelerator_is_the_one_the_spec_names`
+ * holds the other side to the same string.
+ */
+export const DEFAULT_HOTKEY = 'CmdOrCtrl+Shift+Space'
+
+/**
+ * `os::register_hotkey` — claim `accelerator` for the quick-capture window.
+ *
+ * Rejects with `VALIDATION_ERROR` (unparseable, or no modifier) or `OS_ERROR` (the combination
+ * is already owned by another application). A rejected change leaves the PREVIOUS shortcut
+ * registered, so the caller does not have to undo anything. Re-applying the accelerator
+ * already held is a no-op success.
+ */
+export function registerHotkey(accelerator: string): Promise<void> {
+  return invokeCommand<void>('register_hotkey', { accelerator })
+}
+
+/**
+ * `os::set_tray_language` — point the tray menu and tooltip at `language` (defter C1).
+ *
+ * Not a `SYNCDESKTOP.md` §6.2 command; it is declared in `check-command-wiring.mjs`'s
+ * `UNDOCUMENTED_COMMANDS`. It exists because the tray resolves its own language from the
+ * session and the OS, neither of which knows about the per-install override i18next keeps in
+ * `localStorage` — Rust cannot read that store, so the webview pushes instead.
+ */
+export function setTrayLanguage(language: string): Promise<void> {
+  return invokeCommand<void>('set_tray_language', { language })
+}
+
 // ------------------------------------------------------------------------------------------------
 // Pending / conflicted rows — the record badges (`SYNCDESKTOP.md` §7.2)
 // ------------------------------------------------------------------------------------------------
@@ -219,4 +300,44 @@ export function syncStateOf(row: LocalRow): SyncState | null {
 /** One entity's unpushed rows (`NamedQuery::PendingRows`). */
 export function listPendingRows(entity: EntityName, params: QueryParams = {}): Promise<LocalRow[]> {
   return runQuery({ query: 'pending_rows', entity }, params)
+}
+
+// ------------------------------------------------------------------------------------------------
+// Native notifications and the taskbar badge (`SYNCDESKTOP.md` §6.4 items 2 and 7)
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * `commands::os::NotificationInput` — the text one native toast shows.
+ *
+ * Both fields are **already-resolved sentences**, never i18n keys. `os::notification_text`
+ * refuses a `notifications.<type>.title`-shaped string outright (`VALIDATION_ERROR`), because
+ * the row's `data` column is written in key mode (`CrmNotification::toArray`) and only the
+ * webview can render it — which is exactly why this command takes text rather than the row.
+ * `mapNotification` already resolves it through `resolveNotificationText`, so the mapped
+ * `Notification` is the correct source; the raw `LocalRow` is not.
+ */
+export interface NativeNotification {
+  title: string
+  body: string
+}
+
+/**
+ * `os::notify` — hand one toast to the OS notification centre.
+ *
+ * A resolved promise means "handed over", **not** "displayed": the plugin's desktop `show()`
+ * spawns the OS call onto Tauri's runtime and `commands::os::notify` cannot observe the
+ * outcome. Nothing in the UI may therefore claim a notification was shown.
+ */
+export function notify(notification: NativeNotification): Promise<void> {
+  return invokeCommand<void>('notify', { notification })
+}
+
+/**
+ * `os::set_badge` — the unread count on the taskbar/dock entry of the `main` window.
+ *
+ * `0` clears it; a negative count is refused with `VALIDATION_ERROR` rather than clamped, so
+ * callers must pass a real count and not a difference.
+ */
+export function setBadge(count: number): Promise<void> {
+  return invokeCommand<void>('set_badge', { count })
 }

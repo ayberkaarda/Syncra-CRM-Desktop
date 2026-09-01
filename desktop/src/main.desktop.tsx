@@ -16,13 +16,23 @@ import { createRoot } from 'react-dom/client'
 // `/broadcasting/auth`, which fails as a 419 three layers away from the cause (§6.4 TUZAK 2).
 import '@/index.css'
 import { i18nReady } from '@/i18n'
+// Two import statements from the SAME module, on purpose. `frontend/scripts/check-i18n-bootstrap.mjs`
+// (KARAR D-6) asserts the opening gate with a regex that requires a NAMED import list to open the
+// statement — `import\s*\{[^}]*i18nReady` — so folding the default in as
+// `import i18n, { i18nReady } from '@/i18n'` makes that check fail with a message about the symbol
+// not being imported at all. Merging these two lines is the trap; do not.
+import i18n from '@/i18n'
 import { PlatformProvider, setPlatform } from '@/platform'
 import { queryClient } from '@/lib/queryClient'
 import { applyEngineStatus, desktopPlatform, primeDesktopPlatform } from './platform/desktop'
 import { handleAuthLost, installDesktopAuth, restoreDesktopSession } from './platform/auth'
 import { subscribeToEngineEvents } from './bridge/events'
+import { notificationWatcher } from './bridge/notifications'
+import { startDeepLinkBridge } from './bridge/deeplink'
 import { startRealtimeBridge } from './bridge/realtime'
 import { DesktopShell } from './ui/DesktopShell'
+import { setTrayLanguage } from './ui/commands'
+import { restoreHotkey } from './ui/hotkey'
 import App from '@/App'
 
 // Before the first render, and before anything can call `getPlatform()` from a React tree.
@@ -42,8 +52,16 @@ primeDesktopPlatform()
 // simply lost — the broadcast channel only replays to live subscribers. `queryClient` is the
 // same module singleton `App` hands to `QueryClientProvider`, so invalidations land on the
 // cache the tree is actually reading.
+// §6.4 items 2 and 7 ride the SAME subscription: a `tables_changed` batch carrying
+// `notification` is what turns a pulled or broadcast row into a native toast and moves the
+// taskbar badge. Created here (rather than lazily inside the handler) so `startedAt` is the
+// process's start and not the moment the first notification happened to arrive — the backlog
+// rule depends on it. See `bridge/notifications.ts` for why nothing is toasted on the first read.
+const notifications = notificationWatcher()
+
 void subscribeToEngineEvents(queryClient, {
   onStatusChanged: applyEngineStatus,
+  onTablesChanged: notifications.onTablesChanged,
   // The server rejected the device token (§5.5). The engine has already dropped it and kept
   // the outbox; the webview only has to stop claiming a session, which sends `RequireAuth` to
   // `/login` on the next render. `USER_DEACTIVATED` (403) does NOT arrive here — `transport.rs`
@@ -61,6 +79,36 @@ void subscribeToEngineEvents(queryClient, {
 // arms the listeners that subscribe the moment it does.
 startRealtimeBridge()
 
+// §6.4 deep links. The Rust side consumes the url this process was LAUNCHED with
+// (`deep_link::install` reads `get_current()` in `.setup()`), which on a cold start happens
+// long before this tree exists — and a Tauri event with no listener is simply dropped. That is
+// exactly how cold-start links used to be lost (defter O86): the app opened on `/`.
+//
+// So Rust no longer emits a launch target on sight. It HOLDS it, and `startDeepLinkBridge()`
+// announces itself only once its `listen()` has actually resolved; whichever side arrives
+// second performs the delivery, and the target is delivered exactly once. Arming early still
+// matters — it shortens the wait — but correctness no longer depends on winning the race.
+// Every url has already been validated in Rust; this side only maps an entity to a route.
+void startDeepLinkBridge()
+
+// The tray speaks whatever the account's `users.locale` says, because that is all Rust can
+// read: the per-install override i18next keeps in `localStorage` lives inside the WebView2 /
+// WebKitGTK profile and is invisible to the shell (defter C1). So the webview pushes it down —
+// once for the language that is active right now, and again whenever it changes.
+//
+// Failures are swallowed: a tray label in the previous language is a cosmetic defect, and this
+// is not a path any screen is waiting on. The command rejects only for a language the tray has
+// no dictionary for, which `i18n.language` can never be.
+function pushTrayLanguage(language: string): void {
+  void setTrayLanguage(language).catch(() => undefined)
+}
+i18n.on('languageChanged', pushTrayLanguage)
+
+// §6.4's "configurable" half of the global hotkey. `.setup()` has already claimed the default
+// (`quick_capture::install_default`), so this only does work when the user picked something
+// else; see `ui/hotkey.ts` for why the choice lives in `localStorage`.
+restoreHotkey()
+
 // OPENING GATE — mirrors `frontend/src/main.tsx:19-25` deliberately and must keep mirroring it
 // (KARAR A7). `tr` is eager, `en/de/fr` are lazy chunks; rendering before the selected locale's
 // chunk has landed makes i18next fall back to `tr`, so a user who picked English would get a
@@ -74,6 +122,17 @@ startRealtimeBridge()
 // router decides on its very first render whether the user is signed in, and a session that
 // lands one tick later would show `/login` and then yank it away.
 void i18nReady.then(restoreDesktopSession).then(() => {
+  // After the gate, so the tray is told the locale that actually resolved rather than the one
+  // i18next was still bootstrapping. `languageChanged` above covers every later change.
+  pushTrayLanguage(i18n.resolvedLanguage ?? i18n.language)
+
+  // The priming read (§6.4 item 7): it puts the unread count on the taskbar badge at boot and
+  // raises no toast. It runs AFTER `restoreDesktopSession()` because the local mirror is only
+  // readable once the session is restored — before that the query would reject with
+  // `AUTH_REQUIRED` and the badge would keep whatever the previous run left on it. Failures are
+  // swallowed inside the watcher.
+  void notifications.refresh()
+
   createRoot(document.getElementById('root')!).render(
     // `DesktopShell` is the F4 chrome (`SYNCDESKTOP.md` §7.2): the connectivity bar and the
     // panel that carries the Conflict Inbox, storage settings and the device list. It wraps

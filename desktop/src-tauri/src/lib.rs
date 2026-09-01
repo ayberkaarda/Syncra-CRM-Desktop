@@ -14,13 +14,18 @@
 //! the app never noticed, and restarting it was the only way out. The tray and the OS network
 //! event are still F5; they make the loop *faster*, not *possible*.
 
+mod clipboard;
 mod commands;
+mod deep_link;
 mod events;
 mod logging;
+mod quick_capture;
 mod state;
 mod tray;
 
 use tauri::{AppHandle, Manager, RunEvent, Runtime, WindowEvent};
+#[cfg(desktop)]
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_window_state::StateFlags;
 
 use state::AppState;
@@ -38,14 +43,25 @@ pub fn run() {
     // only; mobile is out of scope (K11) but the crate still gates on `cfg(desktop)` itself.
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             // A second launch surfaces the existing window instead of starting a second
-            // instance. Deep-link argument handling (`syncra://...`) is F5-4 scope; the
-            // deep-link plugin is registered below but not wired to this handler yet.
+            // instance.
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
+
+            // §6.4: "forwarded to the existing window via single-instance". On Windows and
+            // Linux a `syncra://` link does not reach a running process at all — the OS starts
+            // a NEW one with the url as its only argument, and this handler is where that
+            // second process's argv arrives. `handle_cli_arguments` checks the argument against
+            // the schemes declared in `tauri.conf.json` and, on a match, fires the plugin's
+            // `on_open_url` — which `crate::deep_link::install` has already subscribed to. So
+            // the validation and the routing stay in one place instead of being written twice.
+            //
+            // macOS never gets here: it delivers the url as an `Open URL` Apple event to the
+            // running instance, which the plugin turns into the same `on_open_url` call.
+            app.deep_link().handle_cli_arguments(args.iter());
         }));
     }
 
@@ -133,11 +149,17 @@ pub fn run() {
             commands::files::open_cached,
             commands::files::attach_from_paths,
             commands::files::screenshot_to_ticket,
-            // F5-2 / F5-7 (§6.4 notification, badge, autostart). `register_hotkey` is NOT here:
-            // it belongs to F5-3 (quick capture), which needs setup-time registration.
+            // F5-2 / F5-7 (§6.4 notification, badge, autostart) and F5-3 (`register_hotkey`,
+            // which completes the five `os::*` commands §6.2 lists — the shortcut itself is
+            // claimed at setup time below, this command is how the user's choice replaces it).
             commands::os::notify,
             commands::os::set_badge,
             commands::os::set_autostart,
+            commands::os::get_autostart,
+            commands::os::register_hotkey,
+            // NOT a §6.2 command — see its doc comment and `check-command-wiring.mjs`'s
+            // `UNDOCUMENTED_COMMANDS` entry (defter C1).
+            commands::os::set_tray_language,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -177,22 +199,59 @@ pub fn run() {
             // `AppState`.
             tray::init(&handle)?;
 
-            // D-8: closing the main window minimizes to tray. The window comes back from the
-            // tray's `Open` item, a double click on the icon, or the `single-instance`
-            // second-instance handler above; leaving is the tray's `Quit`, which is the only
-            // caller of `AppHandle::exit` in the app.
+            // §6.4: claim `CmdOrCtrl+Shift+Space` for the quick-capture window (F5-3).
             //
-            // §6.4 writes this as "(ayar)" — a setting. There is none yet, and inventing one
-            // here would mean a `DesktopSettings` field (the engine's API is frozen) plus a
-            // toggle in `desktop/src` (another strand's files). The i18n copy for it already
-            // exists as `desktop.window.closeToTray.*`; the wiring is an open question for the
-            // phase that owns the settings screen.
+            // Here rather than in a command because a global shortcut is a process-wide OS
+            // claim with the app's own lifetime — a command that had to be invoked before the
+            // hotkey worked would mean no hotkey until the webview had booted, which is
+            // precisely the moment a user reaches for it least.
+            //
+            // Non-fatal by design (see `quick_capture::install_default`): the combination
+            // being taken by another application is ordinary, and the tray's `Quick capture`
+            // item opens the same window with no shortcut involved. The webview replaces this
+            // claim with the user's own accelerator through `os::register_hotkey`.
+            //
+            // Safe inside `.setup()` despite the plugin's `run_on_main_thread` hop:
+            // `tauri_runtime_wry::send_user_message` runs the task INLINE when it is already
+            // on the main thread, which `.setup()` is — the event loop has not started yet, so
+            // a queued task would have deadlocked on its own reply channel.
+            quick_capture::install_default(&handle);
+
+            // §6.4: `syncra://<entity>/<id>`. Subscribes to the plugin's `on_open_url` and
+            // consumes the url this process was launched with, so a link clicked while the app
+            // was closed is not lost. Every url is validated against §6.4's regex and the eight
+            // entity names before anything reaches the webview — see `crate::deep_link`.
+            #[cfg(desktop)]
+            deep_link::install(&handle);
+
+            // §6.4 item 6: clipboard capture. The loop is always spawned; it reads nothing
+            // until `DesktopSettings::clipboard_capture` is switched on, which is off by
+            // default (K10) and only ever written by the settings screen. See
+            // `crate::clipboard` for how §9 item 6 ("the content is not written to disk or
+            // log") is guaranteed structurally rather than by care.
+            clipboard::start(&handle);
+
+            // D-8 / §6.4 "Pencere kapatma → tray'e (ayar)" — a setting, and now actually one.
+            //
+            // `DesktopSettings::close_to_tray` is the flag (defaulting to `true`, which is the
+            // behaviour every existing install already has). It is read **on every close**,
+            // not captured here: the handler is installed once at startup and lives for the
+            // process, so a snapshot taken now would mean the toggle only took effect after a
+            // restart — which is exactly the kind of setting users conclude is broken.
+            //
+            // `false` means the close is allowed through. That does not quit the app by itself:
+            // Tauri exits when the last window closes, and the quick-capture window may still
+            // be alive, so the tray's `Quit` remains the one deliberate way out (and the one
+            // path that reaches the `RunEvent::Exit` teardown).
             if let Some(window) = app.get_webview_window("main") {
                 let hide_target = window.clone();
+                let close_handle = handle.clone();
                 window.on_window_event(move |event| {
                     if let WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = hide_target.hide();
+                        if close_to_tray(&close_handle) {
+                            api.prevent_close();
+                            let _ = hide_target.hide();
+                        }
                     }
                 });
             }
@@ -206,6 +265,17 @@ pub fn run() {
                 teardown(app);
             }
         });
+}
+
+/// Whether closing the main window should hide it instead (`DesktopSettings::close_to_tray`).
+///
+/// Defaults to `true` when the settings cannot be read at all — a state that only exists if
+/// `.setup()` failed before managing the engine. Hiding a window is recoverable from the tray;
+/// letting it close when the user asked for the opposite is not.
+fn close_to_tray<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<AppState>()
+        .map(|state| state.engine.settings().close_to_tray)
+        .unwrap_or(true)
 }
 
 /// Orderly shutdown, run once from `RunEvent::Exit`.

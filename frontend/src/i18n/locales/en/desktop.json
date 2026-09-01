@@ -189,6 +189,68 @@
       "conflict": "Syncra — Conflict detected"
     }
   },
+  "clipboard": {
+    "addAsLeadTitle": "Syncra",
+    "addAsLeadBody": "Add the copied contact as a lead?",
+    "optIn": {
+      "label": "Watch the clipboard and suggest new leads",
+      "description": "While this is off the clipboard is never read. While it is on you are only notified when the clipboard holds exactly an email address or an E.164 phone number; the content is never written to disk or to the log."
+    }
+  },
+  "quickCapture": {
+    "title": "Quick capture",
+    "dismissHint": "Press Esc to close",
+    "types": {
+      "lead": "Lead",
+      "note": "Note",
+      "task": "Task",
+      "activity": "Activity"
+    },
+    "activityTypes": {
+      "call": "Call",
+      "meeting": "Meeting",
+      "email": "Email",
+      "note": "Note"
+    }
+  },
+  "files": {
+    "attach": {
+      "uploaded": "{{name}} was added to the record.",
+      "queued": "{{name}} is queued and has not been sent yet.",
+      "rejected": "{{name}} could not be added."
+    },
+    "drop": {
+      "started_one": "Adding {{count}} file…",
+      "started_other": "Adding {{count}} files…",
+      "noTarget": "To attach files, open a deal or a ticket first, then drop them on the window.",
+      "failed": "The dropped files could not be processed."
+    },
+    "quotePdf": {
+      "action": "Open the quote PDF",
+      "opened": "The PDF opened from the copy on this device.",
+      "downloaded": "The PDF was downloaded and opened.",
+      "error": "The PDF could not be opened."
+    },
+    "screenshot": {
+      "action": "Attach a screenshot to the ticket",
+      "error": "The screenshot could not be taken."
+    }
+  },
+  "preferences": {
+    "title": "Preferences",
+    "hotkey": {
+      "label": "Quick capture shortcut",
+      "description": "For example: CmdOrCtrl+Shift+Space. At least one modifier key is required.",
+      "conflict": "That shortcut is already used by another application. The previous shortcut stays in effect.",
+      "saved": "Shortcut saved."
+    },
+    "autostart": {
+      "label": "Launch Syncra when the computer starts",
+      "description": "When on, the app starts in the background as you sign in and sync picks up where it left off. This setting belongs to this computer, not to your account.",
+      "saved": "Launch-at-login setting saved.",
+      "saveError": "The launch-at-login setting could not be changed."
+    }
+  },
   "window": {
     "closeToTray": {
       "label": "Keep running in the tray when the window is closed",

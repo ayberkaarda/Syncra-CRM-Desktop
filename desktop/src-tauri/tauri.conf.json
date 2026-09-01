@@ -28,6 +28,13 @@
       "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://localhost:8000 ws://localhost:8080; img-src 'self' data: http://localhost:8000; style-src 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'"
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["syncra"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

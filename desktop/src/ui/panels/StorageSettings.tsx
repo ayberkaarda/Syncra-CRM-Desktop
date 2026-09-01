@@ -42,6 +42,11 @@ export function StorageSettings() {
 
   const [stats, setStats] = useState<StorageStats | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // `update_settings` takes the WHOLE `DesktopSettings` struct, so this screen has to hand
+  // back the two booleans it does not own (`clipboard_capture`, `close_to_tray` — both live in
+  // `DesktopPreferences`). It used to send `clipboard_capture: false` unconditionally, which
+  // meant every retention change silently switched the K10 opt-in back off.
+  const [settings, setSettings] = useState<DesktopSettings | null>(null)
   const [retentionDays, setRetentionDays] = useState<number>(MIN_RETENTION_DAYS)
   const [maxDbSizeMb, setMaxDbSizeMb] = useState<number>(MIN_MAX_DB_SIZE_MB)
   const [maxOutbox, setMaxOutbox] = useState<number>(MIN_MAX_OUTBOX)
@@ -50,11 +55,12 @@ export function StorageSettings() {
 
   const load = useCallback(async () => {
     try {
-      const [next, settings] = await Promise.all([readStorageStats(), readStorageSettings()])
+      const [next, persisted] = await Promise.all([readStorageStats(), readStorageSettings()])
       setStats(next)
+      setSettings(persisted)
       setMaxDbSizeMb(Math.round(next.max_db_bytes / BYTES_PER_MB))
       setMaxOutbox(next.max_outbox)
-      setRetentionDays(settings.retention_days)
+      setRetentionDays(persisted.retention_days)
       setLoadError(null)
     } catch (error) {
       setLoadError(errorMessage(t, errorCodeOf(error)))
@@ -83,21 +89,23 @@ export function StorageSettings() {
   function handleSave(): void {
     // Clamped here as well as in the engine (`DesktopSettings::clamped`), so the field the user
     // is looking at shows the value that will actually be stored.
-    const settings: DesktopSettings = {
+    const next: DesktopSettings = {
       retention_days: Math.max(MIN_RETENTION_DAYS, retentionDays),
       max_db_size_mb: Math.max(MIN_MAX_DB_SIZE_MB, maxDbSizeMb),
       max_outbox: Math.max(MIN_MAX_OUTBOX, maxOutbox),
-      // K10: clipboard capture is opt-in and default-off, and this phase ships no UI for it.
-      // Sending `false` is the documented default, not a silent reset of a user choice.
-      clipboard_capture: false,
+      // Not this screen's fields — passed straight back from what the engine has persisted.
+      // The `?? default` arms only fire if the load failed, and they repeat the engine's own
+      // defaults (`DesktopSettings::default`) rather than inventing a value.
+      clipboard_capture: settings?.clipboard_capture ?? false,
+      close_to_tray: settings?.close_to_tray ?? true,
     }
-    setRetentionDays(settings.retention_days)
-    setMaxDbSizeMb(settings.max_db_size_mb)
+    setRetentionDays(next.retention_days)
+    setMaxDbSizeMb(next.max_db_size_mb)
 
     void (async () => {
       setBusy(true)
       try {
-        await updateStorageSettings(settings)
+        await updateStorageSettings(next)
         toast.success(t('desktop:storage.saveSuccess'))
       } catch (error) {
         toast.error(`${t('desktop:storage.saveError')} ${errorMessage(t, errorCodeOf(error))}`)

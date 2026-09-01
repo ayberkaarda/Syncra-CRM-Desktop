@@ -45,6 +45,37 @@ class QuotePdfTest extends TestCase
         parent::setUp();
 
         App::setLocale('tr');
+
+        // Logo header alanı QuotePdfService içinde SÜREÇ BAŞINA (process-wide
+        // static) memoize edilir — bkz. QuotePdfService::logoDataUri()
+        // docblock'u. Testler arasında bu önbellek sızarsa (ör. bu dosyadan
+        // önce çalışan başka bir test zaten render() çağırıp gerçek logoyu
+        // önbelleğe almışsa) "varlık yokken çökmüyor" testi yanlışlıkla
+        // önbellekten gelen eski sonucu görür. Her testten önce zorla
+        // sıfırlanır ki her test kendi dosya-sistemi durumunu görsün.
+        $this->resetLogoDataUriCache();
+    }
+
+    /**
+     * `QuotePdfService::$logoDataUriResolved` / `$logoDataUriCache` private
+     * static alanlarını Reflection ile sıfırlar. Servis KASITLI olarak
+     * process başına bir kez okuyup önbelleğe alıyor (bkz. servis
+     * docblock'u); bu, testin dosyayı geçici olarak taşıyıp geri koyarken
+     * her seferinde gerçek dosya sistemi durumunu görmesini SADECE
+     * reflection ile mümkün kılar — üretim kodunda test-özel bir "reset"
+     * API'si açmak istenmedi.
+     */
+    private function resetLogoDataUriCache(): void
+    {
+        $ref = new \ReflectionClass(QuotePdfService::class);
+
+        $resolved = $ref->getProperty('logoDataUriResolved');
+        $resolved->setAccessible(true);
+        $resolved->setValue(null, false);
+
+        $cache = $ref->getProperty('logoDataUriCache');
+        $cache->setAccessible(true);
+        $cache->setValue(null, null);
     }
 
     private function makeQuoteWithItems(int $itemCount = 3, array $quoteOverrides = []): Quote
@@ -163,6 +194,64 @@ class QuotePdfTest extends TestCase
 
         $money = fn ($v) => number_format((float) $v, 2, ',', '.');
         $this->assertStringContainsString($money($quote->fresh()->total), $text);
+    }
+
+    // -----------------------------------------------------------------
+    // Logo — üst bilgide marka varlığı (bkz. QuotePdfService::logoDataUri())
+    // -----------------------------------------------------------------
+
+    public function test_header_logo_is_embedded_as_an_image_xobject(): void
+    {
+        $quote = $this->makeQuoteWithItems(1);
+
+        $pdf = app(QuotePdfService::class)->render($quote);
+
+        $this->assertStringStartsWith('%PDF-', $pdf);
+
+        // "Şablonda <img> var" demekle yetinmiyoruz: dompdf'in gerçekten bir
+        // görsel XObject yazdığını PDF nesne sözlüğünde arıyoruz.
+        $this->assertMatchesRegularExpression(
+            '/\/Subtype\s*\/Image/',
+            $pdf,
+            'Üretilen PDF baytlarında bir /Subtype /Image XObject bulunamadı.'
+        );
+    }
+
+    public function test_old_logo_placeholder_text_no_longer_appears(): void
+    {
+        $quote = $this->makeQuoteWithItems(1);
+
+        $pdf = app(QuotePdfService::class)->render($quote);
+        $text = $this->extractText($pdf);
+
+        $this->assertStringNotContainsString('LOGO', $text);
+    }
+
+    public function test_missing_logo_asset_does_not_break_pdf_generation(): void
+    {
+        $path = resource_path('images/logo-mark.png');
+        $backupPath = $path.'.test-backup';
+
+        $this->assertFileExists($path, 'Logo varlığı beklenen konumda bulunamadı: '.$path);
+        $this->assertFileDoesNotExist($backupPath, 'Önceki bir test çalıştırması yedeği temizlemeden kalmış olabilir.');
+
+        rename($path, $backupPath);
+        $this->resetLogoDataUriCache();
+
+        try {
+            $quote = $this->makeQuoteWithItems(1);
+
+            $pdf = app(QuotePdfService::class)->render($quote);
+
+            $this->assertStringStartsWith('%PDF-', $pdf);
+            $this->assertDoesNotMatchRegularExpression('/\/Subtype\s*\/Image/', $pdf);
+
+            $text = $this->extractText($pdf);
+            $this->assertStringNotContainsString('LOGO', $text);
+        } finally {
+            rename($backupPath, $path);
+            $this->resetLogoDataUriCache();
+        }
     }
 
     // -----------------------------------------------------------------

@@ -500,7 +500,7 @@ pub async fn attach_from_paths(
 /// Capture the screen (or one region of it), write a PNG, and post it into the ticket's
 /// conversation (§6.4 item 8).
 ///
-/// The capture itself runs on a blocking thread: `screenshots::Screen::capture*` is a
+/// The capture itself runs on a blocking thread: `xcap::Monitor::capture_*` is a
 /// synchronous OS call that copies a full framebuffer, and doing that on an async runtime
 /// thread stalls every other command for its duration.
 ///
@@ -817,10 +817,7 @@ fn capture_to_queue(
     let image = capture(region)?;
     let mut png = Vec::new();
     image
-        .write_to(
-            &mut std::io::Cursor::new(&mut png),
-            screenshots::image::ImageOutputFormat::Png,
-        )
+        .write_to(&mut std::io::Cursor::new(&mut png), xcap::image::ImageFormat::Png)
         .map_err(|e| CommandError::new("VALIDATION_ERROR", format!("cannot encode PNG: {e}")))?;
 
     if png.len() as u64 > MAX_FILE_BYTES {
@@ -859,37 +856,61 @@ fn capture_to_queue(
 }
 
 /// Grab pixels, either from one region or from the whole primary screen.
-fn capture(region: Option<CaptureRegion>) -> CommandResult<screenshots::image::RgbaImage> {
+///
+/// `xcap` rather than the `screenshots` crate `SYNCDESKTOP.md` §6.4 item 8 names: that crate is
+/// abandoned (0.8.10 is its last release and its own README points here) and pinned a second
+/// copy of `image` beside Tauri's. See `Cargo.toml` for the full reasoning; the API shape is the
+/// same, so this function is the only place the change is visible.
+fn capture(region: Option<CaptureRegion>) -> CommandResult<xcap::image::RgbaImage> {
     let capture_error =
-        |e: anyhow::Error| CommandError::new("VALIDATION_ERROR", format!("screen capture: {e}"));
+        |e: xcap::XCapError| CommandError::new("VALIDATION_ERROR", format!("screen capture: {e}"));
 
     match region {
         Some(region) => {
-            let screen =
-                screenshots::Screen::from_point(region.x, region.y).map_err(capture_error)?;
-            // `capture_area` takes screen-relative coordinates and adds the display origin back
-            // on itself, so the virtual-desktop rectangle has to be rebased first — passing
+            let monitor = xcap::Monitor::from_point(region.x, region.y).map_err(capture_error)?;
+            // `capture_region` takes MONITOR-relative coordinates and adds the display origin
+            // back on itself, so the virtual-desktop rectangle has to be rebased first — passing
             // virtual coordinates straight through double-counts the origin on every monitor
-            // that is not at (0, 0).
-            screen
-                .capture_area(
-                    region.x - screen.display_info.x,
-                    region.y - screen.display_info.y,
-                    region.width,
-                    region.height,
-                )
+            // that is not at (0, 0). (Same contract the `screenshots` crate's `capture_area`
+            // had; only the parameter type changed from `i32` to `u32`.)
+            let origin_x = monitor.x().map_err(capture_error)?;
+            let origin_y = monitor.y().map_err(capture_error)?;
+            // `from_point` returned the monitor CONTAINING this point, so the rebased offset is
+            // non-negative — but that is the OS's word, not a guarantee, and `as u32` on a
+            // negative number would wrap into a colossal offset that `check_capture_region`
+            // rejects with a message about a region nobody asked for. A refusal that names the
+            // real problem is worth the four lines.
+            let (Ok(local_x), Ok(local_y)) = (
+                u32::try_from(region.x - origin_x),
+                u32::try_from(region.y - origin_y),
+            ) else {
+                return Err(CommandError::new(
+                    "VALIDATION_ERROR",
+                    format!(
+                        "capture region ({}, {}) is outside the monitor at ({origin_x},                          {origin_y}) that contains it",
+                        region.x, region.y
+                    ),
+                ));
+            };
+            monitor
+                .capture_region(local_x, local_y, region.width, region.height)
                 .map_err(capture_error)
         }
         None => {
-            let screens = screenshots::Screen::all().map_err(capture_error)?;
-            let screen = screens
+            let monitors = xcap::Monitor::all().map_err(capture_error)?;
+            let monitor = monitors
+                // `is_primary` is fallible per monitor here (it was a plain field on
+                // `screenshots::DisplayInfo`). A monitor that cannot answer is treated as "not
+                // primary" rather than failing the capture: the `or_else` below still produces
+                // a screen, and refusing a screenshot because a secondary display misreported
+                // itself would be a worse outcome than capturing the first one.
                 .iter()
-                .find(|screen| screen.display_info.is_primary)
-                .or_else(|| screens.first())
+                .find(|monitor| monitor.is_primary().unwrap_or(false))
+                .or_else(|| monitors.first())
                 .ok_or_else(|| {
                     CommandError::new("VALIDATION_ERROR", "no screen available to capture")
                 })?;
-            screen.capture().map_err(capture_error)
+            monitor.capture_image().map_err(capture_error)
         }
     }
 }
@@ -1710,10 +1731,10 @@ mod tests {
 
     // --- screen capture (manual) ----------------------------------------------------------
 
-    /// Proves the `screenshots` -> PNG -> queue path end to end, including the file the queue
-    /// ends up holding.
+    /// Proves the `xcap` -> PNG -> queue path end to end, including the file the queue ends up
+    /// holding.
     ///
-    /// `#[ignore]` because it needs a real display: `Screen::all()` has nothing to enumerate on
+    /// `#[ignore]` because it needs a real display: `Monitor::all()` has nothing to enumerate on
     /// a headless CI runner, and a suite that goes red without a logged-in desktop session is a
     /// suite people learn to ignore. Run it by hand on the platform being verified:
     /// `cargo test --lib -- --ignored capture_writes_a_real_png_into_the_queue`.

@@ -189,6 +189,68 @@
       "conflict": "Syncra — Çakışma var"
     }
   },
+  "clipboard": {
+    "addAsLeadTitle": "Syncra",
+    "addAsLeadBody": "Panodaki kişiyi müşteri adayı olarak ekleyelim mi?",
+    "optIn": {
+      "label": "Panoyu izle ve müşteri adayı önerisi göster",
+      "description": "Kapalıyken pano hiç okunmaz. Açıkken yalnızca tam bir e-posta adresi veya E.164 telefon numarası kopyalandığında bildirim çıkar; pano içeriği diske veya günlüğe hiçbir zaman yazılmaz."
+    }
+  },
+  "quickCapture": {
+    "title": "Hızlı kayıt",
+    "dismissHint": "Kapatmak için Esc",
+    "types": {
+      "lead": "Müşteri Adayı",
+      "note": "Not",
+      "task": "Görev",
+      "activity": "Aktivite"
+    },
+    "activityTypes": {
+      "call": "Telefon",
+      "meeting": "Toplantı",
+      "email": "E-posta",
+      "note": "Not"
+    }
+  },
+  "files": {
+    "attach": {
+      "uploaded": "{{name}} kayda eklendi.",
+      "queued": "{{name}} kuyruğa alındı, henüz gönderilmedi.",
+      "rejected": "{{name}} eklenemedi."
+    },
+    "drop": {
+      "started_one": "{{count}} dosya ekleniyor…",
+      "started_other": "{{count}} dosya ekleniyor…",
+      "noTarget": "Dosyaları eklemek için önce bir fırsat veya talep kaydını açın, sonra pencereye bırakın.",
+      "failed": "Bırakılan dosyalar işlenemedi."
+    },
+    "quotePdf": {
+      "action": "Teklif PDF'ini aç",
+      "opened": "PDF bu cihazdaki kopyadan açıldı.",
+      "downloaded": "PDF indirildi ve açıldı.",
+      "error": "PDF açılamadı."
+    },
+    "screenshot": {
+      "action": "Ekran görüntüsünü talebe ekle",
+      "error": "Ekran görüntüsü alınamadı."
+    }
+  },
+  "preferences": {
+    "title": "Tercihler",
+    "hotkey": {
+      "label": "Hızlı kayıt kısayolu",
+      "description": "Örnek: CmdOrCtrl+Shift+Space. En az bir değiştirici tuş zorunludur.",
+      "conflict": "Bu kısayol başka bir uygulama tarafından kullanılıyor. Önceki kısayol geçerli kalmaya devam ediyor.",
+      "saved": "Kısayol kaydedildi."
+    },
+    "autostart": {
+      "label": "Bilgisayar açılışında Syncra'yı başlat",
+      "description": "Açıkken uygulama siz oturum açtığınızda arka planda başlar ve senkron kaldığı yerden devam eder. Bu ayar hesabınıza değil, yalnızca bu bilgisayara aittir.",
+      "saved": "Açılışta başlatma ayarı kaydedildi.",
+      "saveError": "Açılışta başlatma ayarı değiştirilemedi."
+    }
+  },
   "window": {
     "closeToTray": {
       "label": "Pencereyi kapatınca tray'de çalışmaya devam et",

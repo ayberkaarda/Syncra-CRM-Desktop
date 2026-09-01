@@ -20,7 +20,8 @@ import { cn } from '@/lib/cn'
 import { refreshEngineStatus } from '../platform/desktop'
 import { errorCodeOf, errorMessage } from './errors'
 import { formatElapsed } from './format'
-import { AlertIcon, OfflineIcon, OnlineIcon, RefreshIcon } from './icons'
+import { AlertIcon, OfflineIcon, OnlineIcon, PauseIcon, RefreshIcon } from './icons'
+import { RecordActions } from './RecordActions'
 import { syncNow } from './commands'
 import { connectivityStateOf, useEngineStatus, type ConnectivityState } from './useEngineStatus'
 import { useIntlLocale, useT } from './useT'
@@ -39,6 +40,8 @@ const STATE_STYLES: Record<ConnectivityState, { dot: string; text: string }> = {
   syncing: { dot: 'bg-primary animate-pulse', text: 'text-fg-secondary' },
   conflict: { dot: 'bg-warning', text: 'text-warning' },
   offline: { dot: 'bg-fg-muted', text: 'text-fg-muted' },
+  // Same muted treatment as offline: paused is a resting state the user chose, not a failure.
+  paused: { dot: 'bg-fg-muted', text: 'text-fg-muted' },
 }
 
 const STATE_LABEL_KEYS: Record<ConnectivityState, string> = {
@@ -46,6 +49,10 @@ const STATE_LABEL_KEYS: Record<ConnectivityState, string> = {
   syncing: 'desktop:sync.status.syncing',
   conflict: 'desktop:sync.status.conflict',
   offline: 'desktop:sync.status.offline',
+  // `desktop:sync.paused` already exists (`SYNCDESKTOP.md` F5-1, the tray's "Pause sync" /
+  // "Resume sync" pair) rather than a new `sync.status.paused` key — same sentence, same
+  // four languages, one source instead of two that could drift.
+  paused: 'desktop:sync.paused',
 }
 
 export interface ConnectivityBarProps {
@@ -107,6 +114,8 @@ export function ConnectivityBar({ onOpen }: ConnectivityBarProps) {
           <OfflineIcon className="size-3.5 text-fg-muted" />
         ) : state === 'conflict' ? (
           <AlertIcon className="size-3.5 text-warning" />
+        ) : state === 'paused' ? (
+          <PauseIcon className="size-3.5 text-fg-muted" />
         ) : (
           <OnlineIcon className={cn('size-3.5', state === 'syncing' ? 'text-primary' : 'text-success')} />
         )}
@@ -155,6 +164,11 @@ export function ConnectivityBar({ onOpen }: ConnectivityBarProps) {
           className={cn('size-3.5', (status.syncing || manualSyncing) && 'animate-spin')}
         />
       </button>
+
+      {/* §6.4 items 5 and 8. They ride in this bar rather than on the record page because the
+          feature pages stay the web's (K1) — see `RecordActions.tsx`. It renders nothing at all
+          off a quote or ticket detail route, so the bar keeps its usual width everywhere else. */}
+      <RecordActions />
     </div>
   )
 }

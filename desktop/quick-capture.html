@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>Syncra</title>
+  </head>
+  <body>
+    <!-- The quick-capture popup (`SYNCDESKTOP.md` §6.4, F5-3): a SECOND Vite entry, opened by
+         `src-tauri/src/quick_capture.rs` as `WebviewUrl::App("quick-capture.html")`.
+
+         Deliberately not a route of the main app. `main.desktop.tsx` boots the router, the
+         TanStack query client, the realtime bridge and the session restore before its first
+         render; this window has to appear the instant a global hotkey is pressed, and it only
+         needs i18n plus the `data::mutate` command. -->
+    <div id="root"></div>
+    <script type="module" src="/src/quick-capture.tsx"></script>
+  </body>
+</html>

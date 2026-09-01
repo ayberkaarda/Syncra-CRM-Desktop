@@ -533,7 +533,7 @@ bootstrap → tablolar dolu, cursor'lar set; delta pull tombstone; server_id→c
 `tauri-plugin-notification, global-shortcut, deep-link, autostart, updater, window-state, single-instance, clipboard-manager, dialog, fs, os, process, shell(open only), log`.
 
 ### 6.2 Komutlar (`src-tauri/src/commands/`)
-`auth::{login, session, restore, logout, list_devices, revoke_device}` · `data::{query, mutate, search}` · `sync::{sync_now, status, conflicts, resolve_conflict, download_archive, bootstrap, handle_realtime}` · `storage::{storage_stats, storage_settings, update_settings, clear_local}` · `files::{cache_quote_pdf, open_cached, attach_from_paths, screenshot_to_ticket}` · `os::{set_badge, register_hotkey, set_autostart, notify}`.
+`auth::{login, session, restore, logout, list_devices, revoke_device}` · `data::{query, mutate, search}` · `sync::{sync_now, status, conflicts, resolve_conflict, download_archive, bootstrap, handle_realtime}` · `storage::{storage_stats, storage_settings, update_settings, clear_local}` · `files::{cache_quote_pdf, open_cached, attach_from_paths, screenshot_to_ticket}` · `os::{set_badge, register_hotkey, set_autostart, get_autostart, set_tray_language, notify}`.
 Her komut `SyncError` → `{code, message}` JSON; UI'da `desktop.errors.*` i18n (bilinmeyen `code` → `desktop.errors.unknown`; eksik anahtar dev/test'te **throw** eder).
 
 <a id="k-handle-realtime"></a>
@@ -590,7 +590,8 @@ frame-ancestors 'none'
 - Drag-drop: `tauri://drag-drop` → `attach_from_paths` (uzantı beyaz listesi mevcut `attachments` kurallarıyla aynı, tek dosya ≤25 MB, offline kuyruk ≤100 MB).
 - PDF cache: `GET /api/quotes/{id}/pdf` → `$APPDATA/syncra/cache/quotes/{id}-{rev}.pdf`.
 - Clipboard (opt-in, varsayılan kapalı): 1 sn polling, regex e-posta/E.164 telefon; eşleşme → sessiz tray bildirimi "Add as lead?"; içerik disk/log'a yazılmaz.
-- Autostart (opt-in), window-state, badge (`set_badge_count`), Windows JumpList / macOS Dock recent (son 5 kayıt).
+- Autostart (opt-in), window-state, badge (`set_badge_count`).
+- Windows JumpList / macOS Dock recent (son 5 kayıt) → **F7'ye devredildi (defter O85).** İki sebep: (1) JumpList girişleri `syncra://<entity>/<id>` ile açılır ve şema OS'a **yalnız paketlenmiş kurulumla** kaydedilir (defter O87) — dev build'de uçtan uca doğrulanamaz, dolayısıyla F5'in kendi kabul standardıyla ("Windows'ta doğrulanmış") ölçülemez; (2) "son 5 kayıt"ın veri kaynağı yok — uygulama son bakılan kayıtları hiçbir yerde izlemiyor, o izleme mekanizması F7'de tasarlanır.
 - Screenshot: hotkey → bölge seç (`screenshots` crate) → PNG → ticket attach.
 
 ### 6.5 Updater
@@ -659,7 +660,7 @@ Durum sütunu `docs/DESKTOP-THREAT-MODEL.md` §3/§6 ve `docs/DESKTOP-OPEN-ITEMS
 | 2 | **403 `USER_DEACTIVATED` → lokal DB + keychain wipe; genel 401 → outbox korunur** (test) | ✅ KAPALI (2026-08-31) — `sync/mod.rs:1072`, sunucu tarafı `AuthService.php:355`; `tests/wire_contract.rs` 3 test, ikisi negatif kontrol (`a_plain_403_does_not_wipe_anything`, `a_bare_401_still_keeps_the_outbox`) |
 | 3 | DB dosyası düz `sqlite3` ile açılamıyor (test: header `SQLite format 3` yok) | ✅ KAPALI |
 | 4 | Keychain'de anahtar; app data'da anahtar/token dosyası yok (dizin taraması) | ✅ KAPALI |
-| 5 | Deep link regex reddi (fuzz 50 örnek) | ⬜ DEĞERLENDİRİLEMEZ — F5-4 |
+| 5 | Deep link reddi (fuzz 50 örnek) — korpus, plugin'in verdiği **ayrıştırılmış `url::Url`** katmanından beslenir. Ham dizgi üzerinden test etmek yanıltıcıdır: `deal/../29` ham hâlde reddedilir ama gerçek yolda URL normalizasyonu `..`'yi siler ve hedef **kabul edilir** (defter O89). İddia şudur: normalizasyon sonrası ne kalırsa kalsın, emit edilen hedef regex + sekiz-isim allowlist'inden geçmiştir. | ⬜ DEĞERLENDİRİLEMEZ — **F6** |
 | 6 | Clipboard içeriği log/diske yazılmıyor | ⬜ DEĞERLENDİRİLEMEZ — F5-6 |
 | 7 | CSP ve capabilities dar; `shell` yalnız `open` | ✅ KAPALI (bugünkü yüzey için) |
 | 8 | Updater imza doğrulaması; imzasız manifest reddi | ⬜ DEĞERLENDİRİLEMEZ — F7 (bugün fail-closed) |
@@ -702,7 +703,7 @@ Durum sütunu `docs/DESKTOP-THREAT-MODEL.md` §3/§6 ve `docs/DESKTOP-OPEN-ITEMS
 **Kabul:** Senaryo dokümanı `docs/DESKTOP-OFFLINE-TEST.md`: ağ kes → 20 işlem (5 create, 6 update, 3 move, 3 message, 2 task complete, 1 delete) → ağ aç → ≤60 sn'de sunucuda, sıra doğru, kasıtlı 2 çakışma inbox'ta, çözüm sonrası tutarlı. Sonuçlar gerçek çıktı/ekran görüntüsü. **DUR VE RAPORLA.**
 
 ### F5 — OS özellikleri (§6.4, sırayla, her madde ayrı mini-rapor)
-1 tray+arka plan · 2 native bildirim · 3 hotkey quick-capture · 4 deep link · 5 drag-drop + PDF cache · 6 clipboard opt-in · 7 autostart/window-state/badge/recent · 8 screenshot→ticket.
+1 tray+arka plan · 2 native bildirim · 3 hotkey quick-capture · 4 deep link · 5 drag-drop + PDF cache · 6 clipboard opt-in · 7 autostart/window-state/badge (**recent → F7**, defter O85) · 8 screenshot→ticket.
 **Kabul:** Windows'ta her madde doğrulanmış; macOS/Linux "derleniyor, manuel test bekliyor". **DUR VE RAPORLA.**
 
 ### F6 — Güvenlik
@@ -711,7 +712,12 @@ Durum sütunu `docs/DESKTOP-THREAT-MODEL.md` §3/§6 ve `docs/DESKTOP-OPEN-ITEMS
 
 ### F7 — Paketleme ve CI
 `tauri build` (MSI+NSIS, DMG, AppImage+deb); `desktop-ci.yml` (3 OS matrix: cargo test/clippy, tsc, vite build, `tauri build --debug`), `desktop-release.yml` (tag `desktop-v*` → artifact + `latest.json` imzalı); mevcut CI bozulmaz; README/README.tr "Desktop" bölümü; `docs/PROGRESS.md`.
-**Kabul:** CI yeşil; Windows MSI < 25 MB; boşta RAM < 150 MB (ölçüm çıktısı). **DUR VE RAPORLA.**
+**Kabul:** CI yeşil; Windows MSI < 25 MB; boşta RAM < 150 MB (ölçüm çıktısı).
+**Ayrıca — yalnız paketlenmiş kurulumla doğrulanabilen üç madde (F5'ten devredildi):**
+- MSI/NSIS kurulumundan sonra, uygulama **kapalıyken** `Start-Process "syncra://deal/<id>"` uygulamayı açar **ve kayda gider** (defter O86 — soğuk başlangıç teslimi); uygulama **açıkken** aynı link mevcut pencereye iletilir.
+- `HKCU\Software\Classes\syncra` kaydının **kurulumla geldiği** doğrulanır; gelmiyorsa `deep_link().register_all()` eklenir (defter O87).
+- JumpList "son 5 kayıt" görünür ve tıklanan giriş ilgili kaydı açar (defter O85).
+**DUR VE RAPORLA.**
 
 ---
 
@@ -768,6 +774,9 @@ Bu belge F0 öncesinde yazıldı ve keşif ilerledikçe **projenin en yanlış b
 | §7.2 | O44 | Quick-capture penceresi F5 madde 3'e devredildi; §10 ile çelişki dipnotla çözüldü, F4 kabulü "§7.2'nin yedi maddesi" olarak okunur | 2026-08-31 |
 | §4.4 | O45 / B1 | `op=action` beyaz listesinin **wire alanı değil `entity.action` anahtarı** olduğu açıkça yazıldı; tek lehçe kuralı (noktalı `action` açık redle döner) belgelendi | 2026-08-31 |
 | §1 | — | Karar kimliği çakışması uyarısı: şartname `K1–K13` ile RISK-2 serisi `K1/K2/K3` ayrıştırıldı | 2026-08-31 |
+| §6.4 / §10 F5 | O85 | JumpList / "son 5 kayıt" F5'ten **F7'ye devredildi**. Elle ölçüm turu kodda `SHAddToRecentDocs`/`ICustomDestinationList`/`IShellLink` için **tek eşleşme bulamadı** — ölçülmemiş değil, **yazılmamış** bir gereksinimdi. Bir F5 maddesinin "doğrulandı" sayılabilmesi için önce var olması gerekir | 2026-09-01 |
+| §10 F7 | O86 / O87 | F7 kabulüne üç madde eklendi: soğuk başlangıç deep link'i, `syncra://` şema kaydının kurulumla gelmesi, JumpList. Üçü de **yalnız paketlenmiş kurulumla** doğrulanabilir; dev build'de şema OS'a hiç kayıtlı değil | 2026-09-01 |
+| §9 madde 5 | O89 | Fuzz iddiası düzeltildi ve **F5-4'ten F6'ya** taşındı. Korpus ham dizgiden besleniyordu; gerçek yolda plugin ayrıştırılmış `url::Url` veriyor ve `..` ret mantığına ulaşmadan normalize oluyor — `deal/../29` birim testte reddedilirken gerçek uygulamada **kabul edildi** | 2026-09-01 |
 | §3 | — | `docs/DESKTOP-OPEN-ITEMS.md` repo ağacına eklendi | 2026-08-31 |
 | §4.1 | **P1, P1b** | `quote_items` RW satırından çıkarıldı; `taggables`/`quote_items`/`custom_field_values` "PULL SETİNDE DEĞİL" olarak ayrı satıra alındı — kendi `sync_version`'ını almaz, tombstone'a girmez; sahip bump zorunluluğu yazıldı | 2026-08-31 |
 | §4.1 | **P19** | `price_list_items` hard delete → `sync_deletions` notu RO satırına eklendi | 2026-08-31 |

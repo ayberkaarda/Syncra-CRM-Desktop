@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Narrow default capability set for the Syncra desktop shell (SYNCDESKTOP.md §6.3, docs/DESKTOP-ARCHITECTURE.md §5.3). clipboard-manager:allow-read-text is deliberately ABSENT: it is not granted statically and is switched on at runtime only when clipboard capture is opted in (K10, default off) — that runtime grant mechanism is F5-6 scope, not this turn's.",
+  "description": "Narrow default capability set for the Syncra desktop shell (SYNCDESKTOP.md §6.3, docs/DESKTOP-ARCHITECTURE.md §5.3). clipboard-manager:allow-read-text stays ABSENT and no runtime grant was built for it: F5-6 reads the clipboard from RUST (src/clipboard.rs), where capabilities do not apply, so the webview still cannot read the clipboard at all — a narrower surface than granting it and gating it. The quick-capture window (F5-3) is listed under `windows` and needs core:window:allow-hide to dismiss itself.",
   "windows": ["main", "quick-capture"],
   "permissions": [
     "core:default",

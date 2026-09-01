@@ -15,6 +15,7 @@ import { installUnauthorizedGuard } from '../platform/auth'
 import { BootstrapScreen } from './BootstrapScreen'
 import { ConnectivityBar } from './ConnectivityBar'
 import { DesktopPanel, type DesktopPanelTab } from './DesktopPanel'
+import { FileDrop } from './FileDrop'
 import { LogoutConfirm } from './LogoutConfirm'
 import { useEngineStatus } from './useEngineStatus'
 
@@ -56,6 +57,10 @@ export function DesktopShell({ children }: { children: ReactNode }) {
           no shared screen to reuse. */}
       <BootstrapScreen />
       <LogoutConfirm />
+      {/* §6.4 item 5. Renders nothing; it owns the `tauri://drag-drop` subscription, which has
+          to be bound for the WHOLE window rather than for one screen — the runtime emits it to
+          the window, not to an element, and there is no DOM node to hang it off. */}
+      <FileDrop />
       <ConnectivityBar onOpen={open} />
       {/* Keyed by the tab it opened on, so re-opening the panel after the state changed lands
           on the new tab instead of the one `useState` initialised with the first time. */}

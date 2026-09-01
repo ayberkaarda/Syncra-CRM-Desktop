@@ -42,10 +42,10 @@ use serde::Deserialize;
 use syncra_sync::SyncStatus;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Listener, Manager, Runtime};
 
-use crate::events::ENGINE_EVENT;
+use crate::events::{emit_status_changed, ENGINE_EVENT};
 use crate::state::AppState;
 
 /// Id the tray icon is registered under, so [`tauri::Manager::tray_by_id`] can find it again
@@ -90,11 +90,32 @@ const LOCALES: [(&str, &str); 4] = [
 /// app would fall back to as well.
 const FALLBACK_LANGUAGE: &str = "tr";
 
-/// Only the slice of `desktop.json` this module reads. Unknown fields are ignored, which is
+/// Only the slice of `desktop.json` the SHELL reads — the tray's own labels, plus the two
+/// strings `crate::clipboard` needs for its notification. Unknown fields are ignored, which is
 /// what keeps the other ~200 keys of the namespace out of this file.
+///
+/// The clipboard section lives here rather than in `clipboard.rs` because this module already
+/// owns the one copy of the embedded dictionaries and the language resolution over them; a
+/// second `include_str!` of the same four files would be a second place for the language to be
+/// resolved differently.
 #[derive(Debug, Clone, Deserialize)]
-struct DesktopNamespace {
+pub struct DesktopLabels {
     tray: TrayLabels,
+    clipboard: ClipboardLabels,
+}
+
+/// `desktop.clipboard` — the "Add as lead?" toast (`SYNCDESKTOP.md` §6.4, F5-6).
+///
+/// Two constant strings and nothing else: no field of this struct can carry clipboard content,
+/// which is the structural half of the §9 item 6 guarantee (`crate::clipboard` owns the other
+/// half).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardLabels {
+    /// `desktop.clipboard.addAsLeadTitle`.
+    pub add_as_lead_title: String,
+    /// `desktop.clipboard.addAsLeadBody` — the "Add as lead?" question itself.
+    pub add_as_lead_body: String,
 }
 
 /// `desktop.tray` — the menu item labels and the four tooltips.
@@ -131,29 +152,37 @@ struct TooltipLabels {
 /// constant, and [`self::tests::every_language_parses`] runs this exact parse for all four
 /// languages, so a dictionary that no longer has the shape the tray needs is a red test long
 /// before it is a runtime failure.
-fn all_labels() -> &'static [(&'static str, TrayLabels); 4] {
-    static CACHE: OnceLock<[(&'static str, TrayLabels); 4]> = OnceLock::new();
+fn all_labels() -> &'static [(&'static str, DesktopLabels); 4] {
+    static CACHE: OnceLock<[(&'static str, DesktopLabels); 4]> = OnceLock::new();
     CACHE.get_or_init(|| LOCALES.map(|(language, raw)| (language, parse_labels(language, raw))))
 }
 
-fn parse_labels(language: &str, raw: &str) -> TrayLabels {
-    match serde_json::from_str::<DesktopNamespace>(raw) {
-        Ok(namespace) => namespace.tray,
+fn parse_labels(language: &str, raw: &str) -> DesktopLabels {
+    match serde_json::from_str::<DesktopLabels>(raw) {
+        Ok(labels) => labels,
         Err(error) => panic!(
-            "frontend/src/i18n/locales/{language}/desktop.json: the `tray` section is not the \
-             shape the tray menu reads ({error})"
+            "frontend/src/i18n/locales/{language}/desktop.json: the `tray`/`clipboard` sections \
+             are not the shape the shell reads ({error})"
         ),
     }
 }
 
 /// Labels for `language`, which must be one of [`LOCALES`]; anything else falls back.
-fn labels_for(language: &str) -> &'static TrayLabels {
+fn labels_for(language: &str) -> &'static DesktopLabels {
     let all = all_labels();
     all.iter()
         .find(|(candidate, _)| *candidate == language)
         .or_else(|| all.iter().find(|(candidate, _)| *candidate == FALLBACK_LANGUAGE))
         .map(|(_, labels)| labels)
         .expect("the fallback language is one of the embedded dictionaries")
+}
+
+/// The "Add as lead?" strings, in whatever language the tray is currently speaking.
+///
+/// `crate::clipboard`'s one caller. Exposed from here — rather than `clipboard.rs` embedding
+/// the dictionaries a second time — so the two surfaces can never disagree about the language.
+pub fn clipboard_labels<R: Runtime>(app: &AppHandle<R>) -> &'static ClipboardLabels {
+    &labels_for(current_language(app)).clipboard
 }
 
 /// The supported language a BCP-47 (or POSIX) tag resolves to, if any.
@@ -182,21 +211,62 @@ fn supported(tag: &str) -> Option<&'static str> {
 /// `os_locale` (`tauri_plugin_os::locale()`) covers the window before a session exists: the
 /// login screen, and the whole life of an app that has never been signed in.
 ///
-/// **Known divergence, on purpose:** the webview lets a user override the language *in this
-/// install* (`localStorage`, `frontend/src/i18n/index.ts`), and that choice wins over the
-/// server's in the UI. Rust cannot read `localStorage` — it lives inside the WebView2/WebKitGTK
-/// profile — so a user who overrides the language locally sees the tray in their account
-/// language instead. Closing that gap needs a webview→shell push, i.e. a new command and a
-/// `desktop/src` call site; both are outside F5-1's file scope and are recorded as an open
-/// question rather than guessed at here.
-fn pick_language(session_locale: Option<&str>, os_locale: Option<&str>) -> &'static str {
-    session_locale
+/// `override_locale` is the gap the F5-1 report left open (defter C1). The webview lets a user
+/// pick a language *for this install* (`localStorage`, `frontend/src/i18n/index.ts`) and that
+/// choice wins over the server's everywhere in the UI — but Rust cannot read `localStorage`,
+/// which lives inside the WebView2/WebKitGTK profile, so the tray used to keep speaking the
+/// account language while every other surface had switched. The webview now pushes the change
+/// down through the `set_tray_language` command ([`set_language_override`]), which is the only
+/// writer of this slot.
+///
+/// Precedence, in order: **override > session > OS**. The override outranks the session for
+/// the same reason it does in i18next — it is the more recent and more specific statement of
+/// what the person in front of the machine wants to read.
+fn pick_language(
+    override_locale: Option<&str>,
+    session_locale: Option<&str>,
+    os_locale: Option<&str>,
+) -> &'static str {
+    override_locale
         .and_then(supported)
+        .or_else(|| session_locale.and_then(supported))
         .or_else(|| os_locale.and_then(supported))
         .unwrap_or(FALLBACK_LANGUAGE)
 }
 
-/// [`pick_language`] applied to the live app: the cached session first, the OS second.
+/// The webview's language override, when one has been pushed down.
+///
+/// A module-level slot rather than managed state: it is set before any particular window
+/// matters, read from the tray's repaint path, and there is exactly one of it per process.
+fn language_override() -> &'static Mutex<Option<&'static str>> {
+    static OVERRIDE: OnceLock<Mutex<Option<&'static str>>> = OnceLock::new();
+    OVERRIDE.get_or_init(|| Mutex::new(None))
+}
+
+/// Point the tray at `language`, then repaint. `false` means the app has no dictionary for it
+/// and nothing was changed — the caller turns that into a `VALIDATION_ERROR`.
+///
+/// Called from `commands::os::set_tray_language`, which `desktop/src/main.desktop.tsx`
+/// subscribes to i18next's `languageChanged` with.
+pub fn set_language_override<R: Runtime>(app: &AppHandle<R>, language: &str) -> bool {
+    let Some(resolved) = supported(language) else {
+        return false;
+    };
+
+    match language_override().lock() {
+        Ok(mut slot) => *slot = Some(resolved),
+        Err(error) => {
+            tracing::warn!(%error, "tray language override slot poisoned");
+            return false;
+        }
+    }
+
+    refresh_now(app);
+    true
+}
+
+/// [`pick_language`] applied to the live app: the webview's override first, the cached session
+/// second, the OS third.
 fn current_language<R: Runtime>(app: &AppHandle<R>) -> &'static str {
     let session_locale = app
         .try_state::<AppState>()
@@ -209,7 +279,13 @@ fn current_language<R: Runtime>(app: &AppHandle<R>) -> &'static str {
                 .map(str::to_owned)
         });
 
-    pick_language(session_locale.as_deref(), tauri_plugin_os::locale().as_deref())
+    let override_locale = language_override().lock().ok().and_then(|slot| *slot);
+
+    pick_language(
+        override_locale,
+        session_locale.as_deref(),
+        tauri_plugin_os::locale().as_deref(),
+    )
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -399,6 +475,40 @@ struct Painted {
     paused: bool,
 }
 
+/// Everything [`refresh`] needs, parked in the app's managed state so a repaint can be
+/// triggered from outside this module's own event listener.
+///
+/// The only outside caller is [`set_language_override`] (defter C1): a language change comes
+/// in over the command bus, not over the engine's event stream, so there is no engine event to
+/// piggyback on and re-emitting a fabricated one would put a lie on the bridge every other
+/// listener reads.
+struct TrayHandles<R: Runtime> {
+    items: TrayItems<R>,
+    painted: Arc<Mutex<Painted>>,
+}
+
+// Same reason as `TrayItems`: a derived `Clone` would demand `R: Clone`.
+impl<R: Runtime> Clone for TrayHandles<R> {
+    fn clone(&self) -> Self {
+        Self {
+            items: self.items.clone(),
+            painted: Arc::clone(&self.painted),
+        }
+    }
+}
+
+/// Repaint the tray from whatever the app state currently says.
+///
+/// A silent no-op before [`init`] has run (nothing to repaint yet) — which is why
+/// `set_language_override` can be called at any point in the boot sequence.
+fn refresh_now<R: Runtime>(app: &AppHandle<R>) {
+    let Some(handles) = app.try_state::<TrayHandles<R>>() else {
+        return;
+    };
+    let handles = handles.inner().clone();
+    refresh(app, &handles.items, &handles.painted);
+}
+
 // ------------------------------------------------------------------------------------------------
 // Wiring
 // ------------------------------------------------------------------------------------------------
@@ -491,7 +601,7 @@ fn refresh<R: Runtime>(app: &AppHandle<R>, items: &TrayItems<R>, painted: &Mutex
         return;
     }
 
-    let labels = labels_for(next.language);
+    let labels = &labels_for(next.language).tray;
 
     if current.status != next.status {
         if let Some(tray) = app.tray_by_id(TRAY_ID) {
@@ -520,22 +630,20 @@ fn refresh<R: Runtime>(app: &AppHandle<R>, items: &TrayItems<R>, painted: &Mutex
 /// language are all read out of [`AppState`].
 pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let language = current_language(app);
-    let labels = labels_for(language);
+    let labels = &labels_for(language).tray;
     let status = TrayStatus::from_status(&status_snapshot(app));
 
     let items = TrayItems {
         open: MenuItem::with_id(app, ID_OPEN, &labels.menu.open, true, None::<&str>)?,
         sync_now: MenuItem::with_id(app, ID_SYNC_NOW, &labels.menu.sync_now, true, None::<&str>)?,
-        // DISABLED ON PURPOSE. The quick capture window is F5-3 and does not exist yet. The
-        // item is present because §6.4 lists it and a menu that grows an entry later is a menu
-        // whose shape moved under the user; it is disabled because the alternative — opening
-        // some placeholder window — would be inventing a feature the spec assigns to another
-        // phase. F5-3 enables it.
+        // Enabled since F5-3. It is the hotkey-independent way into the same window, and the
+        // one that still works when `CmdOrCtrl+Shift+Space` is claimed by another application
+        // (`quick_capture::install_default` logs that and carries on).
         quick_capture: MenuItem::with_id(
             app,
             ID_QUICK_CAPTURE,
             &labels.menu.quick_capture,
-            false,
+            true,
             None::<&str>,
         )?,
         pause: MenuItem::with_id(app, ID_PAUSE, &labels.menu.pause_sync, true, None::<&str>)?,
@@ -588,16 +696,20 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                         });
                     }
                 }
-                ID_QUICK_CAPTURE => {
-                    // Unreachable while the item is disabled; kept so F5-3 has one place to
-                    // wire the window rather than a silent `_ => {}` to discover.
-                    tracing::debug!("tray quick capture is disabled until F5-3 delivers it");
-                }
+                ID_QUICK_CAPTURE => crate::quick_capture::open(app),
                 ID_PAUSE => {
                     toggle_pause(app);
                     // The scheduler slot has already moved, so a plain refresh picks the new
                     // label up along with anything else that changed.
                     refresh(app, &menu_items, &menu_painted);
+                    // The engine never emits anything for this — pause is a fact the shell
+                    // invented (`AppState::scheduler`, not `syncra_sync`) — so nothing else
+                    // would tell `ConnectivityBar` the toggle happened (defter O71). Push the
+                    // current snapshot through the same bridge `StatusChanged` uses, now
+                    // carrying the new `paused` value.
+                    if let Some(state) = app.try_state::<AppState>() {
+                        emit_status_changed(app, state.engine.status());
+                    }
                 }
                 ID_QUIT => {
                     // The only `exit` in the app. `RunEvent::Exit` is what stops the scheduler,
@@ -609,12 +721,41 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                 other => tracing::debug!(id = other, "unhandled tray menu event"),
             }
         })
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::DoubleClick { .. } = event {
-                show_main_window(tray.app_handle());
+        // A single LEFT click opens the window, and so does a double click.
+        //
+        // Defter C2: the builder comment two lines up ("A left click opens the window") has
+        // said so since F5-1, but the handler only matched `DoubleClick` — the code contradicted
+        // its own documentation and a single click did nothing at all. `Click` is emitted for
+        // every button, so the arm has to filter: the RIGHT button is the menu
+        // (`show_menu_on_left_click(false)` above), and opening the window from underneath a
+        // context menu that is about to appear would be its own bug. `Up` rather than `Down`
+        // keeps it a click rather than a press, which is what a drag of the icon begins with.
+        //
+        // Both arms are kept: on Windows a double click also emits two `Click` pairs, so the
+        // window is shown two or three times in a row — and `show_main_window` is idempotent,
+        // which is exactly why the overlap costs nothing.
+        .on_tray_icon_event(|tray, event| match event {
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
             }
+            | TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            } => show_main_window(tray.app_handle()),
+            _ => {}
         })
         .build(app)?;
+
+    // Parked for `refresh_now` (the `set_tray_language` path). Cloned rather than moved: the
+    // engine-event listener below keeps its own handle, and both must repaint the same
+    // `Painted` cell or the two would disagree about what is currently on screen.
+    let handles = TrayHandles {
+        items: items.clone(),
+        painted: Arc::clone(&painted),
+    };
+    app.manage(handles);
 
     // The engine's status reaches the webview through `events::forward_engine_events`, which
     // owns the one and only `SyncEngine::subscribe()` receiver. The tray does NOT open a
@@ -648,20 +789,23 @@ mod tests {
         assert_eq!(all.len(), 4);
         for (language, labels) in all {
             for (field, value) in [
-                ("menu.open", &labels.menu.open),
-                ("menu.syncNow", &labels.menu.sync_now),
-                ("menu.quickCapture", &labels.menu.quick_capture),
-                ("menu.pauseSync", &labels.menu.pause_sync),
-                ("menu.resumeSync", &labels.menu.resume_sync),
-                ("menu.quit", &labels.menu.quit),
-                ("tooltip.online", &labels.tooltip.online),
-                ("tooltip.offline", &labels.tooltip.offline),
-                ("tooltip.syncing", &labels.tooltip.syncing),
-                ("tooltip.conflict", &labels.tooltip.conflict),
+                ("tray.menu.open", &labels.tray.menu.open),
+                ("tray.menu.syncNow", &labels.tray.menu.sync_now),
+                ("tray.menu.quickCapture", &labels.tray.menu.quick_capture),
+                ("tray.menu.pauseSync", &labels.tray.menu.pause_sync),
+                ("tray.menu.resumeSync", &labels.tray.menu.resume_sync),
+                ("tray.menu.quit", &labels.tray.menu.quit),
+                ("tray.tooltip.online", &labels.tray.tooltip.online),
+                ("tray.tooltip.offline", &labels.tray.tooltip.offline),
+                ("tray.tooltip.syncing", &labels.tray.tooltip.syncing),
+                ("tray.tooltip.conflict", &labels.tray.tooltip.conflict),
+                // F5-6: the clipboard toast reads from the same dictionaries.
+                ("clipboard.addAsLeadTitle", &labels.clipboard.add_as_lead_title),
+                ("clipboard.addAsLeadBody", &labels.clipboard.add_as_lead_body),
             ] {
                 assert!(
                     !value.trim().is_empty(),
-                    "desktop.tray.{field} is empty in {language}"
+                    "desktop.{field} is empty in {language}"
                 );
             }
         }
@@ -673,7 +817,7 @@ mod tests {
     fn the_menu_is_actually_translated() {
         let quits: Vec<&str> = all_labels()
             .iter()
-            .map(|(_, labels)| labels.menu.quit.as_str())
+            .map(|(_, labels)| labels.tray.menu.quit.as_str())
             .collect();
         let mut unique = quits.clone();
         unique.sort_unstable();
@@ -683,32 +827,52 @@ mod tests {
 
     #[test]
     fn a_region_tag_resolves_to_its_language() {
-        assert_eq!(pick_language(Some("de-DE"), None), "de");
-        assert_eq!(pick_language(Some("fr_CA"), None), "fr");
-        assert_eq!(pick_language(Some("EN"), None), "en");
-        assert_eq!(pick_language(Some("tr-TR.UTF-8"), None), "tr");
+        assert_eq!(pick_language(None, Some("de-DE"), None), "de");
+        assert_eq!(pick_language(None, Some("fr_CA"), None), "fr");
+        assert_eq!(pick_language(None, Some("EN"), None), "en");
+        assert_eq!(pick_language(None, Some("tr-TR.UTF-8"), None), "tr");
     }
 
     /// The OS answers only when the session does not.
     #[test]
     fn the_session_locale_outranks_the_os() {
-        assert_eq!(pick_language(Some("de"), Some("fr-FR")), "de");
-        assert_eq!(pick_language(None, Some("fr-FR")), "fr");
+        assert_eq!(pick_language(None, Some("de"), Some("fr-FR")), "de");
+        assert_eq!(pick_language(None, None, Some("fr-FR")), "fr");
+    }
+
+    /// Defter C1: the webview's own choice outranks both. Without this the tray keeps speaking
+    /// the account language while every other surface has already switched, and Rust cannot
+    /// read the `localStorage` that holds the choice.
+    #[test]
+    fn the_override_outranks_the_session_and_the_os() {
+        assert_eq!(pick_language(Some("fr"), Some("de"), Some("en")), "fr");
+        assert_eq!(pick_language(Some("fr-CA"), Some("de"), None), "fr");
+    }
+
+    /// An override the app has no dictionary for does not blank the tray — the session (then
+    /// the OS) still answers.
+    #[test]
+    fn an_unsupported_override_defers_to_the_session() {
+        assert_eq!(pick_language(Some("es"), Some("de"), Some("en")), "de");
+        assert_eq!(pick_language(Some("es"), None, Some("en")), "en");
     }
 
     /// A language the app has no dictionary for falls back rather than rendering keys.
     #[test]
     fn an_unsupported_language_falls_back() {
-        assert_eq!(pick_language(Some("es-ES"), Some("ja-JP")), FALLBACK_LANGUAGE);
-        assert_eq!(pick_language(None, None), FALLBACK_LANGUAGE);
-        assert_eq!(pick_language(Some(""), None), FALLBACK_LANGUAGE);
+        assert_eq!(
+            pick_language(None, Some("es-ES"), Some("ja-JP")),
+            FALLBACK_LANGUAGE
+        );
+        assert_eq!(pick_language(None, None, None), FALLBACK_LANGUAGE);
+        assert_eq!(pick_language(None, Some(""), None), FALLBACK_LANGUAGE);
     }
 
     #[test]
     fn labels_for_an_unknown_language_are_the_fallback_ones() {
         assert_eq!(
-            labels_for("es").menu.quit,
-            labels_for(FALLBACK_LANGUAGE).menu.quit
+            labels_for("es").tray.menu.quit,
+            labels_for(FALLBACK_LANGUAGE).tray.menu.quit
         );
     }
 
@@ -851,6 +1015,56 @@ mod tests {
             "lib.rs must remove StateFlags::VISIBLE from the window-state plugin's flags: with \
              it, D-8's hidden window is saved as visible:false and the next launch never calls \
              show()"
+        );
+    }
+
+    /// Defter C2: a SINGLE left click brings the window back.
+    ///
+    /// The builder's own comment has claimed this since F5-1 while the handler matched only
+    /// `DoubleClick`, i.e. the code contradicted its documentation and one click did nothing.
+    /// A real tray event needs a window server and a mouse, so the wiring is locked at the
+    /// source instead — the same idiom as `window_state_does_not_persist_visibility`.
+    #[test]
+    fn a_single_left_click_is_wired_to_the_window() {
+        let source = include_str!("tray.rs");
+        assert!(
+            source.contains("TrayIconEvent::Click"),
+            "the tray must handle a single Click, not only DoubleClick"
+        );
+        assert!(
+            source.contains("button: MouseButton::Left"),
+            "the Click arm must filter on the LEFT button — the right button is the menu"
+        );
+    }
+
+    /// The `Quick capture` item is enabled and reaches the window (F5-3). It was created
+    /// disabled by F5-1, with a `tracing::debug!` in place of the action.
+    #[test]
+    fn the_quick_capture_item_opens_the_window() {
+        let source = include_str!("tray.rs");
+        assert!(
+            source.contains("ID_QUICK_CAPTURE => crate::quick_capture::open(app)"),
+            "the tray's Quick capture item must open the quick-capture window"
+        );
+
+        // ...and it must be built ENABLED. A disabled item cannot be clicked, so the arm above
+        // would be dead code that still reads as wired. The `enabled` flag is the fourth
+        // positional argument of `MenuItem::with_id`, which is why the whole call is inspected
+        // rather than a bare `contains("true")` over the file.
+        //
+        // NOTE: this test cannot use a negative assertion against the old placeholder text —
+        // `include_str!("tray.rs")` reads THIS file, so any literal the assertion searches for
+        // is in the file by virtue of being written here.
+        let call = source
+            .split_once("quick_capture: MenuItem::with_id(")
+            .expect("the quick capture item must still be built with `MenuItem::with_id`")
+            .1
+            .split_once(")?")
+            .expect("unterminated MenuItem::with_id call")
+            .0;
+        assert!(
+            call.contains("true"),
+            "the Quick capture item must be created enabled, got: {call}"
         );
     }
 

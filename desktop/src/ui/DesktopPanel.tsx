@@ -21,13 +21,14 @@ import { useState } from 'react'
 import { Badge, Modal, Tab, TabList, TabPanel, Tabs } from '@/components/ui'
 
 import { ConflictInbox } from './panels/ConflictInbox'
+import { DesktopPreferences } from './panels/DesktopPreferences'
 import { DevicesPanel } from './panels/DevicesPanel'
 import { PendingRecords } from './panels/PendingRecords'
 import { StorageSettings } from './panels/StorageSettings'
 import { useEngineStatus } from './useEngineStatus'
 import { useT } from './useT'
 
-export type DesktopPanelTab = 'pending' | 'conflicts' | 'storage' | 'devices'
+export type DesktopPanelTab = 'pending' | 'conflicts' | 'storage' | 'devices' | 'preferences'
 
 export interface DesktopPanelProps {
   open: boolean
@@ -46,6 +47,7 @@ export function DesktopPanel({ open, onClose, initialTab = 'pending' }: DesktopP
     conflicts: t('desktop:conflicts.title'),
     storage: t('desktop:storage.title'),
     devices: t('desktop:devices.title'),
+    preferences: t('desktop:preferences.title'),
   }
 
   return (
@@ -74,6 +76,7 @@ export function DesktopPanel({ open, onClose, initialTab = 'pending' }: DesktopP
           </Tab>
           <Tab value="storage">{labels.storage}</Tab>
           <Tab value="devices">{labels.devices}</Tab>
+          <Tab value="preferences">{labels.preferences}</Tab>
         </TabList>
 
         {/* `TabPanel` renders nothing while inactive (`components/ui/Tabs.tsx`), so each screen
@@ -90,6 +93,12 @@ export function DesktopPanel({ open, onClose, initialTab = 'pending' }: DesktopP
         </TabPanel>
         <TabPanel value="devices">
           <DevicesPanel />
+        </TabPanel>
+        {/* §6.4's configurable shell behaviour: the quick-capture hotkey, and (from F5-4/F5-6)
+            close-to-tray and clipboard capture. Separate from `storage` because it saves
+            through a different path — see the module doc. */}
+        <TabPanel value="preferences">
+          <DesktopPreferences />
         </TabPanel>
       </Tabs>
     </Modal>

@@ -88,6 +88,24 @@ export default defineConfig({
   build: {
     // `tauri.conf.json` -> `build.frontendDist` is `../dist`, relative to `src-tauri/`.
     outDir: 'dist',
+
+    // TWO entries, not one (F5-3). `quick-capture.html` is the page
+    // `src-tauri/src/quick_capture.rs` opens as `WebviewUrl::App("quick-capture.html")`, and
+    // it is a separate document rather than a route of the main app on purpose: the main
+    // entry boots the router, the query client, the realtime bridge and the session restore
+    // before it renders anything, and a 480×360 popup that has to appear the instant a hotkey
+    // is pressed cannot wait for that. `quick_capture::tests::the_window_page_is_a_real_entry`
+    // asserts this block still names the file — without it the popup opens blank in a bundled
+    // build (dev works either way, which is exactly how this would ship broken).
+    //
+    // Naming `index.html` explicitly is required: the moment `input` is set, Vite stops
+    // inferring the root `index.html` and would build ONLY the second page.
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('index.html', import.meta.url)),
+        'quick-capture': fileURLToPath(new URL('quick-capture.html', import.meta.url)),
+      },
+    },
   },
 
   // `base` is deliberately left at its default `/`. Tauri's asset protocol strips the leading

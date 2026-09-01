@@ -189,6 +189,68 @@
       "conflict": "Syncra — Conflit détecté"
     }
   },
+  "clipboard": {
+    "addAsLeadTitle": "Syncra",
+    "addAsLeadBody": "Ajouter le contact copié comme prospect ?",
+    "optIn": {
+      "label": "Surveiller le presse-papiers et proposer des prospects",
+      "description": "Tant que cette option est désactivée, le presse-papiers n'est jamais lu. Activée, une notification n'apparaît que si le presse-papiers contient exactement une adresse e-mail ou un numéro de téléphone E.164 ; le contenu n'est jamais écrit sur le disque ni dans le journal."
+    }
+  },
+  "quickCapture": {
+    "title": "Saisie rapide",
+    "dismissHint": "Échap pour fermer",
+    "types": {
+      "lead": "Prospect",
+      "note": "Note",
+      "task": "Tâche",
+      "activity": "Activité"
+    },
+    "activityTypes": {
+      "call": "Appel",
+      "meeting": "Réunion",
+      "email": "E-mail",
+      "note": "Note"
+    }
+  },
+  "files": {
+    "attach": {
+      "uploaded": "{{name}} a été ajouté à la fiche.",
+      "queued": "{{name}} est en file d'attente et n'a pas encore été envoyé.",
+      "rejected": "{{name}} n'a pas pu être ajouté."
+    },
+    "drop": {
+      "started_one": "Ajout de {{count}} fichier…",
+      "started_other": "Ajout de {{count}} fichiers…",
+      "noTarget": "Pour joindre des fichiers, ouvrez d'abord une affaire ou un ticket, puis déposez-les sur la fenêtre.",
+      "failed": "Les fichiers déposés n'ont pas pu être traités."
+    },
+    "quotePdf": {
+      "action": "Ouvrir le PDF du devis",
+      "opened": "Le PDF a été ouvert depuis la copie présente sur cet appareil.",
+      "downloaded": "Le PDF a été téléchargé puis ouvert.",
+      "error": "Le PDF n'a pas pu être ouvert."
+    },
+    "screenshot": {
+      "action": "Joindre une capture d'écran au ticket",
+      "error": "La capture d'écran n'a pas pu être réalisée."
+    }
+  },
+  "preferences": {
+    "title": "Préférences",
+    "hotkey": {
+      "label": "Raccourci de saisie rapide",
+      "description": "Par exemple : CmdOrCtrl+Shift+Space. Au moins une touche de modification est requise.",
+      "conflict": "Ce raccourci est déjà utilisé par une autre application. Le raccourci précédent reste actif.",
+      "saved": "Raccourci enregistré."
+    },
+    "autostart": {
+      "label": "Lancer Syncra au démarrage de l'ordinateur",
+      "description": "Lorsque cette option est active, l'application démarre en arrière-plan à votre connexion et la synchronisation reprend où elle s'était arrêtée. Ce réglage appartient à cet ordinateur, pas à votre compte.",
+      "saved": "Réglage de lancement au démarrage enregistré.",
+      "saveError": "Le réglage de lancement au démarrage n'a pas pu être modifié."
+    }
+  },
   "window": {
     "closeToTray": {
       "label": "Continuer à fonctionner dans la barre système à la fermeture de la fenêtre",

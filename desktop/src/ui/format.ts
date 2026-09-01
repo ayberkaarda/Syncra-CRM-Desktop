@@ -6,6 +6,8 @@
 // languages. Writing those strings into `desktop.json` would be four more translations to keep
 // in sync for something the platform gets right for free.
 
+import { parseMirrorTimestamp } from '../platform/data/timestamps'
+
 /**
  * Buckets `formatElapsed` chooses between, coarsest last: the first bucket whose `ceiling` the
  * elapsed seconds fall under wins, and `perUnit` is how many seconds one of its units is.
@@ -58,10 +60,28 @@ export function formatCount(locale: string, value: number): string {
   return new Intl.NumberFormat(locale).format(value)
 }
 
-/** Short absolute timestamp; `null` for a value the server left empty or sent malformed. */
+/**
+ * Short absolute timestamp; `null` for a value the server left empty or sent malformed.
+ *
+ * SCOPE — read this before assuming a timestamp bug is covered here. This function has exactly
+ * TWO callers, both desktop-only panels: `ui/panels/ConflictInbox.tsx` (a conflict row's
+ * `created_at`) and `ui/panels/DevicesPanel.tsx` (a device's `last_used_at`/`created_at`).
+ * It does NOT render the notification list, the activity feed or record headers — those are
+ * shared-app components that format through `features/notifications/components/
+ * notificationMeta.ts::formatRelativeTime` and `lib/datetime.ts`, neither of which passes
+ * through here. An earlier version of this docblock claimed the wider scope, and that claim
+ * made the zone fix below look like it had already covered the notification list when it had
+ * not; the list stayed three hours off for a whole phase because of it.
+ *
+ * Goes through {@link parseMirrorTimestamp} rather than `new Date(iso)` directly: the `*_at`
+ * columns these two panels read come from the mirror, and a space-separated `DATETIME` string
+ * like `"2026-09-01 07:58:01"` — how `SyncPullService::fetchRows()` writes it, see
+ * `@/lib/mirrorTime` — is UTC but carries no zone, so `new Date(...)` reads it as local time
+ * and the rendered timestamp is off by the host's UTC offset (three hours early on UTC+3).
+ */
 export function formatDateTime(locale: string, iso: string | null | undefined): string | null {
   if (!iso) return null
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return null
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+  const ms = parseMirrorTimestamp(iso)
+  if (!Number.isFinite(ms)) return null
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(ms)
 }

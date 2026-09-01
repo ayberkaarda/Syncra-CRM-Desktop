@@ -150,6 +150,18 @@ export function keysForEntities(entities: readonly EntityName[]): (readonly unkn
 
 /** Handlers for the engine events this bridge does not own. */
 export interface EngineEventHandlers {
+  /**
+   * The same batch the invalidation above consumed, for readers that need more than a cache
+   * refresh — `bridge/notifications.ts` is the first: a moved `notification` table is what
+   * §6.4 turns into a native toast and a taskbar badge.
+   *
+   * Called AFTER the invalidation, and never instead of it: this is an extra consumer of the
+   * event, not a replacement for the cache mapping. It is deliberately not a `Promise`-typed
+   * hook — the subscription must not be able to fall behind on an awaited handler, so a
+   * handler that does asynchronous work owns its own queueing (as the notification watcher
+   * does).
+   */
+  onTablesChanged?: (entities: readonly EntityName[]) => void
   onStatusChanged?: (status: unknown) => void
   onConflictAdded?: (id: string) => void
   onStorageWarning?: (stats: unknown) => void
@@ -173,6 +185,7 @@ export function applyEngineEvent(
       for (const queryKey of keysForEntities(event.entities)) {
         void queryClient.invalidateQueries({ queryKey })
       }
+      handlers.onTablesChanged?.(event.entities)
       return
     case 'status_changed':
       handlers.onStatusChanged?.(event.status)

@@ -40,16 +40,23 @@ tauri-plugin-log = "2"
 # `SYNCDESKTOP.md` K11).
 tauri-plugin-single-instance = "2"
 
-# Screen capture for `commands::files::screenshot_to_ticket` (`SYNCDESKTOP.md` §6.4 item 8 names
-# this crate by name: "hotkey → bölge seç (`screenshots` crate) → PNG → ticket attach"). It also
-# re-exports the `image` crate it encodes with (`screenshots::image`), so no second image
-# dependency is declared here. NOTE for the phase report: 0.8.10 is the last release and its own
-# description says "Move to XCap"; on Linux it pulls `dbus` (vendored), `xcb` and `libwayshot`,
-# which the CI image must have headers for.
-screenshots = "0.8"
-# `screenshots` returns `anyhow::Result`; naming the error type is what lets those failures be
-# mapped onto `CommandError` instead of being unwrapped.
-anyhow = "1"
+# Screen capture for `commands::files::screenshot_to_ticket`. `SYNCDESKTOP.md` §6.4 item 8 names
+# the `screenshots` crate ("hotkey → bölge seç (`screenshots` crate) → PNG → ticket attach"), but
+# that crate is ABANDONED: 0.8.10 is its last release and its own README says "Move to XCap".
+# `xcap` is the successor by the same author, with the same shape of API (`Monitor::all` /
+# `from_point` / `capture_region`), so the change is a rename plus one coordinate type.
+#
+# The move is also what stopped a duplicate image stack: `screenshots 0.8` pinned `image 0.24`
+# while Tauri already links `image 0.25`, so both were compiled into the binary along with
+# `exr`, `tiff`, `gif` and `rayon` — 63 packages that existed only to decode formats no
+# screenshot is ever in. `xcap` depends on `image 0.25` with `default-features = false,
+# features = ["png"]`, which unifies with Tauri's copy.
+#
+# Default features only: xcap's `image` feature means `image/default` (jpeg, gif, webp, tiff,
+# exr, …) and would put the whole decoder set back. PNG is all this path encodes.
+# NOTE for the phase report: on Linux xcap pulls `xcb`, `zbus`, `pipewire` and `libwayshot-xcap`,
+# so the F7 CI image needs those headers (`libpipewire-0.3-dev`, `libxcb*-dev`).
+xcap = "0.9"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

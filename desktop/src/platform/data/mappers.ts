@@ -65,6 +65,7 @@ import {
   type LocalRow,
 } from './engine'
 import { EMPTY_REFS, type RefIndex } from './refs'
+import { parseMirrorTimestamp } from './timestamps'
 
 // ------------------------------------------------------------------------------------------------
 // Shared shapes
@@ -135,11 +136,22 @@ export function shortMorph(value: unknown): string | null {
   return tail.toLowerCase()
 }
 
-/** `true` when an ISO timestamp is in the past. */
+/**
+ * `true` when a mirror timestamp is in the past.
+ *
+ * Reads through {@link parseMirrorTimestamp}, not `Date.parse` directly: `tasks.due_at` and
+ * `tickets.sla_due_at` are `dateTime()` migration columns, so a pulled row holds the same
+ * space-separated, zone-less `DATETIME` text `parseMirrorTimestamp`'s header describes — UTC
+ * with nothing in the string saying so. `Date.parse` would read it as local time and shift
+ * `is_overdue` by the host's UTC offset right at the deadline boundary. Date-only columns
+ * (`expected_close_date`, `valid_until`) are unaffected: `parseMirrorTimestamp` only rewrites
+ * strings that carry a time part, so those fall through to the same `Date.parse` reading they
+ * always had — already correct, since ECMA-262 treats a bare date as UTC midnight.
+ */
 function isPast(value: unknown): boolean {
   const raw = str(value)
   if (!raw) return false
-  const at = Date.parse(raw)
+  const at = parseMirrorTimestamp(raw)
   return Number.isFinite(at) && at < Date.now()
 }
 
@@ -722,6 +734,41 @@ export function mapMessage(row: LocalRow, users: RefIndex): Message {
 // ------------------------------------------------------------------------------------------------
 
 /**
+ * The `data` document of a `notifications` mirror row, as an object.
+ *
+ * **The mirror hands this over as a JSON string, not as an object.** `notifications.data` is a
+ * `TEXT` column (`migrations/0001_init.sql`) holding exactly what the server sent —
+ * `SyncPullService::renderNotificationText()` writes it back with `json_encode()`, and the
+ * crate's `json_to_sql()` stores a JSON document as its text. On the way out, `row_to_json()`
+ * re-parses only the columns listed in the entity's `embedded` set (`db/schema.rs`), and
+ * `Entity::Notification` declares `NO_EMBEDDED` — `tags`/`custom_fields`/`items` are decoded,
+ * `data` is not. Reading it as an object therefore yielded `{}` for every real row, i.e. an
+ * empty `title` and `body` on every notification (and, downstream, a `takeUnshown` that
+ * dropped all of them on the empty-text guard).
+ *
+ * `mapSavedView` has the same shape for `query_json` and parses it the same way.
+ *
+ * Both shapes are accepted: the string the mirror actually stores, and the object a fixture —
+ * or a future `embedded` entry — may supply. A document that will not decode, or that decodes
+ * to something other than an object, degrades to `{}`: one malformed row must not take the
+ * whole notification list down with it.
+ */
+function notificationData(raw: unknown): Record<string, unknown> {
+  let value = raw
+  if (typeof value === 'string') {
+    if (value === '') return {}
+    try {
+      value = JSON.parse(value) as unknown
+    } catch {
+      return {}
+    }
+  }
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+/**
  * `NotificationResource`.
  *
  * `client_id` **is** the id (protocol §6.1 P12: `notifications.id` is already a UUID), which
@@ -739,7 +786,7 @@ export function mapMessage(row: LocalRow, users: RefIndex): Message {
  * to a generic translated label today rather than a raw key).
  */
 export function mapNotification(row: LocalRow): Notification {
-  const data = (row.data && typeof row.data === 'object' ? row.data : {}) as Record<string, unknown>
+  const data = notificationData(row.data)
   const meta = data.meta && typeof data.meta === 'object' ? (data.meta as Record<string, unknown>) : {}
   const resolved = resolveNotificationText(data)
   return {
