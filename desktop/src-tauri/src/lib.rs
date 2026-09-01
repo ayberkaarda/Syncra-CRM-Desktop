@@ -93,7 +93,7 @@ pub fn run() {
     // never compiled there — the panic above could not have been caught by any CI job. The
     // registration is now unconditional, which means every build (debug, CI, release) exercises
     // the same plugin-init path, and `desktop-ci.yml`'s Windows release smoke exercises the same
-    // binary shape we ship. Signing key: minisign `AD95461A5419A14A`, private half held only by
+    // binary shape we ship. Signing key: minisign `4CE97F70B4BEFE48`, private half held only by
     // the repo owner and in `TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)`, never in this tree.
     builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 

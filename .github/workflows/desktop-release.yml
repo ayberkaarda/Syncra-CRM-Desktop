@@ -49,12 +49,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # HELD at 22.04 on purpose while desktop-ci.yml moved to 24.04 (2026-08-31).
-        # The release runner's glibc becomes the floor for every Linux user who installs the
-        # artifact (22.04 = glibc 2.35, 24.04 = 2.39); bumping it drops older distributions.
-        # That is a product decision and needs an explicit call — open item O34. The cost of
-        # holding is that CI no longer builds on the same base as the release, so a
-        # 22.04-only build break would surface first in `desktop-release.yml`, not in CI.
+        # ubuntu-24.04, and O34 is closed by measurement rather than by preference. The old
+        # comment here held the release on 22.04 because a release runner's glibc is the floor
+        # of the binary it ships (22.04 = 2.35, 24.04 = 2.39) and bumping it drops older
+        # distributions — a real argument, and it was called a product decision awaiting a
+        # call. The 2026-09-02 release run made the call: **22.04 cannot build this project at
+        # all.** `libspa` fails with E0308/E0425/E0560/E0609 — the Rust crate reading fields
+        # that jammy's libpipewire-0.3-dev headers do not have. There is no 22.04 binary whose
+        # glibc floor needs protecting, so the trade-off had no second side. It also removes
+        # the cost the old comment named: CI and release now build on the same base, and a
+        # Linux break surfaces in CI instead of on a tag.
         os: [windows-latest, ubuntu-24.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
