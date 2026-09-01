@@ -31,6 +31,10 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - '.github/workflows/desktop-ci.yml'
+      # The workflow's own dependencies live outside it now: `linux-runner-prep.sh` installs
+      # the Linux system libraries and reclaims runner disk. Without this entry a commit that
+      # touched only that script would not run the CI which depends on it.
+      - '.github/scripts/**'
   push:
     branches: [feat/desktop]
     paths:
@@ -38,6 +42,10 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - '.github/workflows/desktop-ci.yml'
+      # The workflow's own dependencies live outside it now: `linux-runner-prep.sh` installs
+      # the Linux system libraries and reclaims runner disk. Without this entry a commit that
+      # touched only that script would not run the CI which depends on it.
+      - '.github/scripts/**'
   workflow_dispatch: {}
 
 permissions:
