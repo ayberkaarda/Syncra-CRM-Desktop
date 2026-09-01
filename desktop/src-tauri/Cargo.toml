@@ -2,7 +2,14 @@
 name = "syncra-desktop"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.80"
+# Measured, not guessed: `cargo metadata --locked` over the 703 packages this workspace
+# resolves reports 513 declared `rust-version`s, and the highest is 1.89.0 (`notify-rust
+# 4.18.0`, pulled in by `tauri-plugin-notification`). The next tier down is 1.88.0
+# (`image 0.25.10`, `time 0.3.55`, `plist 1.10.0`, `darling 0.23.0`). The previous "1.80"
+# here was a declaration that no toolchain could honour — the lock has not been buildable on
+# 1.80 for a long time; CI only survives it because it installs `stable`. Re-measure this
+# number (same command, sort by rust_version) whenever `Cargo.lock` moves.
+rust-version = "1.89"
 description = "Syncra CRM desktop shell (Tauri 2)"
 license = "MIT"
 publish = false
@@ -54,8 +61,12 @@ tauri-plugin-single-instance = "2"
 #
 # Default features only: xcap's `image` feature means `image/default` (jpeg, gif, webp, tiff,
 # exr, …) and would put the whole decoder set back. PNG is all this path encodes.
-# NOTE for the phase report: on Linux xcap pulls `xcb`, `zbus`, `pipewire` and `libwayshot-xcap`,
-# so the F7 CI image needs those headers (`libpipewire-0.3-dev`, `libxcb*-dev`).
+# On Linux xcap pulls `xcb`, `zbus`, `pipewire` and `libwayshot-xcap`. Handled in F7:
+# `.github/workflows/desktop-ci.yml` now installs `libclang-dev` (pipewire-sys/libspa-sys run
+# bindgen in build.rs) and `libpipewire-0.3-dev` (their `links`/system-deps pkg-config probes).
+# Those two were added because the crate sources prove they are required; `libxcb*-dev` and the
+# rest of the "probably needed" set were deliberately left out until a build actually names one
+# — see the reasoning in that workflow's Linux dependency step.
 xcap = "0.9"
 
 serde = { version = "1", features = ["derive"] }

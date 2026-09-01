@@ -6,20 +6,40 @@ use App\Models\Attachment;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * `attachments:prune-orphans` — ÖNERİ.
+ * `attachments:prune-orphans` — ZAMANLANMIŞ, GERİ DÖNÜŞSÜZ SİLME.
  *
- * ÖNEMLİ: bu komut routes/console.php'deki zamanlayıcıya KAYITLI DEĞİL ve
- * hiçbir yerden otomatik çalışmaz — Faz 12 kapsamında yalnızca elle
- * çalıştırılabilecek bir araç olarak eklendi. Zamanlayıcıya bağlamak ayrı
- * bir karar/onay gerektirir (bkz. docs/ENGINEERING-RULES.md §6 — teknik lider kararı).
+ * ZAMANLAMA: routes/console.php (D4) bu komutu
+ * `Schedule::command('attachments:prune-orphans --force')->dailyAt('03:47')`
+ * ile HER GÜN 03:47'de çalıştırır. Eşik `config('chat.attachments.
+ * orphan_retention_hours')` (varsayılan 24 saat) — zamanlayıcı `--hours`
+ * vermez. Elle çalıştırma da mümkündür ama komut "yalnızca elle çalışan bir
+ * araç" DEĞİLDİR; bu docblock daha önce öyle olduğunu iddia ediyordu ve o
+ * iddia bir veri kaybı hatasını gizledi (bkz. baseQuery()).
  *
- * GEREKÇE: Bir dosya `POST /api/attachments` ile yüklenip Attachment
- * satırı oluşturulduktan SONRA kullanıcı mesajı hiç göndermezse (sekmeyi
- * kapatır, "gönder"e basmadan vazgeçer, ağ hatası vb.) `attachable_id`
- * NULL kalır ve dosya diskte + tabloda süresiz birikir. `logs:prune`
+ * NEYİ SİLER: yalnızca hiçbir yerden referans verilmeyen ekler —
+ *   - `attachments.attachable_type/attachable_id` NULL (lead/contact zaman
+ *     çizelgesine bağlı DEĞİL), VE
+ *   - hiçbir `messages.attachment_id` bu satıra işaret ETMİYOR (sohbette
+ *     gönderilmiş DEĞİL; soft-delete edilmiş mesajlar dahil), VE
+ *   - `created_at` saklama eşiğinden eski.
+ * Silme `forceDelete()` + `Storage::delete()`'tir: satır ve diskteki dosya
+ * kalıcı olarak gider, geri alma yolu yoktur.
+ *
+ * NEYİ SİLMEZ: bir mesaja bağlı ekler, bir lead/contact'a bağlı ekler,
+ * saklama eşiğinden yeni ekler. Şemada `attachments.id`'ye işaret eden TEK
+ * yabancı anahtar `messages.attachment_id`'dir (2026_08_23_200006); ikinci ve
+ * son bağlılık yolu polimorfik `attachable_*` kolonlarıdır. baseQuery() bu
+ * iki yolu da dışlar; üçüncü bir yol eklenirse baseQuery de güncellenmelidir.
+ *
+ * GEREKÇE: Bir dosya `POST /api/attachments` ile yüklenip Attachment satırı
+ * oluşturulduktan SONRA kullanıcı mesajı hiç göndermezse (sekmeyi kapatır,
+ * "gönder"e basmadan vazgeçer, ağ hatası vb.) hiçbir referans oluşmaz ve
+ * dosya diskte + tabloda süresiz birikir. `logs:prune`
  * (App\Console\Commands\PruneLogs) İLE AYNI DESEN izlenir: `--dry-run`,
  * `--force` (üretimde onaysız çalışmaz), chunk'lı silme.
  *
@@ -41,7 +61,7 @@ class PruneOrphanAttachments extends Command
     /**
      * @var string
      */
-    protected $description = 'Hiçbir mesaja bağlanmamış (attachable_id NULL) ve saklama süresini aşan attachments satırlarını + diskteki dosyalarını kalıcı olarak siler.';
+    protected $description = 'Hiçbir mesaja VE hiçbir kayda bağlanmamış, saklama süresini aşan attachments satırlarını + diskteki dosyalarını kalıcı olarak siler.';
 
     /**
      * Silme sırasında tek seferde işlenecek satır sayısı.
@@ -113,10 +133,39 @@ class PruneOrphanAttachments extends Command
     }
 
     /**
+     * Silmeye aday satırlar. Bu sorgu diskteki dosyayı da yok ettiği için
+     * bir eke işaret eden HER yol burada dışlanmak zorundadır:
+     *
+     *  1. `unattached()` → polimorfik `attachable_*` (lead/contact ekleri).
+     *  2. `whereNotExists(messages)` → sohbet ekleri.
+     *     `MessageService::create()` bir eki mesaja bağlarken YALNIZCA
+     *     `messages.attachment_id` yazar, `attachable_*`'ı hiç doldurmaz;
+     *     yani (1) tek başına sohbet eklerini KORUMAZ ve bu komut daha önce
+     *     sohbete gönderilen her eki 24 saat sonra siliyordu.
+     *
+     * NEDEN `whereNotExists`, `whereDoesntHave` DEĞİL: (a) Attachment
+     * üzerinde bir `messages` ilişkisi yok — `whereDoesntHave` yalnızca onu
+     * eklemek için var olacak bir ilişki gerektirirdi, üstelik derlediği SQL
+     * de aynı `where not exists`; (b) bu komut tüm `attachments` tablosunu
+     * tarar, alt sorgu `messages_attachment_id_foreign` indeksi üzerinden
+     * aday satır başına tek bir indeks aramasıdır (InnoDB yabancı anahtar
+     * için bu indeksi kendiliğinden oluşturur), yani ekstra bir sıralama ya
+     * da geçici tablo maliyeti yoktur.
+     *
+     * `messages.deleted_at` KASITLI olarak filtrelenmez: soft-delete edilmiş
+     * bir mesaj geri alınabilir, eki hâlâ ona aittir.
+     *
      * @return Builder<Attachment>
      */
     private function baseQuery(Carbon $cutoff)
     {
-        return Attachment::query()->unattached()->where('created_at', '<', $cutoff);
+        return Attachment::query()
+            ->unattached()
+            ->whereNotExists(function (QueryBuilder $query): void {
+                $query->select(DB::raw(1))
+                    ->from('messages')
+                    ->whereColumn('messages.attachment_id', 'attachments.id');
+            })
+            ->where('created_at', '<', $cutoff);
     }
 }

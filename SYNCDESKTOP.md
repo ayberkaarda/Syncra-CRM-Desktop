@@ -76,6 +76,8 @@ Kod, identifier, commit, log, dosya adı, doküman başlıkları içindeki tekni
 | K11 | Platform hedefi: **Windows 10+ (MSI+NSIS) ve Linux (AppImage + deb; Ubuntu 22.04+/Fedora 39+, WebKitGTK 2.42+) eşit öncelikli birinci sınıf hedefler**; her OS özelliği iki platformda da doğrulanır. macOS yalnızca derlenir, test edilmez | Geliştirme ortamı Windows + WSL2 Ubuntu; ikisi de elde var |
 | K13 | Paralel fazlar **git worktree** ile izole çalışır (`../syncra-wt-backend`, `../syncra-wt-crate`, …); worktree'leri **ben** açarım, şeritler kendi worktree'si dışına yazamaz | Aynı çalışma dizininde iki şeridin çakışması YASAK |
 | K12 | Bootstrap'ta retention penceresi dışındaki kayıtlar **gelmez**; "Download archive" ile pencere genişletilir | Disk tavanı |
+| K14 | Masaüstü **her zaman bir Laravel backend'inin istemcisidir.** Backend'i kuruluma gömmek veya aynayı kayıt kaynağı yapmak (**standalone mod**) **YAPILMAZ.** | K7 ile çelişir: yetki, quote finansalları, state machine ve SLA sunucudadır, `MutationApplier` tek otoritedir — standalone mod bu mantığın tamamını Rust/TS'te yeniden yazmak, yani **ikinci bir ürün** demektir. Ayrıca ayna K12 gereği **eksiktir** (retention penceresi dışı kayıtlar hiç inmez), yani kaynak olamaz. Backend'i gömmek ise MariaDB trigger'ları + Redis + Reverb + queue + scheduler demek; K11'in kurulum boyutu ve F7'nin `MSI < 25 MB` kabulünü de imha eder. **"Sunucusuz" talebi self-host olarak karşılanır** — varsayılan API hedefi zaten `http://localhost:8000/api/`; eksik olan kod değil, README'deki tek-makine kurulum rehberidir. |
+| K15 | Ayna ve cache kök dizini **kullanıcı tarafından seçilebilir** (varsayılan `app_data_dir()`). Taşıma **yalnız aynı makinede**, engine kapalıyken, kopyala-doğrula-sil sırasıyla yapılır. SQLCipher anahtarı keychain'de kalır ve **hiçbir koşulda dosyayla birlikte dışa verilmez**; `syncra.db`'yi başka makinede açma senaryosu **DESTEKLENMEZ.** | "Disk doluyor" sorununun doğru karşılığı budur. **Anahtar yola bağlı değildir** — `keystore.rs` `keyring::Entry::new(service, key)` ile servis/isim çifti kullanır, dolayısıyla aynı makinede dosya nereye taşınırsa taşınsın açılır. Dosyayı anahtarıyla birlikte dışa vermek T1/I3'ün "çalınan laptop / disk imajı" garantisini **öldürür**; üstelik ayna eksik olduğu için kullanıcı "verimin tamamı" sanarak yarım bir dosya taşır. Gerçek "verimi indir" ihtiyacı ancak **sunucu tarafı export** ile karşılanır. |
 
 > ⚠️ **Karar kimliği çakışması — okurken dikkat.** Bu tablodaki `K1–K13` **şartname** kararlarıdır. Oturum denetimlerinden (RISK-2) çıkan `K1/K2/K3` **ayrı bir seridir**: RISK-2 `K2` = RO referans tablolarının pencerelenmemesi (§4.1), RISK-2 `K3` = bu belgenin revizyonu (§13). Karar belgelerinde ve raporlarda ikinci seri her zaman **`KARAR K2 (RISK-2)`** biçiminde, kaynak belirtilerek anılır.
 
@@ -542,7 +544,7 @@ bootstrap → tablolar dolu, cursor'lar set; delta pull tombstone; server_id→c
 `tauri-plugin-notification, global-shortcut, deep-link, autostart, updater, window-state, single-instance, clipboard-manager, dialog, fs, os, process, shell(open only), log`.
 
 ### 6.2 Komutlar (`src-tauri/src/commands/`)
-`auth::{login, session, restore, logout, list_devices, revoke_device}` · `data::{query, mutate, search}` · `sync::{sync_now, status, conflicts, resolve_conflict, download_archive, bootstrap, handle_realtime}` · `storage::{storage_stats, storage_settings, update_settings, clear_local}` · `files::{cache_quote_pdf, open_cached, attach_from_paths, screenshot_to_ticket}` · `os::{set_badge, register_hotkey, set_autostart, get_autostart, set_tray_language, notify}`.
+`auth::{login, session, restore, logout, list_devices, revoke_device}` · `data::{query, mutate, search}` · `sync::{sync_now, status, conflicts, resolve_conflict, download_archive, bootstrap, handle_realtime}` · `storage::{storage_stats, storage_settings, update_settings, clear_local, data_location, move_data_dir}` · `files::{cache_quote_pdf, open_cached, attach_from_paths, screenshot_to_ticket}` · `os::{set_badge, register_hotkey, set_autostart, get_autostart, set_tray_language, notify}`.
 Her komut `SyncError` → `{code, message}` JSON; UI'da `desktop.errors.*` i18n (bilinmeyen `code` → `desktop.errors.unknown`; eksik anahtar dev/test'te **throw** eder).
 
 <a id="k-handle-realtime"></a>
@@ -604,7 +606,14 @@ frame-ancestors 'none'
 - Screenshot: hotkey → bölge seç (`screenshots` crate) → PNG → ticket attach.
 
 ### 6.5 Updater
-Minisign imzalı; manifest `https://<release-host>/desktop/latest.json`; kanal `stable`. Güncelleme sync döngüsü boşta iken uygulanır.
+Minisign imzalı; manifest **GitHub Releases**'tan servis edilir — ayrı bir güncelleme sunucusu **yoktur ve kurulmayacaktır**:
+`https://github.com/ayberkaarda/Syncra-CRM-Desktop/releases/latest/download/latest.json`
+(`desktop-release.yml` zaten `includeUpdaterJson: true` + `updaterJsonPreferNsis: true` ile bu asset'i üretip imzalıyor.) Kanal `stable`. Güncelleme sync döngüsü boşta iken uygulanır.
+
+`tauri.conf.json` → `plugins.updater`: `pubkey` (zorunlu, `tauri signer generate` çıktısı), yukarıdaki `endpoints`, ve `windows.installMode: "passive"`.
+**Boş endpoint listesi reddedilir** — updater'ı kaydedip hedefsiz bırakmak "çalışıyor" yanılsaması üretir.
+
+> **Ölçüldü (2026-09-01, defter O12):** blok yokken `--release` binary **açılmıyor** — `lib.rs:81` updater'ı `#[cfg(not(debug_assertions))]` ile kaydediyor, konfigürasyonda karşılığı olmayınca `PluginInitialization("updater", "invalid type: null, expected struct Config")` ile panikliyor (exit 101). Blok girildiğinde o `cfg` **silinir**.
 
 ---
 
@@ -720,13 +729,24 @@ Durum sütunu `docs/DESKTOP-THREAT-MODEL.md` §3/§6 ve `docs/DESKTOP-OPEN-ITEMS
 **DUR VE RAPORLA.**
 
 ### F7 — Paketleme ve CI
-`tauri build` (MSI+NSIS, DMG, AppImage+deb); `desktop-ci.yml` (3 OS matrix: cargo test/clippy, tsc, vite build, `tauri build --debug`), `desktop-release.yml` (tag `desktop-v*` → artifact + `latest.json` imzalı); mevcut CI bozulmaz; README/README.tr "Desktop" bölümü; `docs/PROGRESS.md`.
-**Kabul:** CI yeşil; Windows MSI < 25 MB; boşta RAM < 150 MB (ölçüm çıktısı).
+`tauri build` (MSI+NSIS, DMG, AppImage+deb); `desktop-ci.yml` (3 OS matrix: cargo test/clippy, tsc, vite build, `tauri build --debug`; **ek olarak yalnız Windows'ta release smoke** — `tauri build --no-bundle --features custom-protocol` ile **release profili** derlenir, üretilen exe başlatılır ve 10 sn sonra sürecin **ayakta olduğu** doğrulanır), `desktop-release.yml` (tag `desktop-v*` → artifact + `latest.json` imzalı); mevcut CI bozulmaz; README/README.tr "Desktop" bölümü; `docs/PROGRESS.md`.
+**Kabul:** CI yeşil (Windows release smoke dahil); Windows MSI < 25 MB; boşta RAM: **oturum açık + sync döngüsü çalışır** durumda, 3 dk boşta bekleme sonrası **ana süreç + tüm WebView2 alt süreçlerinin toplam Private Bytes < 400 MB** (üç zaman noktalı ölçüm çıktısı rapora girer).
+
+> **Neden bu tanım (2026-09-01 ölçümü):** eski kriter *"boşta RAM < 150 MB"* **ölçülemezdi** — neyi saydığı yazmıyordu ve iki okuma arasında 12 kat fark vardı: yalnız `syncra-desktop.exe` **39 MB**, tüm ağaç (ana + 6 WebView2 süreci) **462 MB** Working Set / **241 MB** Private. Yalnız ana süreci saymak ürün açısından anlamsız (kullanıcının ödediği bellek ağacın tamamı); **Working Set de kabul ölçütü değildir** — paylaşılan WebView2 DLL'lerini süreç başına mükerrer sayar. Dürüst metrik toplam Private Bytes'tır. 150 MB, WebView2'nin taban maliyetinin **altındaydı** — hiçbir gerçek sürümde tutmayacak ölü bir kriterdi. 400 MB, ölçülen 241 MB'lık login değerine oturum + sync yükü için pay bırakır ama bir sızıntıyı hâlâ yakalar. **Açık:** oturum açıkken hiç ölçülmedi (O12 yüzünden uygulama açılamıyordu); ölçüm 400'ü aşarsa **önce kod sorgulanır**, eşik değil.
 **Ayrıca — yalnız paketlenmiş kurulumla doğrulanabilen üç madde (F5'ten devredildi):**
 - MSI/NSIS kurulumundan sonra, uygulama **kapalıyken** `Start-Process "syncra://deal/<id>"` uygulamayı açar **ve kayda gider** (defter O86 — soğuk başlangıç teslimi); uygulama **açıkken** aynı link mevcut pencereye iletilir.
-- `HKCU\Software\Classes\syncra` kaydının **kurulumla geldiği** doğrulanır; gelmiyorsa `deep_link().register_all()` eklenir (defter O87).
+- Sevk edilen son-kullanıcı kurulumu **NSIS'tir** (`currentUser`, yönetici gerektirmez). `HKCU\Software\Classes\syncra` kaydının **NSIS kurulumuyla geldiği** doğrulanır; gelmiyorsa `deep_link().register_all()` eklenir (defter O87).
+  MSI üretilmeye devam eder (kurumsal/GPO dağıtımı) ve **`perMachine` kalır** — bu Tauri'nin varsayılan WiX şablonudur, repoda özel `main.wxs` yoktur; onda şema kaydı `HKLM\Software\Classes\syncra`'dır ve **HKCU şartı MSI'ya uygulanmaz**. MSI yönetici oturumunda bir kez doğrulanır.
+  > **Ölçüldü:** NSIS kurulumu `HKCU\Software\Classes\syncra`'yı yazıyor ve OS `syncra://deal/29`'u doğru exe'ye yönlendiriyor — yani **`register_all()` gerekmiyor**. MSI kurulumu yükseltilmemiş oturumda 1603 ile reddedildi; bu hata değil, `perMachine`'in beklenen davranışı.
 - JumpList "son 5 kayıt" görünür ve tıklanan giriş ilgili kaydı açar (defter O85).
 **DUR VE RAPORLA.**
+
+### F8 — Veri konumu ve self-host onboarding *(F7 onayından SONRA, ayrı faz)*
+1 **Ayna + cache kök dizini seçimi (K15):** `storage::{data_location, move_data_dir}` komutları · Storage sekmesinde "Veri konumu" alanı (yeni panel **açılmaz** — `DesktopPanel.tsx` zaten `storage` sekmesini taşıyor) · taşıma prosedürü (engine kapalı, WAL checkpoint, `syncra.db` ailesi + `cache/` kopyala, doğrula, eskiyi sil) · `dialog:allow-open` ile dizin seçimi (capability'de mevcut) · `desktop` namespace'ine **tr/en/de/fr dördü birden**.
+2 **Self-host rehberi:** README/README.tr'ye tek-makine kurulum (PHP + MariaDB + Redis + Reverb; varsayılan hedef zaten `localhost:8000`). K14'ün pozitif yarısı.
+3 **Runtime API URL — KARAR TURU, kod yok.** Bugün `SYNCRA_API_URL` derleme zamanında gömülü (`state.rs`, `option_env!`), yani her backend için ayrı build gerekiyor. Çalışma anında yapılandırılabilir yapmak **CSP host'larını da** etkiler (§6.3 D-3 build-time'dır ve Tauri'de CSP runtime'da değiştirilemez) → `connect-src` genellemesi tehdit yüzeyini değiştirir. **§6.3, D-3 ve `DESKTOP-THREAT-MODEL.md` TM-F6 birlikte revize edilmeden koda dokunulmaz** (defter O78 dersi).
+4 *(Opsiyonel, backend şeridi)* Sunucu tarafı veri export'u (CSV/arşiv) — web'e de yarar.
+**Kabul:** taşıma sonrası login→sync yeşil; eski dizin **boş**; §9/4 dizin taraması **iki dizinde de** temiz (anahtar/token dosyası yok); `check:commands` yeşil; çıkarılabilir/ağ sürücüsünde SQLite **WAL davranışı ölçülmüş** (güvenilir değilse "yalnız sabit disk" kısıtı konur). **DUR VE RAPORLA.**
 
 ---
 
@@ -786,6 +806,11 @@ Bu belge F0 öncesinde yazıldı ve keşif ilerledikçe **projenin en yanlış b
 | §6.4 / §10 F5 | O85 | JumpList / "son 5 kayıt" F5'ten **F7'ye devredildi**. Elle ölçüm turu kodda `SHAddToRecentDocs`/`ICustomDestinationList`/`IShellLink` için **tek eşleşme bulamadı** — ölçülmemiş değil, **yazılmamış** bir gereksinimdi. Bir F5 maddesinin "doğrulandı" sayılabilmesi için önce var olması gerekir | 2026-09-01 |
 | §10 F7 | O86 / O87 | F7 kabulüne üç madde eklendi: soğuk başlangıç deep link'i, `syncra://` şema kaydının kurulumla gelmesi, JumpList. Üçü de **yalnız paketlenmiş kurulumla** doğrulanabilir; dev build'de şema OS'a hiç kayıtlı değil | 2026-09-01 |
 | §9 madde 5 | O89 | Fuzz iddiası düzeltildi ve **F5-4'ten F6'ya** taşındı. Korpus ham dizgiden besleniyordu; gerçek yolda plugin ayrıştırılmış `url::Url` veriyor ve `..` ret mantığına ulaşmadan normalize oluyor — `deal/../29` birim testte reddedilirken gerçek uygulamada **kabul edildi** | 2026-09-01 |
+| §6.5 | **O12** | Updater manifest host'u `https://<release-host>/…` idi — **var olmayan bir sunucuyu** işaret ediyordu. GitHub Releases'a bağlandı; `plugins.updater` blok tanımı (pubkey/endpoints/installMode) ve boş-endpoint yasağı yazıldı. Blok yokken release binary'nin **açılmadığı** ilk kez ölçüldü (exit 101) | 2026-09-01 |
+| §10 F7 | **O95** | CI tanımına **Windows-only release smoke** eklendi (kapsam genişletmesi, bilinçli): `--debug` `#[cfg(not(debug_assertions))]` bloklarını hiç derlemiyor, O12 bu yüzden CI'dan görünmedi | 2026-09-01 |
+| §10 F7 | **O96** | Boşta RAM kabulü yeniden tanımlandı: *"< 150 MB"* **ölçülemezdi** (neyi saydığı yazmıyordu; 39 MB ile 462 MB arası 12 kat fark). Yeni: oturum açık + sync çalışır, toplam **Private Bytes < 400 MB**; Working Set kabul ölçütü değil | 2026-09-01 |
+| §10 F7 | **O87 / O97** | Sevk edilen kurulum **NSIS** olarak yazıldı; `HKCU` şartının **MSI'ya uygulanmadığı** belirtildi (MSI `perMachine`/`HKLM` — Tauri varsayılanı, repoda özel `main.wxs` yok). NSIS kurulumunun şemayı yazdığı ölçüldü → `register_all()` gerekmiyor | 2026-09-01 |
+| §1, §6.2, §10 | **K14 / K15 / F8** | Kullanıcının "sunucuya dökmeden kullanma + veri dosyasını başka belleğe aktarma" fikri değerlendirildi. **Standalone mod ve gömülü backend kalıcı olarak REDDEDİLDİ** (K14 — K7 ile çelişir, ayna K12 gereği eksiktir, ikinci ürün maliyeti). Gerçek ihtiyacın karşılığı **ayna konumunun seçilebilir olması** (K15) — anahtar yola bağlı olmadığı için (`keystore.rs` servis/isim çifti) aynı makinede taşıma şifreleme garantisini bozmaz. Dosyayı anahtarıyla dışa vermek T1/I3'ü öldüreceği için **DESTEKLENMEZ**. F8 fazı açıldı | 2026-09-01 |
 | §4.4 | **A29** | Mesaj eki metadata'sı pull satırına eklendi (defter O90); `attachments` **kapsam dışı kalmaya devam ediyor** — baytlar senkronlanmaz. Masaüstünde inline önizlemenin neden çalışamadığı (bearer taşıyamayan `<img>` + cookie'siz origin) ölçülüp karara yazıldı | 2026-09-01 |
 | §3 | — | `docs/DESKTOP-OPEN-ITEMS.md` repo ağacına eklendi | 2026-08-31 |
 | §4.1 | **P1, P1b** | `quote_items` RW satırından çıkarıldı; `taggables`/`quote_items`/`custom_field_values` "PULL SETİNDE DEĞİL" olarak ayrı satıra alındı — kendi `sync_version`'ını almaz, tombstone'a girmez; sahip bump zorunluluğu yazıldı | 2026-08-31 |

@@ -67,9 +67,16 @@ class Attachment extends Model
     }
 
     /**
-     * Yüklenip hiçbir mesaja bağlanmamış ekler — bkz.
-     * App\Console\Commands\PruneOrphanAttachments (öneri, kayıt/scheduler
-     * eklenmedi, raporda açıklanır).
+     * Polimorfik sahibi OLMAYAN ekler (`attachable_id IS NULL`) — yani
+     * lead/contact zaman çizelgesine bağlanmamış olanlar.
+     *
+     * DİKKAT: bu scope "hiçbir yere bağlı değil" ANLAMINA GELMEZ. Bir eki
+     * mesaja bağlayan yol `messages.attachment_id`'dir ve
+     * `MessageService::create()` bu satırı yazarken `attachable_*`'a hiç
+     * dokunmaz — sohbette gönderilmiş her ek bu scope'a DAHİLDİR. Silme
+     * yapan bir sorguda tek başına kullanılırsa veri kaybettirir; bir kez
+     * kaybettirdi de (bkz. App\Console\Commands\PruneOrphanAttachments
+     * ::baseQuery(), `messages` alt sorgusunu neden eklediğini açıklar).
      */
     public function scopeUnattached(Builder $query): Builder
     {

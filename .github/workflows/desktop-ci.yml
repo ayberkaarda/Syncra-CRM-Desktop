@@ -124,7 +124,7 @@ jobs:
       # `--workspace` below also compiles `syncra-desktop` (`desktop/src-tauri`), which links
       # against WebKitGTK/GTK headers at compile time — even for `cargo test`/`cargo clippy`,
       # not only `tauri build`. Same package list and source as the Linux step in
-      # `desktop-tauri-build` (Tauri v2 Linux prerequisites).
+      # `desktop-tauri-build` (Tauri v2 Linux prerequisites) — keep the two lists identical.
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -139,7 +139,9 @@ jobs:
             build-essential \
             curl \
             wget \
-            file
+            file \
+            libclang-dev \
+            libpipewire-0.3-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable (branch ref pinned to a commit; action publishes no version tags)
@@ -356,6 +358,30 @@ jobs:
       # Precondition 4: Tauri v2 Linux build/runtime dependencies, per
       # https://v2.tauri.app/start/prerequisites/#linux (current list as of Tauri 2.x;
       # re-check against the docs if this job starts failing on missing libraries).
+      #
+      # F7: the last two are NOT from the Tauri docs — they come from `xcap 0.9`
+      # (`desktop/src-tauri/Cargo.toml`, `commands::files::screenshot_to_ticket`), whose
+      # dependency list in `desktop/Cargo.lock` includes `pipewire 0.10.1` and
+      # `libwayshot-xcap 0.3.3`. Exactly two packages are added, each because a mechanism read
+      # out of the crate sources proves it cannot arrive any other way:
+      #   - libclang-dev        : `pipewire-sys` and `libspa-sys` both run `bindgen` in their
+      #                           `build.rs` (verified in the vendored 0.10.1 sources), and
+      #                           bindgen dlopens libclang at build time. No Rust dependency
+      #                           can supply a system libclang.
+      #   - libpipewire-0.3-dev : both `-sys` crates declare `links` (`pipewire-0.3`,
+      #                           `libspa-0.2`) and resolve the real libraries through
+      #                           `system-deps` -> pkg-config, asking for the `libpipewire-0.3`
+      #                           and `libspa-0.2` modules by name. Nothing in the graph
+      #                           vendors either. On Ubuntu `libpipewire-0.3-dev` ships
+      #                           `libpipewire-0.3.pc` and depends on `libspa-0.2-dev`, so the
+      #                           one package covers both probes; if a future image splits them
+      #                           the pkg-config error names the missing module exactly.
+      # The wider "probably needed" set (libgbm-dev, libegl-dev, libxcb*-dev, libdrm-dev,
+      # libwayland-dev, libdbus-1-dev) is deliberately NOT pre-added. This list was already
+      # assembled once "per the docs" and still turned out incomplete; a padded list would
+      # permanently hide which dependencies are real. A missing apt package fails loudly, by
+      # name, in seconds — that is the cheapest diagnostic in this whole workflow, so it is
+      # left to do its job.
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -370,7 +396,9 @@ jobs:
             build-essential \
             curl \
             wget \
-            file
+            file \
+            libclang-dev \
+            libpipewire-0.3-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -429,3 +457,188 @@ jobs:
       # flag, not an assumption.
       - name: tauri build --debug
         run: npm run tauri -- build --debug --features custom-protocol
+
+  # ---------------------------------------------------------------------------
+  # Release-profile smoke test (SYNCDESKTOP.md §6.5 / §10 F7).
+  #
+  # WHY THIS EXISTS — the blind spot it closes
+  # `desktop-tauri-build` runs `tauri build --debug`, which keeps `debug_assertions` ON.
+  # `desktop/src-tauri/src/lib.rs` gates the updater plugin behind
+  # `#[cfg(not(debug_assertions))]`, so that block is never even compiled by the job above:
+  # the entire release-only configuration of this app is invisible to CI. The first real
+  # release build (F7, 2026-08-31) failed exactly there — `tauri-plugin-updater`'s `Config`
+  # has a mandatory, default-less `pubkey`, so `.setup()` panicked and the binary exited 101
+  # without ever opening a window. A shipped-artifact-does-not-start bug, and CI was green.
+  #
+  # WHY A SEPARATE JOB, not another step on `desktop-tauri-build (windows-latest)`
+  #  1. Signal separation, and it matters *today*: this job is expected to be RED (see the
+  #     step comment below). Folding it into the Windows matrix leg would paint that leg red
+  #     for a reason unrelated to the debug build, and a genuine debug-build regression would
+  #     hide behind the known failure. As its own check the expected-red is contained and
+  #     named.
+  #  2. No compile work is duplicated by splitting: debug and release are different cargo
+  #     profiles and share no artifacts, so the release build pays a full compile wherever it
+  #     is placed. Running it as its own job puts that cost in parallel with the 3-OS matrix
+  #     instead of serialising it behind the slowest leg (Windows, which already carries the
+  #     vendored-OpenSSL Perl/MAX_PATH preconditions and a 40-minute budget).
+  #
+  # WHY WINDOWS ONLY
+  # Deliberate. The bug class this catches — a plugin whose `.setup()` refuses a missing
+  # config — is platform-independent, so a second and third OS would buy a repeat of the same
+  # signal at triple the runner cost. Windows is also the primary target platform.
+  #
+  # WHY NOT A FULL BUNDLE
+  # `--no-bundle` on purpose: the failure is in `.setup()` at process start, not in installer
+  # generation, and `desktop-release.yml` is what owns bundling. Skipping the bundler removes
+  # several minutes and the signing/NSIS surface from this gate.
+  # ---------------------------------------------------------------------------
+  desktop-release-smoke:
+    name: release smoke (windows)
+    needs: [desktop-rust, desktop-frontend]
+    runs-on: windows-latest
+    # Same reasoning as desktop-tauri-build: a cold vendored-OpenSSL compile dominates, and
+    # the release profile cannot reuse the debug profile's artifacts.
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Same two Windows preconditions as desktop-rust / desktop-tauri-build — full diagnosis
+      # in the comments on desktop-rust. This job compiles the same workspace and hits the
+      # same vendored-OpenSSL Perl lookup and MAX_PATH limits.
+      - name: Prefer Strawberry Perl over Git's Perl (Windows)
+        shell: pwsh
+        run: |
+          $strawberry = 'C:\Strawberry\perl\bin'
+          if (-not (Test-Path $strawberry)) {
+            throw "Strawberry Perl not found at $strawberry - runner image changed, update this step"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $strawberry
+
+      - name: Use short CARGO_TARGET_DIR (Windows MAX_PATH workaround)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\t | Out-Null
+          Add-Content -Path $env:GITHUB_ENV -Value 'CARGO_TARGET_DIR=C:\t'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+
+      # rust-cache keys on job id, so this job gets its own cache entry — which is what we
+      # want: it holds release-profile artifacts, and mixing them into desktop-tauri-build's
+      # debug cache would only inflate that one.
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: desktop -> target
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            frontend/package-lock.json
+
+      # Both installs are required: `desktop/vite.desktop.config.ts` aliases `@` to
+      # `../frontend/src`, whose bare imports resolve out of `frontend/node_modules`, while
+      # `@tauri-apps/*` lives only in `desktop/node_modules`. Same as desktop-tauri-build.
+      - name: Install desktop shell dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # `desktop/scripts/tauri.mjs` derives the production CSP from `../frontend/.env`, which
+      # is gitignored and does not exist on a runner. Seeded from the example so the CSP path
+      # is exercised; these are localhost hosts and are NOT a production configuration.
+      - name: Seed frontend/.env for CSP generation (CI has no real one; gitignored)
+        working-directory: frontend
+        run: cp .env.example .env
+
+      # RELEASE profile — no `--debug`. This is the whole point of the job: it is the only
+      # place in CI where `#[cfg(not(debug_assertions))]` code is compiled at all.
+      - name: tauri build (release, no bundle)
+        run: npm run tauri -- build --no-bundle --features custom-protocol
+
+      # ⚠️ EXPECTED RED, AND THAT IS THE CORRECT STATE (open item O12).
+      # `desktop/src-tauri/tauri.conf.json` has no `plugins.updater` block, because that block
+      # requires the real minisign public key the maintainer has yet to generate. Until it
+      # lands, the release binary panics in `.setup()` and this step fails with exit code 101.
+      # That failure is the finding, not a flaw in the gate.
+      #
+      # Do NOT "fix" this by: committing a placeholder pubkey (rejected in lib.rs:75-77 — a
+      # fake signing key in the repo is exactly the placeholder that survives to production),
+      # deleting the `#[cfg(not(debug_assertions))]` guard, or adding `continue-on-error` here.
+      # This step turns green the moment `plugins.updater` is configured, and it must stay a
+      # hard gate so that it does.
+      #
+      # Mechanism: start the built exe, wait up to 10 seconds, assert it is still alive, then
+      # kill it. A release binary that cannot survive its own `.setup()` dies within
+      # milliseconds, so a 10s window separates "started" from "crashed on launch" with a wide
+      # margin. On early exit the exit code and captured stderr are printed and the job fails.
+      # windows-latest ships WebView2 preinstalled, so window creation is a real code path here
+      # rather than an assumed one.
+      #
+      # `System.Diagnostics.Process` rather than `Start-Process -PassThru`: verified locally
+      # (2026-09-01) that the object `Start-Process -PassThru` hands back reports
+      # `HasExited = True` but a NULL `ExitCode`, even after `WaitForExit()` — which would
+      # reduce the required "log the exit code" to an empty string exactly when it matters.
+      # Starting the process directly reports the real code (measured: 101, the Rust panic
+      # code, for today's updater failure). `ReadToEndAsync` is started before the wait so a
+      # chatty binary cannot deadlock on a full pipe buffer.
+      - name: Smoke test - release binary must stay alive for 10s
+        shell: pwsh
+        run: |
+          # Two non-obvious requirements, both found by running this exact block locally
+          # (2026-09-01) before it was committed:
+          #  - `$ErrorActionPreference = 'Stop'` is mandatory, not hygiene. Without it a failed
+          #    `Process::Start` leaves `$proc` null, every later `$proc.<member>` emits a
+          #    non-terminating error, the `if ($proc.WaitForExit(...))` condition evaluates
+          #    false, and the script falls through to the success branch and exits 0. A gate
+          #    that reports green when it could not even launch the binary is worse than no
+          #    gate. Reproduced exactly that way once; do not remove this line.
+          #  - The path must be absolute. `Test-Path` resolves against PowerShell's provider
+          #    location (the step's working-directory), but `ProcessStartInfo.FileName`
+          #    resolves against the OS process working directory, which is not the same thing.
+          #    A relative path passes the existence check and then fails to start.
+          $ErrorActionPreference = 'Stop'
+
+          $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { 'target' }
+          $exePath = Join-Path $targetDir 'release\syncra-desktop.exe'
+          if (-not (Test-Path $exePath)) {
+            throw "Release binary not found at $exePath - the build step's output layout changed"
+          }
+          $exe = (Resolve-Path $exePath).ProviderPath
+
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = $exe
+          $psi.WorkingDirectory = Split-Path -Parent $exe
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $proc = [System.Diagnostics.Process]::Start($psi)
+          if ($null -eq $proc) { throw "Process::Start returned null for $exe" }
+          $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+          $stderrTask = $proc.StandardError.ReadToEndAsync()
+
+          Write-Host "Started $exe (pid $($proc.Id)); waiting up to 10s..."
+
+          if ($proc.WaitForExit(10000)) {
+            $proc.WaitForExit()
+            Write-Host "::error::Release binary died on launch with exit code $($proc.ExitCode). Known open item O12: tauri.conf.json has no plugins.updater block, so tauri-plugin-updater panics in .setup(). Do not silence this step - fix the config."
+            Write-Host '--- stdout ---'
+            Write-Host $stdoutTask.Result
+            Write-Host '--- stderr ---'
+            Write-Host $stderrTask.Result
+            exit 1
+          }
+
+          Write-Host 'Still running after 10s - release binary starts cleanly.'
+          $proc.Kill()
+          exit 0

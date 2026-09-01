@@ -2,7 +2,12 @@
 name = "syncra-sync"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.80"
+# Kept identical to `desktop/src-tauri/Cargo.toml` on purpose: the two crates share one
+# `Cargo.lock` and one `target/`, so the effective floor is the workspace-wide maximum
+# (1.89.0, from `notify-rust 4.18.0`) no matter which member is built. Declaring a lower
+# number here would only advertise a configuration that cannot be built from this lock.
+# See the full measurement note in `desktop/src-tauri/Cargo.toml`.
+rust-version = "1.89"
 description = "Offline-first sync engine for the Syncra CRM desktop client"
 license = "MIT"
 publish = false
