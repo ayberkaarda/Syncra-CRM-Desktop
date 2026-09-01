@@ -25,7 +25,7 @@
 > **Sürüm 3 — 2026-09-01, F6 kalan iki maddesi (bu revizyon).** §9'un iki açık maddesi
 > kapatıldı: **madde 6** (pano) ölçüldü ve dört yeni testle çivilendi; **madde 8** (updater)
 > artık DEĞERLENDİRİLEMEZ değil — defter O12 `tauri.conf.json`'a gerçek `plugins.updater`
-> bloğunu (minisign `3E1D6B1F3C9F300F`) girdi, `lib.rs`'teki `#[cfg(not(debug_assertions))]`
+> bloğunu (minisign `AD95461A5419A14A`) girdi, `lib.rs`'teki `#[cfg(not(debug_assertions))]`
 > silindi ve plugin her build'de kayıtlı. Bu turda **konfigürasyon ve kaynak seviyesinde
 > ölçüm** yapıldı (plugin'in kendi `Config` deserializer'ı + `dosya:satır`); **uçtan uca
 > imzalı güncelleme akışı ÖLÇÜLMEDİ** ve özel anahtar bu ağaçta olmadığı için bu turda
@@ -151,7 +151,7 @@ updater de O12 ile yapılandırıldı; her iki yüzey de satır satır modellend
 | S1 | Spoofing | Anonim: `POST /api/auth/device` üzerinden brute-force / hesap numaralandırma | Cihaz login ucu | Web login ile **paylaşılan** keyed lockout (email+IP, 5 deneme, 1→2→…→60 dk eskalasyon) — `DeviceTokenService.php:147-197`; hata mesajları web ile birebir aynı (numaralandırma önlenir, sınıf yorumu satır 42-49); testler `tests/Feature/Sync/DeviceTokenTest.php:133,160,182` | Dağıtık IP'lerden yavaş deneme (web ile aynı kalıntı) | KAPALI |
 | S2 | Spoofing | İçeriden: cookie oturumu ile sync uçlarına erişim (TransientToken zaafı, protokol §3.3 K-A) | `/api/sync/*` | `EnsureDeviceToken` gerçek `PersonalAccessToken` sınıfını şart koşar (`backend/app/Http/Middleware/EnsureDeviceToken.php:42-59`), alias kayıtlı (`bootstrap/app.php:191,200`); test `DeviceTokenTest.php:263` (bilinçli `actingAs()` ile zaafı yeniden üretip 403 doğrular) | — | KAPALI |
 | S3 | Spoofing | İçeriden: sahte `device_fingerprint` beyanı | Cihaz login ucu | Biçim doğrulaması `size:64` + hex (`Http/Requests/Auth/DeviceTokenRequest.php:38`); eski-token silme **yalnız kendi token'larına** kapsamlı (`DeviceTokenService.php:114-116` — "fingerprint is a device identifier, not an authorisation") | Kendi hesabı için cihaz-başına-tek-token kuralı atlatılır → token bolluğu (bkz. TM-F4). Başka hesabın token'ına dokunamaz | AÇIK (DÜŞÜK) |
-| S4 | Spoofing | Ağda: sahte / imzasız / yanlış anahtarla imzalı update manifest'i | Updater | **2026-09-01 (Sürüm 3, defter O12) itibarıyla updater gerçek.** `tauri.conf.json` → `plugins.updater`: gerçek minisign pubkey (`3E1D6B1F3C9F300F`), tek `https://` endpoint (GitHub Releases `latest/download/latest.json`), `windows.installMode: "passive"`; plugin `lib.rs:86`'da **koşulsuz** kayıtlı (`#[cfg(not(debug_assertions))]` silindi). Üç ayrı fail-closed kapı, üçü de plugin kaynağından okundu: (1) imzasız manifest **indirmeden önce** serde'de düşer — `signature` `Option` değil (`tauri-plugin-updater-2.10.1/src/updater.rs:76`) ve düz biçimde açık hata var (`:1422-1424`); (2) imza `verify_signature` ile `minisign_verify::PublicKey::verify` üzerinden doğrulanır (`:1453-1463`) ve tek çağrı yeri `Update::download`'un **buffer'ı döndürmeden hemen öncesidir** (`:712`) — `install()` yalnız `download()`'un döndürdüğü baytları alır, yani doğrulanmamış bayt kurulamaz; (3) `pubkey` varsayılansız zorunlu alandır (`src/config.rs:101,122`), anahtarsız blok deserialize **olmaz**. Testler: `src-tauri/src/updater.rs:69,93,109,129,190,251` (6 test) | **Kalan risk = anahtarın kendisi.** Doğrulama zinciri sağlam; kırılma noktası özel anahtarın (`TAURI_SIGNING_PRIVATE_KEY`) sızması. Ayrıca **uçtan uca akış ÖLÇÜLMEDİ** — gerçek imzalı bir sürüm henüz yok ve TM-F16 (`createUpdaterArtifacts` yok) bugün onu üretmeyi de engelliyor | KAPALI (konfigürasyon + kaynak kanıtı); uçtan uca **ÖLÇÜLMEDİ** — §3/8 |
+| S4 | Spoofing | Ağda: sahte / imzasız / yanlış anahtarla imzalı update manifest'i | Updater | **2026-09-01 (Sürüm 3, defter O12) itibarıyla updater gerçek.** `tauri.conf.json` → `plugins.updater`: gerçek minisign pubkey (`AD95461A5419A14A`), tek `https://` endpoint (GitHub Releases `latest/download/latest.json`), `windows.installMode: "passive"`; plugin `lib.rs:86`'da **koşulsuz** kayıtlı (`#[cfg(not(debug_assertions))]` silindi). Üç ayrı fail-closed kapı, üçü de plugin kaynağından okundu: (1) imzasız manifest **indirmeden önce** serde'de düşer — `signature` `Option` değil (`tauri-plugin-updater-2.10.1/src/updater.rs:76`) ve düz biçimde açık hata var (`:1422-1424`); (2) imza `verify_signature` ile `minisign_verify::PublicKey::verify` üzerinden doğrulanır (`:1453-1463`) ve tek çağrı yeri `Update::download`'un **buffer'ı döndürmeden hemen öncesidir** (`:712`) — `install()` yalnız `download()`'un döndürdüğü baytları alır, yani doğrulanmamış bayt kurulamaz; (3) `pubkey` varsayılansız zorunlu alandır (`src/config.rs:101,122`), anahtarsız blok deserialize **olmaz**. Testler: `src-tauri/src/updater.rs:69,93,109,129,190,251` (6 test) | **Kalan risk = anahtarın kendisi.** Doğrulama zinciri sağlam; kırılma noktası özel anahtarın (`TAURI_SIGNING_PRIVATE_KEY`) sızması. Ayrıca **uçtan uca akış ÖLÇÜLMEDİ** — gerçek imzalı bir sürüm henüz yok ve TM-F16 (`createUpdaterArtifacts` yok) bugün onu üretmeyi de engelliyor | KAPALI (konfigürasyon + kaynak kanıtı); uçtan uca **ÖLÇÜLMEDİ** — §3/8 |
 | S5 | Spoofing | Lokal proses: `syncra://` linkiyle kullanıcıyı **başka bir kayda** yönlendirmek (linkte görünen id ≠ açılan id) | Deep link | Entity url'in **host**'udur ve hiçbir normalizasyon host'a ulaşmaz: `deal/../lead/1` host'u `deal` bırakır, `setting/../deal/42` allowlist'e takılır, `DEAL/42` küçük harfe katlanmadığı için reddedilir (`deep_link.rs:170-190`; test `normalisation_can_change_the_id_but_never_the_entity`, `the_normalisation_families_are_pinned`) | **`id` kayabilir:** `syncra://deal/1/../2` → deal **2**; `deal/9999999999999/../42` → deal 42 (regex'in reddedeceği 13 haneli segment sonrakiyle siliniyor). Ulaşılabilen küme = aynadaki kayıtlar, yani `SyncScope`'un pull anında zaten filtrelediği satırlar → yetki kazanımı yok, yalnız yanıltma | **AÇIK (DÜŞÜK) — KABUL EDİLDİ**, §4.6/b |
 | T1 | Tampering | Fiziksel erişim: DB dosyasını değiştirme/okuma | `syncra.db` | SQLCipher — `PRAGMA key` ilk ifade (`db/mod.rs:38`), yanlış anahtar gürültülü hata (`db/mod.rs:41-43`, test `tests/encryption.rs:53-62`); anahtar keychain'de | Aynı OS hesabındaki kötücül proses keychain'i okuyabilir (SINIR 3, kabul edilmiş) | KAPALI |
 | T2 | Tampering | İçeriden: outbox'u/lokal DB'yi elle değiştirip sahte mutasyon push'lamak | Push ucu | Sunucu istemci beyanına güvenmez: her mutasyonda Policy + FormRequest + horizontal boundary (`MutationApplier.php:256,333,407,500,521`); `changed_fields` dışı alan yazılmaz; yasak alanlar 422 (`SyncPushTest.php` matrisi) | Kullanıcı kendi YAPABİLDİĞİ işlemleri farklı bir istemciden yapmış olur — yetki kazanımı yok | KAPALI |
@@ -381,7 +381,7 @@ updater de O12 ile yapılandırıldı; her iki yüzey de satır satır modellend
 
    Sürüm 2'de bu madde `DEĞERLENDİRİLEMEZ-F7` idi çünkü `plugins.updater` bloğu yoktu.
    **Defter O12 ile o durum düştü:** `tauri.conf.json` → `plugins.updater` gerçek minisign
-   pubkey'i (`3E1D6B1F3C9F300F`), tek `https://` endpoint'i ve `windows.installMode: "passive"`
+   pubkey'i (`AD95461A5419A14A`), tek `https://` endpoint'i ve `windows.installMode: "passive"`
    taşıyor; `lib.rs`'teki `#[cfg(not(debug_assertions))]` **silindi** ve plugin `lib.rs:86`'da
    her build'de kayıtlı.
 
@@ -415,10 +415,10 @@ updater de O12 ile yapılandırıldı; her iki yüzey de satır satır modellend
      katman önce, build'in bir şey kurabilir hâle gelmesinden önce olur.
    - `no_dangerous_transport_escape_hatch_is_enabled` (`:93`) — üç `dangerous*` bayrağı da
      kapalı.
-   - `the_configured_pubkey_is_the_real_minisign_key_for_3e1d6b1f3c9f300f` (`:190`) — pubkey
+   - `the_configured_pubkey_is_the_real_minisign_key_for_ad95461a5419a14a` (`:190`) — pubkey
      iki base64 katmanı çözülüp **gerçek** bir minisign anahtarı olduğu doğrulanıyor: 42 bayt,
      `Ed` + 8 baytlık key id + 32 baytlık Ed25519 anahtarı, ve **anahtarın içindeki key id
-     onu adlandıran untrusted comment ile birebir aynı** (`3E1D6B1F3C9F300F`). Placeholder /
+     onu adlandıran untrusted comment ile birebir aynı** (`AD95461A5419A14A`). Placeholder /
      elle kırpılmış / uydurma bir anahtar burada düşer. Test kendi negatif kontrolünü taşır
      (bir bayt çevrilince karşılaştırma bozulmalı).
    - `an_empty_pubkey_is_not_what_ships` (`:129`) — boş anahtarı serde kabul eder, reddi
@@ -430,7 +430,7 @@ updater de O12 ile yapılandırıldı; her iki yüzey de satır satır modellend
      CI işi tarafından yakalanamazdı.
 
    **C. Neyin ÖLÇÜLMEDİĞİ ve bu turda ölçülemeyeceği.** Bu build'in **kabul edeceği** bir
-   `latest.json` üretmek `3E1D6B1F3C9F300F`'in **özel** yarısını gerektirir; o anahtar yalnız
+   `latest.json` üretmek `AD95461A5419A14A`'in **özel** yarısını gerektirir; o anahtar yalnız
    depo sahibinde ve CI'ın `TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)` secret'ındadır, bu ağaçta
    yoktur ve bilinçle olmayacaktır. Dolayısıyla **"doğru imzalı bir güncelleme kurulur"** ve
    **"yolda bozulan payload son baytta reddedilir"** iddiaları bugün **DOĞRULANMADI**.

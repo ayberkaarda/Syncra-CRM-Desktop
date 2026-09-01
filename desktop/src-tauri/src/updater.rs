@@ -36,7 +36,7 @@
 //! ## What is NOT measured here, and will not be until the first signed release
 //!
 //! There is no end-to-end run: producing a `latest.json` that this build would *accept*
-//! requires the minisign **private** key for `3E1D6B1F3C9F300F`, which is held only by the
+//! requires the minisign **private** key for `AD95461A5419A14A`, which is held only by the
 //! repo owner and by `TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)` in CI, and is deliberately not in
 //! this tree. So "a correctly signed update installs" and "a payload corrupted in flight is
 //! refused at the last byte" stay unverified until a real signed release exists. `Update` is
@@ -174,7 +174,7 @@ mod tests {
     }
 
     /// The configured key is a **real** minisign Ed25519 public key, and it is the one the
-    /// release pipeline signs with: key id `3E1D6B1F3C9F300F`.
+    /// release pipeline signs with: key id `AD95461A5419A14A`.
     ///
     /// Why this is worth a test rather than a glance. `Config` only requires a `String`; a
     /// truncated key, a key for a signing pair nobody holds, or the placeholder someone pastes
@@ -187,8 +187,8 @@ mod tests {
     ///
     /// The id is little-endian in the key bytes, which is why it is reversed before hex.
     #[test]
-    fn the_configured_pubkey_is_the_real_minisign_key_for_3e1d6b1f3c9f300f() {
-        const EXPECTED_KEY_ID: &str = "3E1D6B1F3C9F300F";
+    fn the_configured_pubkey_is_the_real_minisign_key_for_ad95461a5419a14a() {
+        const EXPECTED_KEY_ID: &str = "AD95461A5419A14A";
 
         let config: Config = serde_json::from_value(shipped_updater_json()).expect("config");
 
