@@ -1473,7 +1473,12 @@ fn apply_server_row(
             continue;
         }
         names.push(key.clone());
-        values.push(db::json_to_sql(value));
+        // The second write boundary for server-sourced values (defter O83). `theirs` is the
+        // raw server row — either the `server_row` a push conflict returned or the
+        // `pending_shadows.row_json` a §5.5 pull parked — so a `TakeServer` (or the
+        // server-side half of a `Merge`) would otherwise write the space-form dialect back
+        // over a row the pull path had already normalised.
+        values.push(db::json_to_sql_for_column(key, value));
     }
     for fk in spec.fks {
         if let Some(server_id) = obj.get(fk.server_col).and_then(|v| v.as_i64()) {

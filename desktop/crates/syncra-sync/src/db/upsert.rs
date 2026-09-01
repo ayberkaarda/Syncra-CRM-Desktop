@@ -11,7 +11,7 @@
 //!   `pending_shadows` as "theirs" instead.
 
 use super::schema::{self, TableSpec};
-use super::{columns, json_to_sql};
+use super::{columns, json_to_sql_for_column};
 use crate::error::{Result, SyncError};
 use crate::types::{Entity, SyncState};
 use rusqlite::{Connection, Transaction};
@@ -170,8 +170,13 @@ pub fn upsert_row(
             // (users is a fixed projection, and additive server columns are expected).
             continue;
         }
+        // `json_to_sql_for_column`, not `json_to_sql`: this is one of the two write
+        // boundaries where a server-dialect timestamp (`2026-09-01 23:59:00`) is folded into
+        // the mirror's canonical `2026-09-01T23:59:00.000Z` (defter O83). The *local* column
+        // name is what decides, so an aliased column is classified by the name it is actually
+        // stored under.
+        vals.push(json_to_sql_for_column(&column, value));
         cols.push(column);
-        vals.push(json_to_sql(value));
     }
 
     // Resolve foreign keys to local references.
@@ -530,5 +535,102 @@ mod tests {
             )
             .unwrap();
         assert_eq!(ticket_number, "T-0503", "the rest of the row must still write normally");
+    }
+
+    /// The transport test for KARAR A29 (defter O90): before migration
+    /// `0004_message_attachment_fields.sql` these four keys had no matching column and were
+    /// silently dropped, which is why an attached-message bubble on desktop rendered with no
+    /// thumbnail and no filename. Values below are copied from the real wire row in
+    /// `wire-fixtures/pull/message.row.json` — the fixture itself is the actual proof that
+    /// this shape matches the wire (via `tests/wire_fixtures.rs`); this test proves the SQLite
+    /// round trip specifically, including that the JSON bool comes back as `1`, the same
+    /// convention `json_to_sql` already uses for every other boolean column.
+    #[test]
+    fn message_attachment_fields_survive_the_upsert_round_trip() {
+        let (_dir, conn) = temp_conn();
+        let spec = schema::spec_for(Entity::Message);
+        let table_columns = columns(&conn, "messages").unwrap();
+
+        let row = json!({
+            "id": 1,
+            "client_id": null,
+            "sync_version": 11,
+            "conversation_id": 1,
+            "user_id": 1,
+            "body": "Destek talebi çözüldü, müşteri onayladı.",
+            "attachment_id": 1,
+            "type": "file",
+            "edited_at": null,
+            "created_at": "2026-09-01 11:03:31",
+            "updated_at": "2026-09-01 11:03:31",
+            "deleted_at": null,
+            "attachment_name": "ekran-goruntusu.png",
+            "attachment_mime": "image/png",
+            "attachment_size": 7079718,
+            "attachment_is_image": true,
+        });
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let mut id_map = IdMap::new();
+        upsert_row(&tx, spec, &row, &mut id_map, &table_columns).unwrap();
+        tx.commit().unwrap();
+
+        let (name, mime, size, is_image): (Option<String>, Option<String>, Option<i64>, Option<i64>) =
+            conn.query_row(
+                "SELECT attachment_name, attachment_mime, attachment_size, attachment_is_image \
+                 FROM messages WHERE server_id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+
+        assert_eq!(name, Some("ekran-goruntusu.png".to_string()));
+        assert_eq!(mime, Some("image/png".to_string()));
+        assert_eq!(size, Some(7079718));
+        // JSON `true` -> SQL 1, readable back as a bool by the caller (K7: `is_image` is read
+        // straight off this column, never re-derived from `attachment_mime`).
+        assert_eq!(is_image, Some(1));
+    }
+
+    /// A message with no attachment carries none of the four fields on the wire at all
+    /// (`SyncPullService::attachMessageAttachments()` only runs for messages that have an
+    /// `attachment_id`) — they must land as SQL NULL, not be invented as `0`/empty string.
+    #[test]
+    fn a_message_without_an_attachment_gets_null_in_all_four_attachment_columns() {
+        let (_dir, conn) = temp_conn();
+        let spec = schema::spec_for(Entity::Message);
+        let table_columns = columns(&conn, "messages").unwrap();
+
+        let row = json!({
+            "id": 2,
+            "client_id": null,
+            "sync_version": 1,
+            "conversation_id": 1,
+            "user_id": 1,
+            "body": "Merhaba",
+            "attachment_id": null,
+            "type": "text",
+            "created_at": "2026-09-01 11:00:00",
+            "updated_at": "2026-09-01 11:00:00",
+        });
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let mut id_map = IdMap::new();
+        upsert_row(&tx, spec, &row, &mut id_map, &table_columns).unwrap();
+        tx.commit().unwrap();
+
+        let (name, mime, size, is_image): (Option<String>, Option<String>, Option<i64>, Option<i64>) =
+            conn.query_row(
+                "SELECT attachment_name, attachment_mime, attachment_size, attachment_is_image \
+                 FROM messages WHERE server_id = 2",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+
+        assert_eq!(name, None);
+        assert_eq!(mime, None);
+        assert_eq!(size, None);
+        assert_eq!(is_image, None);
     }
 }

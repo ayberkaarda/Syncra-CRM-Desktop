@@ -84,6 +84,10 @@ vi.mock('../../bridge/invoke', () => ({
 // Imported AFTER the mock declaration for readability only — `vi.mock` is hoisted, so the order
 // of these lines does not affect what `desktopData` gets.
 import { desktopData } from './index'
+import { mapMessage, mapTicket } from './mappers'
+import { EMPTY_REFS } from './refs'
+import type { TicketRefs } from './mappers'
+import type { LocalRow } from './engine'
 
 // ------------------------------------------------------------------------------------------------
 // Fixtures
@@ -235,4 +239,89 @@ describe('wire fixtures — the TypeScript composers produce the canonical mutat
       'the comparison cannot tell `move` from `deal.move`, so every assertion above is worthless',
     )
   })
+})
+
+// ------------------------------------------------------------------------------------------------
+// Consumer 3, pull side: `wire-fixtures/pull/*.json`'s `mapped` block against `./mappers.ts`.
+//
+// The crate proves every non-envelope key in a pull fixture's `row` has a mirror column
+// (`crates/syncra-sync/tests/wire_fixtures.rs::every_pulled_key_has_a_mirror_column`). The
+// backend proves the row really is a subset of what `SyncPullService` sends (e.g.
+// `backend/tests/Feature/Sync/SyncPullMessageAttachmentTest.php`). Neither of those two can see
+// a mapper-side failure: a column the mirror correctly stores but a mapper drops, renames, or
+// misreads on the way to the DTO — exactly what happened before KARAR A29 (defter O90), where
+// `mapMessage` hard-coded `attachment: null` no matter what the row carried. This block is the
+// third leg: it drives `fixture.row` through the real mapper and checks the fixture's `mapped`
+// block against what came out.
+//
+// Assertions are per-entity, not generic — the DTO shape differs by entity (a message's
+// attachment metadata nests under `attachment.*`, a ticket's SLA fields are flat), and there are
+// only two entities under `wire-fixtures/pull/` today. A fixture with an `entity` this file does
+// not recognise fails loudly (`assert.fail`) rather than being silently skipped, so a third pull
+// fixture cannot land here uncovered.
+// ------------------------------------------------------------------------------------------------
+
+const PULL_DIR = fileURLToPath(new URL('../../../../wire-fixtures/pull/', import.meta.url))
+
+type PullFixture = {
+  id: string
+  why: string
+  entity: string
+  row: Record<string, unknown>
+  mapped?: Record<string, unknown>
+}
+
+function loadPullFixtures(): { name: string; fixture: PullFixture }[] {
+  return readdirSync(PULL_DIR)
+    .filter((file) => file.endsWith('.json'))
+    .sort()
+    .map((file) => ({
+      name: path.basename(file, '.json'),
+      fixture: JSON.parse(readFileSync(path.join(PULL_DIR, file), 'utf8')) as PullFixture,
+    }))
+}
+
+describe('wire fixtures — pull rows map to the DTO shape the fixture pins (consumer 3 of wire-fixtures/pull/)', () => {
+  const pullFixtures = loadPullFixtures()
+  const ticketRefs: TicketRefs = { companies: EMPTY_REFS, contacts: EMPTY_REFS, users: EMPTY_REFS, tags: EMPTY_REFS }
+
+  it('there is at least one pull fixture with a `mapped` block to check', () => {
+    assert.ok(
+      pullFixtures.some(({ fixture }) => fixture.mapped),
+      `no wire-fixtures/pull/*.json carries a \`mapped\` block`,
+    )
+  })
+
+  for (const { name, fixture } of pullFixtures) {
+    if (!fixture.mapped) continue
+    const mapped = fixture.mapped
+    const row = fixture.row as LocalRow
+
+    it(`${name}: the mapper reads the row into the DTO the fixture's \`mapped\` block pins`, () => {
+      if (fixture.entity === 'message') {
+        const message = mapMessage(row, EMPTY_REFS)
+        assert.equal(message.body, mapped.body)
+        assert.equal(message.type, mapped.type)
+        assert.ok(message.attachment, `${name}: expected an attachment, mapMessage returned null`)
+        assert.equal(message.attachment?.original_name, mapped.attachment_name)
+        assert.equal(message.attachment?.mime_type, mapped.attachment_mime)
+        assert.equal(message.attachment?.size, mapped.attachment_size)
+        // The one field the fixture's wire value does NOT pin 1:1 to the DTO: the wire says
+        // `attachment_is_image: true`, but `is_image` is forced `false` on every attachment,
+        // image or not (KARAR A29 — see `mapAttachment`'s docblock in `./mappers.ts`).
+        assert.equal(message.attachment?.is_image, false)
+      } else if (fixture.entity === 'ticket') {
+        const ticket = mapTicket(row, ticketRefs)
+        assert.equal(ticket.subject, mapped.subject)
+        assert.equal(ticket.status, mapped.status)
+        assert.equal(ticket.priority, mapped.priority)
+        assert.equal(ticket.sla_remaining_seconds, mapped.sla_remaining_seconds)
+        assert.equal(ticket.sla_total_seconds, mapped.sla_total_seconds)
+        assert.equal(ticket.sla_target_hours, mapped.sla_target_hours)
+        assert.equal(ticket.sla_breached, mapped.sla_breached)
+      } else {
+        assert.fail(`${name}: no mapper wired up here for entity "${fixture.entity}" — add one, do not skip it`)
+      }
+    })
+  }
 })

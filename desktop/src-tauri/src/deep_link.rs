@@ -10,13 +10,45 @@
 //! email client, any other application on the machine can hand one to this app, and the OS will
 //! start it (or wake it) with that string. It is the only untrusted input the shell accepts that
 //! did not come through the sync protocol. §9 item 5 makes the refusal an acceptance criterion,
-//! and [`self::tests::the_fuzz_corpus_is_rejected_in_full`] is the fifty-sample proof.
+//! and [`self::tests::the_fuzz_corpus_reaches_no_third_outcome`] is the eighty-three-sample proof.
 //!
 //! The parser is therefore an **allowlist twice over**: the shape must match §6.4's regex
 //! exactly, and the entity must be one of the eight names §6.4 lists. Everything else — path
 //! traversal, percent-encoding, shell metacharacters, unicode look-alikes, oversized ids,
 //! negative numbers, a bare scheme — is rejected before anything is emitted, so nothing
 //! downstream has to be careful.
+//!
+//! ## What arrives here is a NORMALISED url, and the fuzz has to say so
+//!
+//! [`parse_deep_link`] itself normalises nothing. But it is never handed the string the attacker
+//! typed: `tauri-plugin-deep-link` builds a [`url::Url`] first — `arg.parse::<url::Url>()` in its
+//! `handle_cli_arguments`, the same `url 2.5.8` this crate depends on — and [`install`] passes
+//! `url.as_str()`, the WHATWG **serialisation**, down. A whole class of hostile spellings has
+//! therefore already dissolved by the time this function sees them:
+//!
+//! * dot segments are removed — `syncra://deal/../29` arrives as `syncra://deal/29`, and
+//!   `%2e%2e` / `.%2e` count as dot segments too;
+//! * ASCII tab, CR and LF are deleted from anywhere in the string;
+//! * leading and trailing C0 controls and spaces are trimmed;
+//! * the scheme is case-folded (`SYNCRA://` → `syncra://`) — the host is **not**;
+//! * empty credentials are dropped (`syncra://@lead/42` → `syncra://lead/42`).
+//!
+//! Measuring this on the running app is what corrected §9 item 5 (defter O89): `syncra://deal/../29`
+//! is refused when the raw string is handed straight to [`parse_deep_link`], and **accepted**
+//! when it comes down the real path. A fuzz corpus asserting "all fifty are rejected" against
+//! raw strings was therefore proving something the shipped code does not do.
+//!
+//! So the claim the corpus proves is the one that survives normalisation:
+//! **whatever is left after the URL parser has had its way, the emitted target has been through
+//! §6.4's regex and the eight-name allowlist.** Each sample lands on exactly one of two
+//! legitimate outcomes — refused, or a well-formed `{entity, id}` inside the contract — and
+//! [`self::tests::the_fuzz_corpus_reaches_no_third_outcome`] is that proof.
+//!
+//! One consequence is worth stating rather than hiding: dot-segment removal can turn one record
+//! id into a DIFFERENT one (`syncra://deal/1/../2` opens deal 2). It cannot change the entity —
+//! the entity is the URL's host and no path normalisation touches the host — so it is not a way
+//! out of the allowlist, but a link's visible id is not necessarily the id it opens.
+//! [`self::tests::normalisation_can_change_the_id_but_never_the_entity`] pins both halves.
 //!
 //! Note what a rejection is *not*: it is not an error the user sees. A malicious link is not a
 //! situation to explain to the person who clicked it, and a dialog would only tell an attacker
@@ -129,6 +161,12 @@ impl Rejection {
 /// trimmed, lowercased, percent-decoded or otherwise repaired. Every one of those would be a
 /// way for two different strings to become the same accepted target, which is precisely how
 /// allowlists are bypassed.
+///
+/// **`raw` is not raw in production.** Both call sites feed it `url::Url::as_str()`, so the URL
+/// parser has already collapsed dot segments, stripped tab/CR/LF, trimmed surrounding C0 and
+/// space, folded the scheme's case and dropped empty credentials — see the module header. This
+/// function adding no normalisation of its own is what keeps the total amount of it bounded and
+/// auditable at one layer; it is not a claim that no normalisation happened.
 pub fn parse_deep_link(raw: &str) -> Result<DeepLinkTarget, Rejection> {
     let prefix = format!("{SCHEME}://");
     let rest = raw.strip_prefix(&prefix).ok_or(Rejection::Scheme)?;
@@ -437,7 +475,7 @@ mod tests {
     /// encoding, case, unicode confusables, embedded terminators, oversized numbers, nested
     /// schemes, and the shell metacharacters that matter because a deep link is very often
     /// handed to something that eventually execs.
-    const FUZZ_CORPUS: [&str; 50] = [
+    const FUZZ_CORPUS: [&str; 83] = [
         // -- path traversal (1-6) --
         "syncra://deal/../42",
         "syncra://../deal/42",
@@ -496,23 +534,313 @@ mod tests {
         "syncra://deal/42#/settings",
         "syncra://user:pass@deal/42",
         "syncra://setting/42",
+        // -- normalisation families (51-83) ------------------------------------------------
+        //
+        // Everything above this line was written against the RAW string. These were added once
+        // the corpus was moved onto the layer the app actually runs on (defter O89): each is a
+        // spelling the URL parser REWRITES, and several of them are accepted after it does.
+        // They are in the corpus precisely because they are accepted — the assertion is no
+        // longer "nothing parses", it is "whatever parses is inside the contract".
+        //
+        // -- dot segments, encoded and plain (51-60) --
+        "syncra://deal/1/../2",
+        "syncra://deal/1/%2e%2e/2",
+        "syncra://deal/%2E%2E/42",
+        "syncra://deal/.%2e/42",
+        "syncra://deal/./42",
+        "syncra://deal/42/..",
+        "syncra://deal/42/.",
+        "syncra://deal/../lead/1",
+        "syncra://deal/../../lead/1",
+        "syncra://setting/../deal/42",
+        // -- an id the regex would refuse, erased by the segment that follows it (61) --
+        "syncra://deal/9999999999999/../42",
+        // -- tab / CR / LF, which the URL parser DELETES wherever they appear (62-66) --
+        "syncra://de\tal/42",
+        "syncra://deal\t/42",
+        "syncra://deal/4\n2",
+        "syncra://deal/4\r2",
+        "syncra://dea\r\nl/42",
+        // -- surrounding C0 controls and spaces, which it TRIMS (67-69) --
+        "  syncra://deal/42  ",
+        "\u{0}syncra://deal/42\u{0}",
+        "\u{1}\u{2}syncra://deal/42\u{1f}",
+        // -- case folding: the scheme folds, the opaque host does not (70) --
+        "SyNcRa://DeAl/42",
+        // -- credentials: EMPTY ones are dropped, non-empty ones are kept (71-74) --
+        "syncra://@lead/42",
+        "syncra://:@lead/42",
+        "syncra://deal@lead/42",
+        "syncra://@/42",
+        // -- things the URL parser refuses outright, so they never reach this module (75) --
+        r"syncra://deal\42",
+        // -- percent-encoding that is NOT decoded (76-79) --
+        "syncra://deal/4%32",
+        "syncra://%64%65%61%6c/42",
+        "syncra://deal/1/..%2f2",
+        "syncra://deal/%2f42",
+        // -- structure the serialisation preserves (80-83) --
+        "syncra://deal/1/..//2",
+        "syncra://deal:80/42",
+        "syncra://deal/42?",
+        "syncra://deal/42#",
     ];
 
+    /// The eight §6.4 names, RESTATED here instead of read from [`ENTITIES`].
+    ///
+    /// A fuzz test that audits an allowlist by asking that same allowlist for its opinion is a
+    /// tautology: widen `ENTITIES` and the assertion widens with it, in silence. This second
+    /// copy is what gives the test something to disagree with — add a ninth name to `ENTITIES`
+    /// and this list does not move, so `syncra://setting/42` starts parsing and the fuzz goes
+    /// red. That negative control is the only evidence the fuzz can fail at all.
+    const CONTRACT_ENTITIES: [&str; 8] = [
+        "deal",
+        "lead",
+        "contact",
+        "company",
+        "ticket",
+        "quote",
+        "task",
+        "conversation",
+    ];
+
+    /// §6.4's shape, re-derived by hand rather than with [`target_pattern`] — same reason as
+    /// [`CONTRACT_ENTITIES`]: the check must not be the pattern grading its own homework.
+    fn is_within_contract(target: &DeepLinkTarget) -> bool {
+        let entity_ok = !target.entity.is_empty()
+            && target.entity.bytes().all(|b| b.is_ascii_lowercase())
+            && CONTRACT_ENTITIES.contains(&target.entity.as_str());
+        let id_ok =
+            (1..=12).contains(&target.id.len()) && target.id.bytes().all(|b| b.is_ascii_digit());
+        entity_ok && id_ok
+    }
+
+    /// What became of one corpus sample once it had been through the plugin's own parser.
+    ///
+    /// Two of these are legitimate, and the point of the fuzz is that there is no third.
+    #[derive(Debug, PartialEq, Eq)]
+    enum FuzzOutcome {
+        /// `url::Url::parse` refused the string outright, so the plugin never builds a `Url`
+        /// for it and it has no path into this module at all — refused a layer ABOVE
+        /// `parse_deep_link`. Counted, not ignored: it is still a refusal.
+        NotAUrl,
+        /// It parsed, and `parse_deep_link` refused whatever normalisation left behind.
+        Rejected(Rejection),
+        /// It parsed, normalisation left something legal behind, and it was accepted. Only
+        /// reachable once [`is_within_contract`] has passed inside the driver below.
+        Accepted(DeepLinkTarget),
+    }
+
+    /// Run one sample down the path the shipped app uses.
+    ///
+    /// `url::Url::parse` then `url.as_str()` is not an approximation of the plugin — it is the
+    /// plugin: `tauri-plugin-deep-link 2.4.9` does `arg.as_ref().parse::<url::Url>().ok()` in
+    /// `handle_cli_arguments`, hands the `Url` to `on_open_url` / `get_current`, and
+    /// [`install`] calls `.as_str()` on it. One `url 2.5.8` in `Cargo.lock`, so it is literally
+    /// the same parser.
+    fn through_the_plugins_parser(raw: &str) -> FuzzOutcome {
+        let Ok(url) = url::Url::parse(raw) else {
+            return FuzzOutcome::NotAUrl;
+        };
+
+        match parse_deep_link(url.as_str()) {
+            Ok(target) => {
+                assert!(
+                    is_within_contract(&target),
+                    "`{raw}` normalised to `{}` and was ACCEPTED as {target:?}, which is \
+                     outside §6.4's `^[a-z]+/[0-9]{{1,12}}$` + eight-name allowlist",
+                    url.as_str()
+                );
+                FuzzOutcome::Accepted(target)
+            }
+            Err(rejection) => FuzzOutcome::Rejected(rejection),
+        }
+    }
+
+    /// §9 item 5. Every sample lands on one of two legitimate outcomes and never a third.
+    ///
+    /// The old version of this test asserted that all fifty samples were *rejected*, and it
+    /// asserted it against the raw strings. Both halves were wrong: on the real path the URL
+    /// parser rewrites the input first, and twenty-two of these samples come out the other side
+    /// as perfectly legal links. Asserting the old claim proved something the shipped code does
+    /// not do — `syncra://deal/../29` routes to `/deals/29` on the running app while the unit
+    /// test insisted it could not (defter O89).
+    ///
+    /// So the claim is the one that survives normalisation: whatever is left, it went through
+    /// the regex and the eight-name allowlist. `through_the_plugins_parser` asserts exactly
+    /// that for every accepted sample; this test's own job is to prove the corpus is big
+    /// enough, that it really does exercise both outcomes, and that the three counts add up —
+    /// i.e. nothing fell through a gap in the match.
     #[test]
-    fn the_fuzz_corpus_is_rejected_in_full() {
-        // The count is asserted so the corpus cannot quietly shrink below what §9 asks for.
-        assert_eq!(FUZZ_CORPUS.len(), 50, "§9 item 5 asks for a fifty-sample fuzz");
-
-        let accepted: Vec<&str> = FUZZ_CORPUS
-            .iter()
-            .copied()
-            .filter(|sample| parse_deep_link(sample).is_ok())
-            .collect();
-
+    fn the_fuzz_corpus_reaches_no_third_outcome() {
         assert!(
-            accepted.is_empty(),
-            "these hostile deep links were ACCEPTED: {accepted:?}"
+            FUZZ_CORPUS.len() >= 50,
+            "§9 item 5 asks for at least a fifty-sample fuzz, found {}",
+            FUZZ_CORPUS.len()
         );
+
+        let mut not_a_url: Vec<&str> = Vec::new();
+        let mut rejected: Vec<(&str, &'static str)> = Vec::new();
+        let mut accepted: Vec<(&str, DeepLinkTarget)> = Vec::new();
+
+        for raw in FUZZ_CORPUS {
+            match through_the_plugins_parser(raw) {
+                FuzzOutcome::NotAUrl => not_a_url.push(raw),
+                FuzzOutcome::Rejected(rejection) => rejected.push((raw, rejection.reason())),
+                FuzzOutcome::Accepted(target) => accepted.push((raw, target)),
+            }
+        }
+
+        // Printed, not pinned to an exact number: the breakdown is here so a reader of the test
+        // output can see how much of the corpus survives normalisation rather than having to
+        // take "it passed" on trust.
+        println!(
+            "corpus of {}: {} unparseable, {} rejected, {} accepted within the contract",
+            FUZZ_CORPUS.len(),
+            not_a_url.len(),
+            rejected.len(),
+            accepted.len()
+        );
+        for (raw, target) in &accepted {
+            println!("  survives normalisation: {raw:?} -> {target:?}");
+        }
+
+        assert_eq!(
+            not_a_url.len() + rejected.len() + accepted.len(),
+            FUZZ_CORPUS.len(),
+            "a sample reached no outcome at all"
+        );
+        assert!(
+            !accepted.is_empty(),
+            "the corpus no longer exercises the surviving-normalisation path, which is the \
+             only path where the allowlist has to hold"
+        );
+        assert!(
+            !rejected.is_empty(),
+            "the corpus no longer exercises the rejection path"
+        );
+    }
+
+    /// The measured behaviour of the URL parser, entry by entry, so it is documentation and not
+    /// folklore.
+    ///
+    /// `None` means "never reaches a route" (unparseable, or rejected); `Some((entity, id))` is
+    /// the target the running app would emit. Every line here was read off a real run, not
+    /// reasoned about — that is the whole point, since reasoning about it is what produced the
+    /// wrong §9 item 5 in the first place.
+    #[test]
+    fn the_normalisation_families_are_pinned() {
+        let cases: &[(&str, Option<(&str, &str)>)] = &[
+            // Dot segments are removed — INCLUDING their percent-encoded spellings, which the
+            // WHATWG path state treats as dot segments (`%2e`, `%2E`, `.%2e`).
+            ("syncra://deal/../42", Some(("deal", "42"))),
+            ("syncra://deal/%2e%2e/42", Some(("deal", "42"))),
+            ("syncra://deal/%2E%2E/42", Some(("deal", "42"))),
+            ("syncra://deal/.%2e/42", Some(("deal", "42"))),
+            ("syncra://deal/./42", Some(("deal", "42"))),
+            // …but `%2f` is not a separator, so a dot segment glued to the next one is inert.
+            ("syncra://deal/1/..%2f2", None),
+            // Popping past the last segment leaves a trailing slash, which the regex refuses.
+            ("syncra://deal/42/..", None),
+            ("syncra://deal/42/.", None),
+            // The HOST is not part of the path and no amount of `..` reaches it.
+            ("syncra://deal/../lead/1", None),
+            ("syncra://deal/../../lead/1", None),
+            ("syncra://setting/../deal/42", None),
+            // Tab, CR and LF are deleted from anywhere in the string before parsing.
+            ("syncra://de\tal/42", Some(("deal", "42"))),
+            ("syncra://deal\t/42", Some(("deal", "42"))),
+            ("syncra://deal/4\n2", Some(("deal", "42"))),
+            ("syncra://deal/4\r2", Some(("deal", "42"))),
+            ("syncra://dea\r\nl/42", Some(("deal", "42"))),
+            // Leading/trailing C0 controls and spaces are trimmed.
+            ("  syncra://deal/42  ", Some(("deal", "42"))),
+            ("\u{0}syncra://deal/42\u{0}", Some(("deal", "42"))),
+            ("\u{1}\u{2}syncra://deal/42\u{1f}", Some(("deal", "42"))),
+            ("syncra://deal/42 ", Some(("deal", "42"))),
+            // The scheme is case-folded. The opaque host is NOT — which is why `DEAL` still
+            // fails the `[a-z]+` half of the regex and the allowlist is never consulted.
+            ("SYNCRA://deal/42", Some(("deal", "42"))),
+            ("SyNcRa://DeAl/42", None),
+            ("syncra://DEAL/42", None),
+            // EMPTY credentials are dropped by the serialiser; non-empty ones are kept, and the
+            // `@` they keep is what the regex trips over.
+            ("syncra://@lead/42", Some(("lead", "42"))),
+            ("syncra://:@lead/42", Some(("lead", "42"))),
+            ("syncra://deal@lead/42", None),
+            ("syncra://user:pass@deal/42", None),
+            // Percent-encoding is NOT decoded outside dot segments, so no digit can be smuggled
+            // in encoded and no entity name can be spelled in escapes.
+            ("syncra://deal/4%32", None),
+            ("syncra://%64%65%61%6c/42", None),
+            ("syncra://deal/%2f42", None),
+            // A backslash is a forbidden host code point: the plugin's own parse fails, so this
+            // never becomes a `Url` and never reaches `parse_deep_link` at all.
+            (r"syncra://deal\42", None),
+            ("", None),
+            // The unknown entity is still the unknown entity after normalisation.
+            ("syncra://setting/42", None),
+        ];
+
+        for (raw, expected) in cases {
+            let actual = match through_the_plugins_parser(raw) {
+                FuzzOutcome::Accepted(target) => Some((target.entity, target.id)),
+                FuzzOutcome::NotAUrl | FuzzOutcome::Rejected(_) => None,
+            };
+            let expected = expected.map(|(entity, id)| (entity.to_string(), id.to_string()));
+            assert_eq!(actual, expected, "`{raw}` normalised differently than pinned");
+        }
+    }
+
+    /// The security shape of what normalisation CAN still do.
+    ///
+    /// Dot-segment removal rewrites the path, and the path is the id — so a link whose visible
+    /// id is `1` can open record `2`, and a segment the regex would have refused (thirteen
+    /// digits) can be erased by the segment after it. Both are recorded rather than "fixed":
+    /// this is the URL standard behaving as specified, the resulting target is still inside the
+    /// contract, and a shell that second-guessed its own URL parser would be a worse boundary
+    /// than one that does not.
+    ///
+    /// What it can NOT do is the part that would matter: the entity is the url's HOST, and no
+    /// path normalisation, dot segment, or encoding reaches the host. There is no spelling in
+    /// the corpus — or found while assembling it — that turns one entity into another, so the
+    /// eight-name allowlist cannot be walked around, only satisfied.
+    #[test]
+    fn normalisation_can_change_the_id_but_never_the_entity() {
+        // The id CAN move. Both of these are inside the contract and both open a record other
+        // than the one the raw string reads as.
+        assert_eq!(
+            through_the_plugins_parser("syncra://deal/1/../2"),
+            FuzzOutcome::Accepted(DeepLinkTarget {
+                entity: "deal".to_string(),
+                id: "2".to_string(),
+            })
+        );
+        assert_eq!(
+            through_the_plugins_parser("syncra://deal/9999999999999/../42"),
+            FuzzOutcome::Accepted(DeepLinkTarget {
+                entity: "deal".to_string(),
+                id: "42".to_string(),
+            })
+        );
+
+        // The entity cannot. Every sample in the corpus that normalises into an acceptance
+        // carries its entity in its own authority component, unchanged.
+        for raw in FUZZ_CORPUS {
+            if let FuzzOutcome::Accepted(target) = through_the_plugins_parser(raw) {
+                let host = url::Url::parse(raw)
+                    .expect("it parsed a moment ago")
+                    .host_str()
+                    .expect("an accepted link has a host — the entity IS the host")
+                    .to_string();
+                assert_eq!(
+                    target.entity, host,
+                    "`{raw}` was accepted as `{}` but its host says `{host}` — normalisation \
+                     moved the ENTITY, which is an allowlist bypass",
+                    target.entity
+                );
+            }
+        }
     }
 
     /// Every entry of the corpus is distinct — fifty samples, not one sample fifty times.
@@ -530,6 +858,12 @@ mod tests {
     /// `regex` crate rather than on the pattern text: `$` matches before a final `\n`, so the
     /// pattern is anchored with `\z`. Swap `\z` back to `$` and this test — and only this test
     /// — goes red.
+    ///
+    /// Deliberately on the RAW string, unlike the fuzz: the URL parser deletes newlines before
+    /// this function ever sees one (`syncra://deal/42\n` arrives as `syncra://deal/42`), so on
+    /// the real path the anchor is a second line of defence, and this is the only place it can
+    /// be exercised at all. It is not evidence about what the running app does with that link —
+    /// the fuzz and `the_normalisation_families_are_pinned` are.
     #[test]
     fn a_trailing_newline_does_not_pass_the_anchor() {
         assert_eq!(parse_deep_link("syncra://deal/42\n"), Err(Rejection::Shape));
@@ -628,22 +962,44 @@ mod tests {
         assert_eq!(handoff.webview_ready(), Some(ticket_8()));
     }
 
-    /// The handoff does not weaken the boundary: every one of the fifty hostile samples is
-    /// refused *before* anything is held, so no rejected link can be waiting to be delivered.
+    /// The handoff does not weaken the boundary: nothing outside §6.4's contract is ever held
+    /// for delivery.
+    ///
+    /// On the same layer as the fuzz, and for the same reason — a cold start hands
+    /// `get_current()`'s `Url` to `hold_launch_url`, never the command line's raw bytes. A
+    /// rejected link is not held; an accepted one is held only if it is inside the contract.
     #[test]
-    fn no_rejected_launch_url_is_ever_held() {
+    fn no_launch_url_outside_the_contract_is_ever_held() {
         for hostile in FUZZ_CORPUS {
+            let Ok(url) = url::Url::parse(hostile) else {
+                // The plugin cannot build a `Url` for it, so `install` never sees it.
+                continue;
+            };
+            let delivered = url.as_str();
             let handoff = LaunchHandoff::default();
-            assert_eq!(
-                hold_launch_url(&handoff, hostile),
-                LaunchOutcome::Rejected,
-                "`{hostile}` must not be held"
-            );
-            assert_eq!(
-                handoff.webview_ready(),
-                None,
-                "`{hostile}` was held and would have been delivered"
-            );
+
+            match hold_launch_url(&handoff, delivered) {
+                LaunchOutcome::Rejected => assert_eq!(
+                    handoff.webview_ready(),
+                    None,
+                    "`{hostile}` was rejected yet something was left waiting to be delivered"
+                ),
+                LaunchOutcome::Held => {
+                    let held = handoff
+                        .webview_ready()
+                        .expect("a held launch target must be handed to the webview");
+                    assert!(
+                        is_within_contract(&held),
+                        "`{hostile}` normalised to `{delivered}` and {held:?} was HELD, which \
+                         is outside the contract"
+                    );
+                }
+                LaunchOutcome::EmitNow(target) => assert!(
+                    is_within_contract(&target),
+                    "`{hostile}` normalised to `{delivered}` and {target:?} was emitted, which \
+                     is outside the contract"
+                ),
+            }
         }
     }
 
@@ -686,3 +1042,4 @@ mod tests {
         );
     }
 }
+

@@ -705,23 +705,76 @@ export function mapConversation(row: LocalRow, refs: ConversationRefs): Conversa
 }
 
 /**
+ * Reconstruct `Message.attachment` from the four `attachment_*` fields
+ * `SyncPullService::attachMessageAttachments()` flattens onto the `messages` pull row (KARAR
+ * A29, defter O90; `wire-fixtures/pull/message.row.json`).
+ *
+ * `attachments` itself is still outside sync scope (protocol §1.3) — there is no local
+ * `attachments` table, and never will be — but the metadata the server started attaching to the
+ * row *is* mirrored, and dropping it on the floor is exactly the bug A29 closes: every
+ * attached-message bubble rendered with a timestamp and nothing else, for every device, not a
+ * regression window.
+ *
+ * **`is_image` is ALWAYS forced to `false`, never read off `attachment_is_image`.**
+ * `AttachmentPreview` (`frontend/src/features/chat/components/MessageBubble.tsx`) renders an
+ * inline `<img src={attachment.url}>` when `is_image` is true, which cannot work on desktop:
+ * `desktop/src/platform/http.ts` uses `transport: 'bearer'` with `withCredentials` off, the
+ * route sits behind `auth:sanctum`, and a bare `<img src>` request carries neither the bearer
+ * header nor a session cookie — it 401s. The webview's own origin (`tauri.localhost`) does not
+ * match the host-less URL `ChatAttachmentResource`/this mapper both return, either. Forcing
+ * `false` makes every attachment — image or not — render through the file-card branch instead:
+ * name + size, no network round trip, correct offline. This is deliberate, not a gap:
+ * `attachment_is_image` is read off the row (`wireIsImage`, discarded) so the mirror keeps
+ * carrying it for the day an inline-preview channel ships and does not need another pull to get
+ * it — but it must never reach the DTO (K7: one definition, server-side,
+ * `ChatAttachmentResource::payload()`) and must never be re-derived from `attachment_mime`
+ * either.
+ *
+ * `null` when: the row is a tombstone (`deleted_at` set — the server never attaches the four
+ * fields to a deleted message's row either, `SyncPullMessageAttachmentTest`), or any of the four
+ * fields is missing (a message with no attachment, or a pre-A29 mirror row not yet re-pulled —
+ * same absence, same `null`, no guessing).
+ */
+function mapAttachment(row: LocalRow): Attachment | null {
+  if (str(row.deleted_at)) return null
+
+  const id = toInt(row.attachment_id)
+  const originalName = str(row.attachment_name)
+  const mimeType = str(row.attachment_mime)
+  const size = toInt(row.attachment_size)
+  // Read off the row, deliberately never forwarded to the DTO — see docblock above.
+  void row.attachment_is_image
+
+  if (id === undefined || originalName === null || mimeType === null || size === undefined) {
+    return null
+  }
+
+  return {
+    id,
+    original_name: originalName,
+    mime_type: mimeType,
+    size,
+    // Forced, not read from the wire — see docblock above (KARAR A29).
+    is_image: false,
+    url: `/api/attachments/${id}`,
+  }
+}
+
+/**
  * `MessageResource`.
  *
- * Not reconstructable: `attachment` — `attachments` is explicitly outside the sync scope
- * (protocol §1.3), so an attached file has no local row and the field is `null`. `tick` is
- * always `'sent'`: the mirror carries `last_read_message_id` but no delivered cursor, and
- * `TickState` is monotonic (`features/chat/types.ts`), so reporting the lowest state is the
+ * `tick` is always `'sent'`: the mirror carries `last_read_message_id` but no delivered cursor,
+ * and `TickState` is monotonic (`features/chat/types.ts`), so reporting the lowest state is the
  * only value that a later realtime event can correct without ever moving backwards.
  */
 export function mapMessage(row: LocalRow, users: RefIndex): Message {
-  const attachment: Attachment | null = null
   return {
     id: rowId(row),
     conversation_id: toInt(row.conversation_id) ?? 0,
     user: chatUser(users.resolve(row.user_id, row.user_client_id)),
     body: str(row.body),
     type: (text(row.type) || 'text') as Message['type'],
-    attachment,
+    attachment: mapAttachment(row),
     edited_at: str(row.edited_at),
     deleted_at: str(row.deleted_at),
     created_at: text(row.created_at),

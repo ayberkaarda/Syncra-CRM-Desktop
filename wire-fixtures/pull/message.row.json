@@ -1,0 +1,42 @@
+{
+  "id": "pull/message.row",
+  "why": "KARAR A29 (defter O90): attached-message bubbles rendered empty on desktop - no thumbnail, no dragged filename, only the timestamp. Root cause: `attachments` is out of sync scope (protocol §1.3), `messages` mirrored only `attachment_id`, and `mapMessage` hard-coded `attachment: null`. The fix flattens the attachment's metadata onto the `messages` pull row as four fields (`SyncPullService::attachMessageAttachments()`), sourced from the same shape `ChatAttachmentResource::payload()` builds for the web client. This fixture is generated from the REAL wire response of `POST /api/sync/pull` (see server.scenario), not hand-typed - including the space-separated `created_at`/`updated_at` format `DB::table()` really produces (defter O81/O83), which differs from the ISO-8601 shape Eloquent casts would produce.",
+  "table": "messages",
+  "entity": "message",
+  "completeness": "subset",
+  "completeness_note": "The `row` below is a SUBSET of the real pull row, not the whole of it. Consumers therefore assert containment, never equality: the backend proves every key here appears in what SyncPullService produced, and the crate proves every non-envelope key here has a mirror column.",
+  "envelope_keys": ["id", "client_id", "sync_version"],
+  "envelope_note": "`upsert_row` handles these three itself - `id` becomes `server_id`, `client_id` is the primary key, `sync_version` becomes `server_sync_version` - so they are the three keys that must NOT be looked for as columns of the same name.",
+  "row": {
+    "id": 1,
+    "client_id": null,
+    "sync_version": 11,
+    "conversation_id": 1,
+    "user_id": 1,
+    "body": "Destek talebi çözüldü, müşteri onayladı.",
+    "attachment_id": 1,
+    "type": "file",
+    "edited_at": null,
+    "created_at": "2026-09-01 11:03:31",
+    "updated_at": "2026-09-01 11:03:31",
+    "deleted_at": null,
+    "attachment_name": "ekran-goruntusu.png",
+    "attachment_mime": "image/png",
+    "attachment_size": 7079718,
+    "attachment_is_image": true
+  },
+  "mapped": {
+    "note": "What `mappers.ts::mapMessage` must read off the row above. The four `attachment_*` fields are the ONLY source for the mirror's attachment columns - `is_image` is never re-derived client-side from `attachment_mime` (K7: one definition, ChatAttachmentResource::payload()).",
+    "body": "Destek talebi çözüldü, müşteri onayladı.",
+    "type": "file",
+    "attachment_name": "ekran-goruntusu.png",
+    "attachment_mime": "image/png",
+    "attachment_size": 7079718,
+    "attachment_is_image": true
+  },
+  "server": {
+    "scenario": "message_attachment",
+    "mode": "subset_of_pull_row",
+    "generated_from": "backend/tests/Feature/Sync/ZZScratchDumpMessageRowTest.php (temporary, run once against test_tmp_o90be, deleted after this fixture was captured) - a real POST /api/sync/pull response for an attached message in a conversation the caller belongs to."
+  }
+}

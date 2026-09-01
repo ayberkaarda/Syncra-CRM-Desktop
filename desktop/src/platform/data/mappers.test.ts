@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, it, vi } from 'vitest'
 
 import i18n from '@/i18n'
 
-import { mapNotification, mapTask, mapTicket } from './mappers'
+import { mapMessage, mapNotification, mapTask, mapTicket } from './mappers'
 import { EMPTY_REFS } from './refs'
 import type { LocalRow } from './engine'
 import type { TaskRefs, TicketRefs } from './mappers'
@@ -460,5 +460,108 @@ describe('mapTask — is_overdue reads mirror-shaped `due_at` correctly', () => 
   it('a task with no `due_at` is never overdue', () => {
     const task = mapTask(taskRow({ due_at: null }), taskRefs)
     assert.equal(task.is_overdue, false)
+  })
+})
+
+/**
+ * `mapMessage` — `attachment` reconstruction from the four flattened `attachment_*` fields
+ * (KARAR A29, defter O90; `wire-fixtures/pull/message.row.json`).
+ *
+ * Before this fix `mapMessage` hard-coded `attachment: null`, so every attached-message bubble
+ * rendered with a timestamp and nothing else — no thumbnail, no filename — for every device,
+ * regardless of whether the attachment was an image or not. See `mapAttachment`'s docblock in
+ * `./mappers.ts` for why `is_image` is unconditionally forced to `false` rather than read off
+ * `attachment_is_image` (desktop's bearer-auth `<img>` request would 401).
+ */
+describe('mapMessage — attachment reconstruction (KARAR A29)', () => {
+  /** A minimal `messages` mirror row, overridable per test. */
+  function messageRow(overrides: Partial<LocalRow> = {}): LocalRow {
+    return {
+      client_id: 'msg-1',
+      server_id: 1,
+      conversation_id: 1,
+      user_id: 1,
+      user_client_id: null,
+      body: 'Destek talebi çözüldü, müşteri onayladı.',
+      type: 'file',
+      edited_at: null,
+      created_at: '2026-09-01 11:03:31',
+      deleted_at: null,
+      ...overrides,
+    }
+  }
+
+  it('POSITIVE: the four wire fields build an Attachment DTO, with is_image forced false', () => {
+    const row = messageRow({
+      attachment_id: 1,
+      attachment_name: 'ekran-goruntusu.png',
+      attachment_mime: 'image/png',
+      attachment_size: 7079718,
+      attachment_is_image: true, // the wire says true — the DTO must NOT say true.
+    })
+
+    const message = mapMessage(row, EMPTY_REFS)
+
+    assert.ok(message.attachment, 'attachment must not be null when all four fields are present')
+    assert.equal(message.attachment?.id, 1)
+    assert.equal(message.attachment?.original_name, 'ekran-goruntusu.png')
+    assert.equal(message.attachment?.mime_type, 'image/png')
+    assert.equal(message.attachment?.size, 7079718)
+    assert.equal(message.attachment?.url, '/api/attachments/1')
+    // The bound: is_image is NEVER re-derived and NEVER forwarded from the wire — see A29.
+    assert.equal(message.attachment?.is_image, false)
+  })
+
+  it('a non-image attachment (e.g. a PDF) also maps, still with is_image false', () => {
+    const row = messageRow({
+      attachment_id: 2,
+      attachment_name: 'Sözleşme_Taslağı.pdf',
+      attachment_mime: 'application/pdf',
+      attachment_size: 204800,
+      attachment_is_image: false,
+    })
+
+    const message = mapMessage(row, EMPTY_REFS)
+
+    assert.equal(message.attachment?.original_name, 'Sözleşme_Taslağı.pdf')
+    assert.equal(message.attachment?.mime_type, 'application/pdf')
+    assert.equal(message.attachment?.is_image, false)
+  })
+
+  it('NULL/missing attachment_* fields (a message with no attachment, or a pre-A29 row) -> attachment: null, no throw', () => {
+    const row = messageRow({
+      attachment_id: null,
+      attachment_name: null,
+      attachment_mime: null,
+      attachment_size: null,
+      attachment_is_image: null,
+    })
+
+    assert.doesNotThrow(() => mapMessage(row, EMPTY_REFS))
+    const message = mapMessage(row, EMPTY_REFS)
+    assert.equal(message.attachment, null)
+  })
+
+  it('a row that never carried the four keys at all (undefined, not null) also maps to attachment: null', () => {
+    const row = messageRow() // no attachment_* keys present on the object
+
+    assert.doesNotThrow(() => mapMessage(row, EMPTY_REFS))
+    assert.equal(mapMessage(row, EMPTY_REFS).attachment, null)
+  })
+
+  it('NEGATIVE CONTROL: a tombstone (deleted_at set) maps to attachment: null even when the four fields are present', () => {
+    const row = messageRow({
+      deleted_at: '2026-09-01 12:00:00',
+      attachment_id: 1,
+      attachment_name: 'ekran-goruntusu.png',
+      attachment_mime: 'image/png',
+      attachment_size: 7079718,
+      attachment_is_image: true,
+    })
+
+    const message = mapMessage(row, EMPTY_REFS)
+
+    assert.equal(message.attachment, null)
+    assert.equal(message.deleted_at, '2026-09-01 12:00:00')
   })
 })

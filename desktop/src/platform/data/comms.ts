@@ -242,13 +242,54 @@ export const chatSource: ChatSource = {
     }
   },
 
+  /**
+   * Send a message, writing the row the way a pull would have written it.
+   *
+   * Two fields here are NOT free-form; both are copies of a server-side rule (KARAR A29):
+   *
+   * * **`type` is DERIVED from the attachment, never chosen.** `MessageService::create()`
+   *   writes `$attachmentId !== null ? Message::TYPE_FILE : Message::TYPE_TEXT`, and
+   *   `StoreMessageRequest` does not even accept a client `type` (a client that could pick one
+   *   could forge a `system` line). A hard-coded `'text'` therefore contradicted the server on
+   *   every attached message: the local row said `text` until the next pull replaced it with
+   *   `file`, and the bubble changed type under the user.
+   *
+   * * **the three `attachment_*` fields come from the upload response**, not from anything
+   *   re-derived here — see `rememberAttachmentMeta` below. Without them `mapMessage` answers
+   *   `attachment: null` (`mapAttachment` needs name + mime + size), `useSendMessage`'s
+   *   `onSuccess` replaces the correct optimistic bubble with that `null`, and the card the
+   *   user just dragged in DISAPPEARS until the next pull brings it back.
+   *
+   * `attachment_is_image` is deliberately NOT written. The mirror's copy of it is
+   * `str_starts_with($mime, 'image/')` (`SyncPullService::attachMessageAttachments()`, i.e. the
+   * `ChatAttachmentResource::payload()` definition), whereas the upload response's `is_image`
+   * is `Attachment::isInlineEligibleImage()` — a config allowlist, a strictly NARROWER set.
+   * Two different definitions behind one name: filling the column from the upload's answer
+   * would reintroduce exactly the kind of local/server disagreement this method is fixing, in
+   * the one field K7 is most explicit about. Left unset, the next pull writes the
+   * authoritative value; nothing on screen depends on it meanwhile, because `mapAttachment`
+   * forces `is_image: false` on desktop regardless.
+   */
   sendMessage: async (conversationId, payload): Promise<Message> => {
+    const attachmentId = payload.attachment_id ?? undefined
+    const meta = attachmentId === undefined ? undefined : takeAttachmentMeta(attachmentId)
     const clientId = await createRow('message', {
       conversation_id: conversationId,
       body: payload.body ?? undefined,
-      attachment_id: payload.attachment_id ?? undefined,
+      attachment_id: attachmentId,
       mentions: payload.mentions?.length ? payload.mentions : undefined,
-      type: 'text',
+      // The server's rule, mirrored — see docblock.
+      type: attachmentId === undefined ? 'text' : 'file',
+      // Spread rather than four `undefined`s: the local applier copies every payload key that
+      // is a real column, and writing explicit NULLs over a row a pull may already have filled
+      // would be a downgrade rather than a no-op.
+      ...(meta
+        ? {
+            attachment_name: meta.name,
+            attachment_mime: meta.mime,
+            attachment_size: meta.size,
+          }
+        : {}),
     })
     const row = await readBack('message', clientId)
     return mapMessage(row, await loadRefs('user', [row], ['user_id', 'user_client_id']))
@@ -297,8 +338,80 @@ export const chatSource: ChatSource = {
           onProgress(Math.min(100, Math.round((event.loaded * 100) / event.total)))
         },
       })
-      .then((body) => body.data)
+      .then((body) => {
+        // The one place the client ever learns an attachment's metadata. Remembered here so
+        // the send that follows can write it onto the message row — see below.
+        rememberAttachmentMeta(body.data)
+        return body.data
+      })
   },
+}
+
+// ------------------------------------------------------------------------------------------------
+// Attachment metadata carried from upload to send (KARAR A29)
+// ------------------------------------------------------------------------------------------------
+
+/** The three fields `mapAttachment` needs off a `messages` row. */
+type AttachmentMeta = { name: string; mime: string; size: number }
+
+/**
+ * How many uploaded-but-not-yet-sent attachments to remember.
+ *
+ * Small on purpose: what this bounds is "files the user has attached and not sent yet", which
+ * is a handful in practice. The number is a leak ceiling, not a capacity target.
+ */
+const ATTACHMENT_META_LIMIT = 32
+
+/**
+ * Metadata held between the upload that learned it and the send that writes it.
+ *
+ * **Why a hand-off exists at all.** `attachments` is outside sync scope (protocol §1.3): there
+ * is no local table to join, so an attachment's metadata lives on the `messages` row itself as
+ * four flat fields. The pull side flattens them server-side
+ * (`SyncPullService::attachMessageAttachments()`); the SEND side had nobody doing it, so a row
+ * the user's own message created carried `attachment_id` and nothing else.
+ *
+ * The client already holds the answer — `POST /api/attachments` replies with
+ * `AttachmentResource` (`original_name`, `mime_type`, `size`) — and was simply dropping it.
+ * `sendMessage`'s payload cannot carry it: that payload is the REST body of
+ * `POST /api/conversations/{id}/messages`, and widening it would change the shared `ChatSource`
+ * signature for a desktop-only need. This map is the contained alternative and keeps the whole
+ * fix inside this file.
+ *
+ * **Lifetime — it does not accumulate.** An entry is written by `uploadAttachment` and REMOVED
+ * by the first `sendMessage` that names it (`takeAttachmentMeta`); the normal flow is one
+ * upload then one send, so the map is empty again the moment the message exists.
+ * `ATTACHMENT_META_LIMIT` bounds the abnormal flows — files attached and then abandoned, or a
+ * composer that uploads several before sending any — by evicting the oldest entry. Eviction is
+ * safe: a miss degrades to the pre-A29 behaviour (the row still carries `attachment_id`, and
+ * the next pull fills the four fields in), never to a wrong value. Nothing is persisted, so a
+ * restart empties it with the same harmless outcome.
+ *
+ * The `Map` is insertion-ordered, which is what makes "evict the oldest" a `keys().next()`.
+ */
+const attachmentMeta = new Map<number, AttachmentMeta>()
+
+function rememberAttachmentMeta(attachment: Attachment): void {
+  // Delete-then-set so re-uploading the same id moves it to the BACK of the eviction order
+  // instead of keeping its original, older position.
+  attachmentMeta.delete(attachment.id)
+  attachmentMeta.set(attachment.id, {
+    name: attachment.original_name,
+    mime: attachment.mime_type,
+    size: attachment.size,
+  })
+  while (attachmentMeta.size > ATTACHMENT_META_LIMIT) {
+    const oldest = attachmentMeta.keys().next()
+    if (oldest.done) break
+    attachmentMeta.delete(oldest.value)
+  }
+}
+
+/** Read an entry and drop it: metadata is CONSUMED by the send, never kept afterwards. */
+function takeAttachmentMeta(attachmentId: number): AttachmentMeta | undefined {
+  const meta = attachmentMeta.get(attachmentId)
+  attachmentMeta.delete(attachmentId)
+  return meta
 }
 
 /**

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Sync;
 
+use App\Models\Attachment;
 use App\Models\Conversation;
 use App\Models\Deal;
 use App\Models\Lead;
@@ -150,6 +151,14 @@ class WireFixtureTest extends TestCase
     public static function pushFixtures(): array
     {
         return self::namesIn('push');
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    public static function pullRowFixtures(): array
+    {
+        return self::namesIn('pull');
     }
 
     // ------------------------------------------------------------- binding
@@ -458,34 +467,40 @@ class WireFixtureTest extends TestCase
     /**
      * The pull row really carries every key the fixture names.
      *
-     * Containment, not equality: `wire-fixtures/pull/ticket.row.json` declares
-     * itself a SUBSET (`completeness: "subset"`), so this asserts the server
-     * sends at least those keys. The crate asserts the mirror has a column for
-     * each of them - which is the pair that would have caught the SLA fields
-     * going missing, because on their own each side looked fine.
+     * Containment, not equality: every `wire-fixtures/pull/*.row.json` fixture
+     * declares itself a SUBSET (`completeness: "subset"`), so this asserts the
+     * server sends at least those keys. The crate asserts the mirror has a
+     * column for each of them - which is the pair that would have caught the
+     * SLA fields (and now the flattened attachment fields, KARAR A29) going
+     * missing, because on their own each side looked fine.
+     *
+     * One data-provided test per fixture file rather than one method per
+     * table: every branch needs different seeding (a ticket vs. a message
+     * with an attachment, in a conversation the caller belongs to), so the
+     * seeding is dispatched on `fixture.table` instead of duplicating the
+     * HTTP call and key-containment assertion per table.
      */
-    public function test_the_pull_row_carries_every_key_the_fixture_names(): void
+    #[DataProvider('pullRowFixtures')]
+    public function test_the_pull_row_carries_every_key_the_fixture_names(string $name): void
     {
-        $fixture = self::readFixture('pull', 'ticket.row');
+        $fixture = self::readFixture('pull', $name);
+        $table = (string) $fixture['table'];
 
-        [, $token] = $this->deviceUser('Admin');
+        [$user, $token] = $this->deviceUser('Admin');
 
-        $ticket = Ticket::factory()->create([
-            'priority' => 'high',
-            'status' => 'open',
-            'sla_due_at' => now()->addHours(20),
-            'sla_paused_at' => null,
-            'sla_paused_seconds' => 0,
-            'resolved_at' => null,
-        ]);
+        $id = match ($table) {
+            'tickets' => $this->seedTicketForPullFixture(),
+            'messages' => $this->seedMessageForPullFixture($user),
+            default => throw new \RuntimeException("No pull-fixture seeding wired for table `{$table}`."),
+        };
 
         $rows = $this->withToken($token)->postJson('/api/sync/pull', [
-            'cursors' => ['tickets' => 0],
-        ])->assertOk()->json('tables.tickets.rows');
+            'cursors' => [$table => 0],
+        ])->assertOk()->json("tables.{$table}.rows");
 
-        $row = collect($rows)->firstWhere('id', $ticket->id);
+        $row = collect($rows)->firstWhere('id', $id);
 
-        $this->assertNotNull($row, 'The seeded ticket is not in the pull response at all.');
+        $this->assertNotNull($row, "The seeded {$fixture['entity']} is not in the pull response at all.");
 
         foreach (array_keys($fixture['row']) as $key) {
             $this->assertArrayHasKey(
@@ -496,6 +511,40 @@ class WireFixtureTest extends TestCase
                 .'silently stops filling.'
             );
         }
+    }
+
+    private function seedTicketForPullFixture(): int
+    {
+        $ticket = Ticket::factory()->create([
+            'priority' => 'high',
+            'status' => 'open',
+            'sla_due_at' => now()->addHours(20),
+            'sla_paused_at' => null,
+            'sla_paused_seconds' => 0,
+            'resolved_at' => null,
+        ]);
+
+        return (int) $ticket->id;
+    }
+
+    /**
+     * A `messages` row carrying an attachment, in a conversation the caller
+     * (`$user`) is a member of - `SyncScope::applyRowScope()` gates
+     * `messages` on `conversation_user` membership, so a message in a
+     * conversation the caller does not belong to would simply not come back.
+     */
+    private function seedMessageForPullFixture(User $user): int
+    {
+        $conversation = Conversation::factory()->dm()->createdBy($user)->withMembers([$user])->create();
+        $attachment = Attachment::factory()->image()->create();
+
+        $message = Message::factory()
+            ->inConversation($conversation)
+            ->fromUser($user)
+            ->withAttachment($attachment)
+            ->create();
+
+        return (int) $message->id;
     }
 
     // -------------------------------------------------------------- errors

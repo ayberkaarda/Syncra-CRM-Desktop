@@ -65,13 +65,39 @@ const ROUTES: Record<DeepLinkEntity, (id: string) => string> = {
 }
 
 /**
- * The path `target` should navigate to, or `null` for an entity this build has no route for.
+ * §6.4's id shape, restated on this side of the IPC.
+ *
+ * The Rust parser has already enforced it, so this rejects nothing a real deep link contains.
+ * It is here because `id` is interpolated into a navigation path one line below, and "the other
+ * process promised" is not a property this file can check. Without it `{entity: 'deal', id:
+ * '../admin'}` produces `/deals/../admin` and `{id: '42?x=1'}` produces a path with a query
+ * string on it — both measured, both routed.
+ */
+const ID_PATTERN = /^[0-9]{1,12}$/
+
+/**
+ * The path `target` should navigate to, or `null` for anything this build has no route for.
  *
  * `null` rather than a fallback to `/`: the Rust side has already rejected every entity outside
  * the eight, so reaching this branch means the two tables disagree — a defect worth leaving
  * visible (the app stays where it is) instead of hiding behind a navigation to the dashboard.
+ *
+ * ## `Object.hasOwn`, not a truthiness test on the lookup
+ *
+ * `ROUTES[entity]` is a prototype-chain lookup, so the "closed, hand-written table" above was
+ * not closed: `entity: 'constructor'` resolved to `Object` and returned a boxed `String`
+ * instead of a path, `'toString'` returned the string `[object Undefined]`, and `'valueOf'`,
+ * `'hasOwnProperty'`, `'toLocaleString'` and `'__proto__'` each threw a `TypeError` — inside a
+ * Tauri event callback, where a throw has nowhere to go. All six measured, none of them
+ * reachable while the Rust allowlist holds.
+ *
+ * That last clause is the point. This module is the SECOND line of defence; its whole job is to
+ * be correct on the assumption that the first one has failed, which is exactly the scenario the
+ * §9 item 5 negative control simulates. An own-property check makes the table as closed as its
+ * header always claimed it was.
  */
 export function routeForDeepLink(target: DeepLinkTarget): string | null {
-  const route = ROUTES[target.entity]
-  return route ? route(target.id) : null
+  if (!Object.hasOwn(ROUTES, target.entity)) return null
+  if (!ID_PATTERN.test(target.id)) return null
+  return ROUTES[target.entity](target.id)
 }

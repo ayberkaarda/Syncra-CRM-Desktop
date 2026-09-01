@@ -158,6 +158,12 @@ pub const TABLES: &[TableSpec] = &[
     spec(Entity::Ticket, TICKET_FKS, TAGGED, true),
     spec(Entity::Quote, QUOTE_FKS, QUOTE_EMBEDDED, true),
     spec(Entity::Conversation, CONVERSATION_FKS, NO_EMBEDDED, true),
+    // `attachment_*` (KARAR A29, defter O90, migration 0004) stays NO_EMBEDDED: the four
+    // fields SyncPullService::attachMessageAttachments() flattens onto a message row are
+    // plain scalars (a name, a mime string, a byte count, a bool), each in its own column —
+    // not a JSON document the way `tags`/`custom_fields`/quote `items` are. `embedded` exists
+    // to tell `row_to_json` which columns to re-parse as JSON on the way out; none of these
+    // four needs that.
     spec(Entity::Message, MESSAGE_FKS, NO_EMBEDDED, true),
     spec(Entity::ConversationUser, CONVERSATION_USER_FKS, NO_EMBEDDED, false),
     // notifications: client_id == server id, no server_id column (protocol §6.1 P12).

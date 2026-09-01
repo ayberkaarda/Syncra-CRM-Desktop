@@ -15,9 +15,15 @@ const MIGRATION_0001: &str = include_str!("../../migrations/0001_init.sql");
 /// Adds the four server-computed SLA columns to `tickets` (defter O2/O35, KARAR A26) — see
 /// the file for the full contract.
 const MIGRATION_0002: &str = include_str!("../../migrations/0002_ticket_sla_fields.sql");
+/// Folds the mirror's two timestamp dialects into one (defter O83) — see the file for why
+/// 86 `*_at` columns are converted and the date-only columns are not.
+const MIGRATION_0003: &str = include_str!("../../migrations/0003_normalize_timestamps.sql");
+/// Adds the four flattened attachment-metadata columns to `messages` (KARAR A29, defter
+/// O90) — see the file for the full contract.
+const MIGRATION_0004: &str = include_str!("../../migrations/0004_message_attachment_fields.sql");
 
 /// Schema version written to `PRAGMA user_version` once every migration has run.
-const SCHEMA_VERSION: i32 = 2;
+const SCHEMA_VERSION: i32 = 4;
 
 /// Every migration, in order, paired with the `user_version` it brings the database to.
 ///
@@ -29,7 +35,12 @@ const SCHEMA_VERSION: i32 = 2;
 /// applying the intermediate SQL would silently leave its columns out. `user_version` is
 /// advanced after each individual migration (not once at the end), so a crash mid-chain
 /// resumes at the next unapplied entry instead of re-running one that already succeeded.
-const MIGRATIONS: &[(i32, &str)] = &[(1, MIGRATION_0001), (2, MIGRATION_0002)];
+const MIGRATIONS: &[(i32, &str)] = &[
+    (1, MIGRATION_0001),
+    (2, MIGRATION_0002),
+    (3, MIGRATION_0003),
+    (4, MIGRATION_0004),
+];
 
 /// Open (or create) the encrypted database and bring it to the current schema version.
 ///
@@ -196,6 +207,131 @@ pub fn json_to_sql(value: &Json) -> rusqlite::types::Value {
         }
         Json::String(s) => V::Text(s.clone()),
         other => V::Text(other.to_string()),
+    }
+}
+
+/// Whether `column` holds a timestamp that must be normalised on the way in.
+///
+/// Decided by name rather than by a hand-kept list. Every datetime column in
+/// `migrations/0001_init.sql` ends in `_at` — 111 of them across 25 tables (`created_at`,
+/// `updated_at`, `deleted_at`, `due_at`, `reminder_at`, `completed_at`, `occurred_at`,
+/// `converted_at`, `closed_at`, `sent_at`, `accepted_at`, `rejected_at`, `last_message_at`,
+/// `edited_at`, `joined_at`, `read_at`, `fetched_at`, `first_response_at`, `resolved_at`,
+/// `sla_due_at`, `sla_paused_at`, `sla_warning_notified_at`, `sla_breach_notified_at`,
+/// `local_updated_at`) — and, the half that actually matters, every **date-only** column does
+/// not: `expected_close_date`, `valid_until`, `rate_date` and `exchange_rate_date` are MySQL
+/// `date()` columns whose `2026-09-05` values are already correct and would be turned into a
+/// fabricated midnight by any normalisation. The suffix is exactly the line between the two
+/// sets, which is why it is the rule.
+///
+/// [`normalize_timestamp`] is a second, independent guard: it rewrites only values that
+/// really are a naive date plus time, so even a future `_at` column holding something else
+/// passes through untouched.
+pub fn is_timestamp_column(column: &str) -> bool {
+    column.ends_with("_at")
+}
+
+/// Rewrite a naive `YYYY-MM-DD[ T]HH:MM:SS[.fraction]` stamp into `YYYY-MM-DDTHH:MM:SS.mmmZ`.
+///
+/// # Why (defter O83)
+///
+/// Locally created rows have always used that shape: `outbox::now_iso()` is
+/// `to_rfc3339_opts(SecondsFormat::Millis, true)`. Server rows did **not**.
+/// `SyncPullService::fetchRows()` reads the mirror tables with `DB::table()` — no Eloquent,
+/// so no datetime cast — and a MySQL `DATETIME` therefore reaches the wire as
+/// `2026-09-01 23:59:00`, with a **space** (`0x20`) at offset 10 where the local dialect has
+/// `T` (`0x54`).
+///
+/// Both dialects land in the same `TEXT` column, and every ordering, keyset and range
+/// comparison in [`query`] is a plain string comparison over that column. Because
+/// `'T' > ' '`, on any given date *every* offline row sorted above *every* server row
+/// regardless of the actual clock, the `messages` keyset cursor cut the wrong page, and
+/// `due_at < strftime('%Y-%m-%dT%H:%M:%SZ','now')` marked every server task due later *today*
+/// as overdue — its space-form stamp is below the `T`-form "now" for the whole day.
+///
+/// Normalising at the write boundary is the fix, rather than normalising inside the queries:
+/// SQL-side normalisation would have to be repeated in every predicate and would make
+/// `idx_messages_conv` and the other timestamp indexes unusable, while rewriting the *local*
+/// rows into the space form instead would strip the zone marker off every row and re-open the
+/// "a naive stamp is assumed to be local time" class of bug.
+///
+/// The trailing `.000` is not decoration: `now_iso()` emits milliseconds, so a bare `...:27Z`
+/// and a local `...:27.000Z` are not string-equal at the same instant (`'Z' > '.'`) and the
+/// two dialects would simply diverge again one character further along.
+///
+/// # What is left alone
+///
+/// `None` means *leave the value exactly as it is*:
+///
+/// * anything already carrying a zone (`...Z`, `...+03:00`) — it is unambiguous already, and
+///   rewriting it would either be a no-op or a lie about the offset;
+/// * date-only values (`2026-09-05`), which no `_at` column should hold but which must
+///   survive untouched if one ever does;
+/// * anything that is not a timestamp at all.
+///
+/// A sub-second fraction is truncated (not rounded) to three digits, which is exactly what
+/// `SecondsFormat::Millis` does on the local side, so both writers agree to the character.
+/// MySQL `DATETIME` carries no fractional part today; the branch exists so that a future
+/// `DATETIME(6)` column cannot re-introduce a second dialect.
+pub fn normalize_timestamp(raw: &str) -> Option<String> {
+    let bytes = raw.as_bytes();
+    if bytes.len() < 19 {
+        return None;
+    }
+    for (index, byte) in bytes[..19].iter().enumerate() {
+        let ok = match index {
+            4 | 7 => *byte == b'-',
+            10 => *byte == b' ' || *byte == b'T',
+            13 | 16 => *byte == b':',
+            _ => byte.is_ascii_digit(),
+        };
+        if !ok {
+            return None;
+        }
+    }
+
+    let millis = if bytes.len() == 19 {
+        String::from("000")
+    } else {
+        // Anything other than a fraction at offset 19 is a zone marker (`Z`, `+`, `-`);
+        // those are already unambiguous and must not be touched.
+        if bytes[19] != b'.' {
+            return None;
+        }
+        let fraction = &raw[20..];
+        if fraction.is_empty() || !fraction.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let mut millis: String = fraction.chars().take(3).collect();
+        while millis.len() < 3 {
+            millis.push('0');
+        }
+        millis
+    };
+
+    Some(format!("{}T{}.{millis}Z", &raw[..10], &raw[11..19]))
+}
+
+/// [`json_to_sql`], plus the timestamp normalisation the mirror's `TEXT` columns depend on.
+///
+/// This is the single write boundary for server-sourced values. Both places a server row
+/// reaches a mirror table go through it — [`upsert::upsert_row`] on the pull path (which is
+/// what `bootstrap`, every delta and `download_archive` all funnel into via
+/// `pull_until_drained`), and `sync::apply_server_row` on the conflict-resolution path, which
+/// is also where a `pending_shadows.row_json` parked by §5.5 is replayed. Wiring only the
+/// first would let a `TakeServer` resolution write the old dialect back over a row a pull had
+/// already normalised.
+pub fn json_to_sql_for_column(column: &str, value: &Json) -> rusqlite::types::Value {
+    let sql = json_to_sql(value);
+    if !is_timestamp_column(column) {
+        return sql;
+    }
+    match &sql {
+        rusqlite::types::Value::Text(text) => match normalize_timestamp(text) {
+            Some(normalized) => rusqlite::types::Value::Text(normalized),
+            None => sql,
+        },
+        _ => sql,
     }
 }
 
@@ -410,6 +546,104 @@ mod tests {
             stage_cols.contains(&"name_key".to_string()),
             "pipeline_stages.name_key missing after migrating an existing v1 database"
         );
+    }
+
+    /// The same migration-chain proof as the v1 test above, narrowed to migration 0004
+    /// (KARAR A29, defter O90): a database that already has the four SLA columns and the
+    /// normalised timestamp dialect (v3) must still gain the four `messages.attachment_*`
+    /// columns on the next `open()`, an existing `messages` row must survive untouched with
+    /// NULL in all four (K5: the server re-versions old attached rows so the next delta
+    /// re-attaches real metadata; nothing here invents a value), and a second `open()` must
+    /// be a no-op.
+    #[test]
+    fn existing_v3_database_gets_migration_0004_applied_on_next_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let key = "d".repeat(64);
+
+        // Fixture: a v3 database — MIGRATION_0001..0003 applied, user_version stamped at 3 —
+        // with one pre-existing `messages` row, exactly what a real user's mirror looks like
+        // the moment before this migration ships.
+        {
+            let conn = Connection::open_with_flags(
+                &path,
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+            )
+            .unwrap();
+            conn.pragma_update(None, "key", &key).unwrap();
+            conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get::<_, i64>(0))
+                .unwrap();
+            conn.execute_batch(MIGRATION_0001).unwrap();
+            conn.execute_batch(MIGRATION_0002).unwrap();
+            register_functions(&conn).unwrap();
+            conn.execute_batch(MIGRATION_0003).unwrap();
+            conn.pragma_update(None, "user_version", 3).unwrap();
+            conn.execute(
+                "INSERT INTO messages(client_id, server_id, conversation_id, user_id, body, \
+                 attachment_id, type, created_at, updated_at) \
+                 VALUES ('msg-v3-probe', 9001, 1, 1, 'pre-existing row', 1, 'file', \
+                 '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z')",
+                [],
+            )
+            .unwrap();
+        }
+
+        // Sanity: the fixture really is a pre-0004 database (v3, no attachment_* columns).
+        {
+            let conn =
+                Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
+            conn.pragma_update(None, "key", &key).unwrap();
+            let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+            assert_eq!(version, 3, "fixture must start at v3, or this test proves nothing");
+            let cols = columns(&conn, "messages").unwrap();
+            for col in [
+                "attachment_name",
+                "attachment_mime",
+                "attachment_size",
+                "attachment_is_image",
+            ] {
+                assert!(!cols.contains(&col.to_string()));
+            }
+        }
+
+        // The real entry point every app launch goes through.
+        let conn = open(&path, &key).unwrap();
+
+        let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+
+        let cols = columns(&conn, "messages").unwrap();
+        for col in [
+            "attachment_name",
+            "attachment_mime",
+            "attachment_size",
+            "attachment_is_image",
+        ] {
+            assert!(
+                cols.contains(&col.to_string()),
+                "messages.{col} missing after migrating an existing v3 database"
+            );
+        }
+
+        // The pre-existing row survived, its old columns unchanged, and the four new columns
+        // are NULL rather than some invented value.
+        let (body, attachment_name, attachment_is_image): (String, Option<String>, Option<i64>) =
+            conn.query_row(
+                "SELECT body, attachment_name, attachment_is_image FROM messages \
+                 WHERE client_id = 'msg-v3-probe'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(body, "pre-existing row");
+        assert_eq!(attachment_name, None);
+        assert_eq!(attachment_is_image, None);
+
+        // Idempotent: opening again must not fail or double-apply.
+        drop(conn);
+        let conn2 = open(&path, &key).unwrap();
+        let version2: i32 = conn2.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version2, SCHEMA_VERSION);
     }
 
     /// A migration whose `execute_batch` fails partway through must leave the database exactly
@@ -726,5 +960,353 @@ mod tests {
         let json = row_to_json(row, Some(Entity::Company)).unwrap();
         assert_eq!(json.get_str("name"), Some("Acme"));
         assert_eq!(json.get("tags"), Some(&serde_json::json!([1, 2, 3])));
+    }
+
+    // ---------------------------------------------------------------------------------
+    // defter O83 — one timestamp dialect
+    // ---------------------------------------------------------------------------------
+
+    /// Every input shape the mirror can be handed, and what must come back.
+    ///
+    /// The `None` half is the load-bearing one: a value that already carries a zone, a
+    /// date-only value, and anything that is not a timestamp must be returned untouched. A
+    /// normaliser that is merely eager here would corrupt `expected_close_date` and lie about
+    /// the offset of `+03:00` stamps.
+    #[test]
+    fn normalize_timestamp_converts_only_naive_date_times() {
+        // The server dialect: MySQL DATETIME text, space separator, no zone.
+        assert_eq!(
+            normalize_timestamp("2026-09-01 23:59:00").as_deref(),
+            Some("2026-09-01T23:59:00.000Z")
+        );
+        // A naive stamp that already uses `T` still needs the `.000Z` tail, or it would sort
+        // apart from `now_iso()`'s output one character later (`Z` is 0x5A, `.` is 0x2E).
+        assert_eq!(
+            normalize_timestamp("2026-09-01T23:59:00").as_deref(),
+            Some("2026-09-01T23:59:00.000Z")
+        );
+        // A fraction is truncated to milliseconds, exactly like `SecondsFormat::Millis`.
+        assert_eq!(
+            normalize_timestamp("2026-09-01 23:59:00.123456").as_deref(),
+            Some("2026-09-01T23:59:00.123Z")
+        );
+        // A short fraction is padded, not left ragged: `.5` means 500ms, and an unpadded
+        // `.5Z` would sort above `.499Z` but also above `.6Z`.
+        assert_eq!(
+            normalize_timestamp("2026-09-01 23:59:00.5").as_deref(),
+            Some("2026-09-01T23:59:00.500Z")
+        );
+
+        for already_fine in [
+            "2026-09-01T23:59:00Z",
+            "2026-09-01T23:59:00.000Z",
+            "2026-09-01T23:59:00.123Z",
+            "2026-09-01T23:59:00+03:00",
+            "2026-09-01T23:59:00.123+03:00",
+            "2026-09-01 23:59:00Z",
+        ] {
+            assert_eq!(
+                normalize_timestamp(already_fine),
+                None,
+                "{already_fine:?} already carries a zone and must be left exactly as it is"
+            );
+        }
+
+        for not_a_timestamp in [
+            "2026-09-05", // date-only: expected_close_date, valid_until, rate_date
+            "",
+            "not a date",
+            "2026-09-01 23:59",     // 16 chars, no seconds
+            "2026/09/01 23:59:00",  // wrong separators
+            "2026-09-01x23:59:00",  // wrong date/time separator
+            "2026-09-01 23:59:00.", // a dot with nothing behind it
+            "2026-09-01 23:59:00.12x",
+        ] {
+            assert_eq!(
+                normalize_timestamp(not_a_timestamp),
+                None,
+                "{not_a_timestamp:?} is not a naive date-time and must pass through"
+            );
+        }
+    }
+
+    /// The `*_at` rule is only safe because the schema actually splits that way. This asserts
+    /// it against the database as opened, not against a comment: every date-only column must
+    /// fall outside the rule, and every column the read layer compares must fall inside it.
+    #[test]
+    fn the_timestamp_column_rule_matches_the_schema() {
+        for date_only in [
+            "expected_close_date",
+            "valid_until",
+            "rate_date",
+            "exchange_rate_date",
+        ] {
+            assert!(
+                !is_timestamp_column(date_only),
+                "{date_only} is a date() column — normalising it would invent a midnight"
+            );
+        }
+        for timestamp in [
+            "created_at",
+            "updated_at",
+            "deleted_at",
+            "due_at",
+            "occurred_at",
+            "last_message_at",
+            "sla_due_at",
+            "read_at",
+            "local_updated_at",
+        ] {
+            assert!(
+                is_timestamp_column(timestamp),
+                "{timestamp} is a datetime column"
+            );
+        }
+
+        // And the schema itself: no column ending in `_at` may be anything but TEXT, or the
+        // name-based rule would be pointing at the wrong kind of value.
+        let (_dir, conn) = temp_db();
+        let names: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+                .unwrap();
+            let found = stmt
+                .query_map([], |r| r.get::<_, String>(0))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect();
+            found
+        };
+        let mut checked = 0;
+        for table in names {
+            let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})")).unwrap();
+            let cols: Vec<(String, String)> = stmt
+                .query_map([], |r| Ok((r.get::<_, String>(1)?, r.get::<_, String>(2)?)))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect();
+            for (name, kind) in cols {
+                if is_timestamp_column(&name) {
+                    assert_eq!(kind, "TEXT", "{table}.{name} is {kind}, not TEXT");
+                    checked += 1;
+                }
+            }
+        }
+        assert!(
+            checked >= 100,
+            "expected ~111 `*_at` columns in the schema, found {checked}"
+        );
+    }
+
+    /// The write boundary itself: the column name decides whether a value is a candidate, and
+    /// non-text values are never touched.
+    #[test]
+    fn json_to_sql_for_column_normalises_at_the_boundary() {
+        use rusqlite::types::Value as V;
+        use serde_json::json;
+
+        assert_eq!(
+            json_to_sql_for_column("created_at", &json!("2026-09-01 23:59:00")),
+            V::Text("2026-09-01T23:59:00.000Z".into())
+        );
+        assert_eq!(
+            json_to_sql_for_column("created_at", &json!("2026-09-01T23:59:00.000Z")),
+            V::Text("2026-09-01T23:59:00.000Z".into()),
+            "an already-canonical value round-trips unchanged"
+        );
+        assert_eq!(
+            json_to_sql_for_column("expected_close_date", &json!("2026-09-05")),
+            V::Text("2026-09-05".into())
+        );
+        assert_eq!(
+            json_to_sql_for_column("created_at", &json!(null)),
+            V::Null,
+            "NULL stays NULL"
+        );
+        assert_eq!(
+            json_to_sql_for_column("sla_target_hours", &json!(4.25)),
+            V::Real(4.25),
+            "a non-text value is untouched by the timestamp path"
+        );
+        // A column that merely looks like it holds a stamp is not a candidate: the rule is
+        // the column name, and `title` is free text.
+        assert_eq!(
+            json_to_sql_for_column("title", &json!("2026-09-01 23:59:00")),
+            V::Text("2026-09-01 23:59:00".into())
+        );
+    }
+
+    /// The upgrade half (defter O83). Normalising at the write boundary only fixes rows the
+    /// server sends from now on; a mirror already on disk is full of the old dialect, and
+    /// nothing re-pulls a row whose `sync_version` has not moved. Migration 0003 converts what
+    /// is already there — and, just as importantly, leaves alone what is already right.
+    ///
+    /// Fixture pattern follows `existing_v1_database_gets_migration_0002_applied_on_next_open`:
+    /// build a database exactly as the previous release left it (v2, old-dialect rows), then
+    /// go through the real `open()` that every app launch uses.
+    #[test]
+    fn migration_0003_converts_an_existing_mirror_and_spares_the_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let key = "d".repeat(64);
+
+        {
+            let conn = Connection::open_with_flags(
+                &path,
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+            )
+            .unwrap();
+            conn.pragma_update(None, "key", &key).unwrap();
+            conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| {
+                r.get::<_, i64>(0)
+            })
+            .unwrap();
+            // The FTS triggers call `syncra_fold`, so a bare connection cannot write a mirror
+            // row at all. `open()` registers it before `migrate()` runs, which is also what
+            // lets migration 0003's UPDATEs re-index the rows they touch.
+            register_functions(&conn).unwrap();
+            conn.execute_batch(MIGRATION_0001).unwrap();
+            conn.execute_batch(MIGRATION_0002).unwrap();
+            conn.pragma_update(None, "user_version", 2).unwrap();
+
+            // A server row as the old build stored it, beside a date() column that is already
+            // correct.
+            conn.execute(
+                "INSERT INTO deals(client_id, server_id, title, created_at, updated_at,
+                                   expected_close_date, closed_at)
+                 VALUES ('11111111-1111-1111-1111-111111111111', 1, 'Server row',
+                         '2026-09-01 23:59:00', '2026-08-31 07:05:09', '2026-09-05', NULL)",
+                [],
+            )
+            .unwrap();
+            // A row created offline by that same old build: already canonical, must not move.
+            conn.execute(
+                "INSERT INTO deals(client_id, title, created_at, updated_at, local_updated_at)
+                 VALUES ('22222222-2222-2222-2222-222222222222', 'Offline row',
+                         '2026-09-01T08:00:00.000Z', '2026-09-01T08:00:00.000Z',
+                         '2026-09-01T08:00:00.000Z')",
+                [],
+            )
+            .unwrap();
+            // A second table and a domain column, to prove the migration is not just
+            // `deals.created_at`.
+            conn.execute(
+                "INSERT INTO tasks(client_id, server_id, title, due_at, reminder_at, created_at)
+                 VALUES ('33333333-3333-3333-3333-333333333333', 5, 'Server task',
+                         '2026-09-01 17:00:00', NULL, '2026-09-01 09:00:00')",
+                [],
+            )
+            .unwrap();
+            // A quote, for `valid_until` — the other date() column.
+            conn.execute(
+                "INSERT INTO quotes(client_id, server_id, quote_number, valid_until, sent_at)
+                 VALUES ('44444444-4444-4444-4444-444444444444', 3, 'Q-3', '2026-09-30',
+                         '2026-09-01 12:30:00')",
+                [],
+            )
+            .unwrap();
+        }
+
+        // Sanity: the fixture really is a pre-0003 database, or this test proves nothing.
+        {
+            let conn =
+                Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
+            conn.pragma_update(None, "key", &key).unwrap();
+            let version: i32 = conn
+                .query_row("PRAGMA user_version", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(version, 2, "fixture must start at v2");
+            let created: String = conn
+                .query_row("SELECT created_at FROM deals WHERE server_id = 1", [], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            assert_eq!(
+                created, "2026-09-01 23:59:00",
+                "fixture must carry the old dialect"
+            );
+        }
+
+        let conn = open(&path, &key).unwrap();
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+
+        let get = |sql: &str| -> Option<String> { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+
+        // Converted.
+        assert_eq!(
+            get("SELECT created_at FROM deals WHERE server_id = 1").as_deref(),
+            Some("2026-09-01T23:59:00.000Z")
+        );
+        assert_eq!(
+            get("SELECT updated_at FROM deals WHERE server_id = 1").as_deref(),
+            Some("2026-08-31T07:05:09.000Z")
+        );
+        assert_eq!(
+            get("SELECT due_at FROM tasks WHERE server_id = 5").as_deref(),
+            Some("2026-09-01T17:00:00.000Z")
+        );
+        assert_eq!(
+            get("SELECT created_at FROM tasks WHERE server_id = 5").as_deref(),
+            Some("2026-09-01T09:00:00.000Z")
+        );
+        assert_eq!(
+            get("SELECT sent_at FROM quotes WHERE server_id = 3").as_deref(),
+            Some("2026-09-01T12:30:00.000Z")
+        );
+
+        // Untouched.
+        assert_eq!(
+            get("SELECT expected_close_date FROM deals WHERE server_id = 1").as_deref(),
+            Some("2026-09-05"),
+            "a date() column must survive the migration exactly as it was"
+        );
+        assert_eq!(
+            get("SELECT valid_until FROM quotes WHERE server_id = 3").as_deref(),
+            Some("2026-09-30")
+        );
+        assert_eq!(
+            get("SELECT created_at FROM deals
+                  WHERE client_id = '22222222-2222-2222-2222-222222222222'")
+            .as_deref(),
+            Some("2026-09-01T08:00:00.000Z"),
+            "an already-canonical value must not be rewritten"
+        );
+        assert_eq!(
+            get("SELECT local_updated_at FROM deals
+                  WHERE client_id = '22222222-2222-2222-2222-222222222222'")
+            .as_deref(),
+            Some("2026-09-01T08:00:00.000Z")
+        );
+        assert_eq!(
+            get("SELECT reminder_at FROM tasks WHERE server_id = 5"),
+            None,
+            "NULL stays NULL"
+        );
+
+        // And the point of the whole exercise: the two rows now sort by the clock.
+        let order: Vec<String> = conn
+            .prepare("SELECT title FROM deals ORDER BY created_at DESC")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(
+            order,
+            vec!["Server row".to_string(), "Offline row".to_string()]
+        );
+
+        // Re-running is a no-op: a second open() must not append another `.000Z`.
+        drop(conn);
+        let conn = open(&path, &key).unwrap();
+        let created: String = conn
+            .query_row("SELECT created_at FROM deals WHERE server_id = 1", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(created, "2026-09-01T23:59:00.000Z");
     }
 }

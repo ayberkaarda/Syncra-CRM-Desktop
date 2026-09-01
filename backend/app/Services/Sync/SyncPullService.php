@@ -2,6 +2,7 @@
 
 namespace App\Services\Sync;
 
+use App\Models\Attachment;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\Support\NotificationText;
@@ -332,6 +333,10 @@ class SyncPullService
             $rows = $this->attachTicketSla($rows);
         }
 
+        if ($table === 'messages') {
+            $rows = $this->attachMessageAttachments($rows);
+        }
+
         return $this->attachEmbeds($table, $definition, $rows);
     }
 
@@ -416,6 +421,86 @@ class SyncPullService
             $rows[$index]['sla_total_seconds'] = $sla->totalSeconds($ticket);
             $rows[$index]['sla_target_hours'] = $sla->targetHoursForTicket($ticket);
             $rows[$index]['sla_breached'] = $sla->isBreached($ticket);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * KARAR A29 (defter O90): `attachments` never joins the sync scope - file
+     * BYTES are out of protocol §1.3, and mirroring the whole table for four
+     * fields would be the tail wagging the dog. Instead the `messages` pull
+     * row carries the attachment's METADATA as four flattened fields, sourced
+     * from the exact same shape `AttachmentResource::toArray()` already
+     * builds for the web client (K7: ONE definition of `is_image`, never
+     * re-derived here from a MIME prefix). `attachment_is_image` is computed
+     * by calling `Attachment::isInlineEligibleImage()` - the same allowlist
+     * check the web resource and `AttachmentController::show()`'s `?inline=1`
+     * gate use (`config('chat.attachments.inline_mime_types')`: exactly the
+     * four raster types `image/jpeg|png|gif|webp`). This is deliberately
+     * NARROWER than a `str_starts_with($mime, 'image/')` prefix check would
+     * be - `image/svg+xml` matches that prefix but is excluded from the
+     * allowlist on purpose (inline SVG rendering is a known XSS vector), so a
+     * prefix-based re-derivation here would silently mark SVGs as
+     * image-eligible against the source definition's intent. This mirrors
+     * `attachTicketSla()`'s pattern one method up:
+     * a server-computed/looked-up projection glued onto the raw `SELECT *`
+     * row rather than expressed as a join, because the row set here is
+     * whatever `rowsFor()` already paged and trimmed - a join would have to
+     * happen before paging to be correct, and would fetch attachment bytes
+     * this endpoint has no business returning.
+     *
+     * ONE query for the whole page (`whereIn`), matching `attachEmbeds()`'s
+     * discipline - never one query per row.
+     *
+     * A soft-deleted message (`deleted_at` set) gets none of the four fields,
+     * mirroring `MessageResource::toArray()`'s mask: on the web surface a
+     * deleted message's `attachment` is unconditionally null, so a pull row
+     * that kept the name/mime/size for a "deleted" message would disagree
+     * with the surface it is supposed to mirror.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachMessageAttachments(array $rows): array
+    {
+        $ids = [];
+
+        foreach ($rows as $row) {
+            if ($row['deleted_at'] !== null || $row['attachment_id'] === null) {
+                continue;
+            }
+
+            $ids[(int) $row['attachment_id']] = true;
+        }
+
+        if ($ids === []) {
+            return $rows;
+        }
+
+        // Eloquent (not DB::table()) so `isInlineEligibleImage()` - the K7
+        // source-of-truth definition - can be called on each row below,
+        // instead of re-deriving it here from the raw mime string.
+        $attachments = Attachment::query()
+            ->whereIn('id', array_keys($ids))
+            ->get(['id', 'original_name', 'mime_type', 'size'])
+            ->keyBy('id');
+
+        foreach ($rows as $index => $row) {
+            if ($row['deleted_at'] !== null || $row['attachment_id'] === null) {
+                continue;
+            }
+
+            $attachment = $attachments->get((int) $row['attachment_id']);
+
+            if ($attachment === null) {
+                continue;
+            }
+
+            $rows[$index]['attachment_name'] = $attachment->original_name;
+            $rows[$index]['attachment_mime'] = $attachment->mime_type;
+            $rows[$index]['attachment_size'] = (int) $attachment->size;
+            $rows[$index]['attachment_is_image'] = $attachment->isInlineEligibleImage();
         }
 
         return $rows;
