@@ -78,6 +78,18 @@ const INVALIDATION_OWNER = 'bridge/events.ts'
  */
 const PRESENCE_EXCEPTION_MARKER = 'A11-EXCEPTION: presence'
 
+/**
+ * The owner's own test file, and only it. `bridge/events.test.ts` cannot avoid naming
+ * `invalidateQueries`: it hands the bridge a mock QueryClient and asserts which keys that bridge
+ * invalidates — the assertion IS the rule this checker enforces, written the other way round.
+ *
+ * Deliberately NOT a blanket `*.test.ts` exemption. A different module's test naming
+ * `invalidateQueries` still fails, and that failure stays meaningful: it means some other module
+ * is being described as invalidating the cache, which is exactly what KARAR A11 forbids. The
+ * exemption widens nothing about what production code may do — no shipped byte comes from here.
+ */
+const INVALIDATION_OWNER_TEST = 'bridge/events.test.ts'
+
 const problems = []
 const notes = []
 
@@ -589,6 +601,7 @@ if (commandName) {
 // ------------------------------------------------------------------------------------------------
 
 let invalidationSites = 0
+let ownerTestSites = 0
 for (const path of sourceFiles(DESKTOP_SRC)) {
   const rel = relative(DESKTOP_SRC, path).replace(/\\/g, '/')
   const lines = read(path).split('\n')
@@ -598,6 +611,11 @@ for (const path of sourceFiles(DESKTOP_SRC)) {
     // write documentation against.
     const code = /^\s*(\/\/|\*|\/\*)/.test(line) ? '' : line.split('//')[0]
     if (!code.includes('invalidateQueries')) return
+    // Counted separately so the summary line keeps meaning "production sites", not "mentions".
+    if (rel === INVALIDATION_OWNER_TEST) {
+      ownerTestSites += 1
+      return
+    }
     invalidationSites += 1
     if (rel === INVALIDATION_OWNER) return
     if (line.includes(PRESENCE_EXCEPTION_MARKER)) return
@@ -631,7 +649,7 @@ notes.push(`  channel/event -> entities : ${bindings.length}`)
 notes.push(`  UNROUTED (with reason)    : ${unrouted.length}`)
 notes.push(`engine command              : ${commandName ?? '-'} (TS + Rust fn + generate_handler)`)
 notes.push(`tauri commands registered   : ${registered.length}`)
-notes.push(`invalidateQueries sites     : ${invalidationSites}, all in ${INVALIDATION_OWNER}`)
+notes.push(`invalidateQueries sites     : ${invalidationSites}, all in ${INVALIDATION_OWNER} (+${ownerTestSites} in ${INVALIDATION_OWNER_TEST}, mocked)`)
 
 export function runRealtimeWiringCheck() {
   return { problems, notes }

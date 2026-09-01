@@ -9,86 +9,23 @@
 // its own API — with no error message, because a CSP violation in a packaged webview is silent
 // unless devtools are open. Deriving both from one source removes the possibility.
 //
+// O4 (closed by this pass): being the ONLY correct way to build was previously a convention.
+// `tauri.conf.json`'s committed CSP is now a deny-everything placeholder and
+// `src-tauri/build.rs` panics on a release build that did not come through here, so a direct
+// `npx tauri build` can no longer produce a quietly localhost-configured package.
+//
 // The `tauri` script name is a contract with `desktop-ci.yml`, which calls
 // `npm run tauri -- build --debug` (§E.5.2 ACIK 3) — hence a wrapper rather than a differently
 // named script.
 import { createRequire } from 'node:module'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+
+// Resolution of every derived value lives in `build-env.mjs` so that
+// `check-release-host.mjs` gates the exact values this file injects — see that module's header.
+import { buildCsp, desktopRoot, resolveApiBase, resolveEnv } from './build-env.mjs'
 
 const require = createRequire(import.meta.url)
-const desktopRoot = fileURLToPath(new URL('..', import.meta.url))
-
-/** Minimal `.env` reader — `KEY=value`, `#` comments, optional surrounding quotes. */
-function readEnvFile(path) {
-  let raw
-  try {
-    raw = readFileSync(path, 'utf8')
-  } catch {
-    return {}
-  }
-  const out = {}
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eq = trimmed.indexOf('=')
-    if (eq < 1) continue
-    const key = trimmed.slice(0, eq).trim()
-    const value = trimmed.slice(eq + 1).trim()
-    out[key] = value.replace(/^(['"])(.*)\1$/, '$2')
-  }
-  return out
-}
-
-// KARAR D-2: one `.env`, the frontend's. Same precedence Vite uses — `.env` then `.env.local`,
-// with a real process env variable winning over both (that is how CI overrides the host).
-function resolveEnv() {
-  const frontend = resolve(desktopRoot, '../frontend')
-  return {
-    ...readEnvFile(resolve(frontend, '.env')),
-    ...readEnvFile(resolve(frontend, '.env.local')),
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(([key]) => key.startsWith('VITE_') && process.env[key]),
-    ),
-  }
-}
-
-/** `http://localhost:8000/api/` -> `http://localhost:8000`. A CSP source is an origin, not a URL. */
-function toOrigin(value, fallback) {
-  try {
-    return new URL(value).origin
-  } catch {
-    return fallback
-  }
-}
-
-function buildCsp(env) {
-  const apiOrigin = toOrigin(env.VITE_API_URL ?? '', 'http://localhost:8000')
-
-  const scheme = env.VITE_REVERB_SCHEME === 'https' ? 'wss' : 'ws'
-  const host = env.VITE_REVERB_HOST || 'localhost'
-  const port = env.VITE_REVERB_PORT || '8080'
-  const reverbOrigin = `${scheme}://${host}:${port}`
-
-  // `ipc: http://ipc.localhost` is NOT optional (§5.5 duzeltme 1 / S1): Tauri 2 routes every
-  // `invoke()` through `connect-src`, so without it the app opens and then every command fails.
-  // `style-src-attr` is the S2 fix: once Tauri injects a nonce into `style-src`, the spec makes
-  // the browser ignore `'unsafe-inline'` there, which breaks every library that writes an inline
-  // `style=""` attribute — `style-src-attr` is not affected by the nonce.
-  return [
-    "default-src 'self'",
-    `connect-src 'self' ipc: http://ipc.localhost ${apiOrigin} ${reverbOrigin}`,
-    `img-src 'self' data: ${apiOrigin}`,
-    "style-src 'self' 'unsafe-inline'",
-    "style-src-attr 'unsafe-inline'",
-    // Poppins is self-hosted through `@fontsource` (`frontend/src/index.css`), so no font CDN
-    // origin is needed — `data:` covers the inlined faces (`docs/DESIGN-SYSTEM.md` §9).
-    "font-src 'self' data:",
-    "object-src 'none'",
-    "frame-ancestors 'none'",
-  ].join('; ')
-}
 
 const args = process.argv.slice(2)
 
@@ -103,7 +40,9 @@ if (CONFIG_AWARE.has(args[0])) {
   const outFile = resolve(desktopRoot, '.tauri/tauri.conf.generated.json')
   mkdirSync(dirname(outFile), { recursive: true })
   writeFileSync(outFile, `${JSON.stringify(overlay, null, 2)}\n`, 'utf8')
-  // Merged onto `src-tauri/tauri.conf.json`; only `app.security.csp` is replaced.
+  // Merged onto `src-tauri/tauri.conf.json`; only `app.security.csp` is replaced. The CLI also
+  // forwards this overlay to the build script as `TAURI_CONFIG`, which is what `build.rs`
+  // inspects to prove the placeholder policy was actually replaced.
   finalArgs.push('--config', outFile)
   console.log(`[tauri] CSP from ../frontend/.env -> ${outFile}`)
 
@@ -117,8 +56,7 @@ if (CONFIG_AWARE.has(args[0])) {
   // silently apart. An explicit SYNCRA_API_URL in the real process env still wins, which
   // is how CI and one-off builds override the host.
   if (!process.env.SYNCRA_API_URL) {
-    const origin = toOrigin(env.VITE_API_URL ?? '', 'http://localhost:8000')
-    process.env.SYNCRA_API_URL = `${origin}/api/`
+    process.env.SYNCRA_API_URL = resolveApiBase(env)
     console.log(`[tauri] SYNCRA_API_URL -> ${process.env.SYNCRA_API_URL}`)
   } else {
     console.log(`[tauri] SYNCRA_API_URL (from process env) -> ${process.env.SYNCRA_API_URL}`)

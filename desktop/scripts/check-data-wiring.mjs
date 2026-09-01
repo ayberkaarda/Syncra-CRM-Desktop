@@ -232,7 +232,19 @@ const SHARED_HELPERS = {
   'companies.userOptions': 'userOptions',
   'leads.ownerOptions': 'userOptions',
   'deals.ownerOptions': 'userOptions',
+  'tickets.userOptions': 'userOptions',
   'leads.customFields': 'customFieldRecords',
+  // The deal-form / ticket-form lookups (defter O42). Both domains read through the same three
+  // helpers in `crm.ts`, so the helper body is what has to show the local read — the member
+  // itself is one line.
+  'deals.tags': 'formTagOptions',
+  'tickets.tags': 'formTagOptions',
+  'deals.customFields': 'customFieldRecords',
+  'tickets.customFields': 'customFieldRecords',
+  'deals.contactOptions': 'formContactOptions',
+  'tickets.contactOptions': 'formContactOptions',
+  'deals.companyOptions': 'formCompanyOptions',
+  'tickets.companyOptions': 'formCompanyOptions',
   'chat.conversation': 'conversationById',
   'chat.renameConversation': 'conversationById',
   'chat.muteConversation': 'conversationById',

@@ -13,6 +13,7 @@
     "check:commands": "node scripts/check-command-wiring.mjs",
     "check:identifier": "node scripts/check-identifier.mjs",
     "check:errors": "node scripts/check-error-codes.mjs",
+    "check:release-host": "node scripts/check-release-host.mjs",
     "tauri": "node scripts/tauri.mjs",
     "dev": "node scripts/tauri.mjs dev"
   },

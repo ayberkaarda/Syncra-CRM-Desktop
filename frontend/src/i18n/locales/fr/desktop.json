@@ -24,6 +24,7 @@
     "USER_INACTIVE": "Votre compte a été désactivé.",
     "INVALID_CREDENTIALS": "Adresse e-mail ou mot de passe incorrect.",
     "PENDING_MUTATIONS": "Vous avez des modifications qui n'ont pas encore été synchronisées. Synchronisez d'abord, ou déconnectez-vous quand même.",
+    "ROW_NOT_LOCAL": "Cet enregistrement ne figure pas dans votre copie locale — il se trouve peut-être en dehors de la période de conservation. Il redevient visible dès que vous êtes de nouveau en ligne.",
     "unknown": "Une erreur inconnue est survenue."
   },
   "onlineOnly": {
@@ -77,7 +78,8 @@
     "description": "Cet appareil contient des modifications qui n'ont pas encore été envoyées au serveur. Nous vous recommandons de synchroniser avant de vous déconnecter.",
     "discardWarning_one": "Se déconnecter entraînera la perte de {{count}} modification non envoyée.",
     "discardWarning_other": "Se déconnecter entraînera la perte de {{count}} modifications non envoyées.",
-    "force": "Se déconnecter quand même"
+    "force": "Se déconnecter quand même",
+    "wipedLocalOnly": "Cet appareil a été déconnecté localement, mais son enregistrement sur le serveur n'a pas pu être supprimé. Vous pouvez le gérer depuis la page Appareils."
   },
   "bootstrap": {
     "title": "Configuration initiale",

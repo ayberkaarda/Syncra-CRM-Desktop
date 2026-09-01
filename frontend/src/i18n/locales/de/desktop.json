@@ -24,6 +24,7 @@
     "USER_INACTIVE": "Ihr Konto wurde deaktiviert.",
     "INVALID_CREDENTIALS": "E-Mail-Adresse oder Passwort ist falsch.",
     "PENDING_MUTATIONS": "Sie haben Änderungen, die noch nicht synchronisiert wurden. Synchronisieren Sie zuerst oder melden Sie sich trotzdem ab.",
+    "ROW_NOT_LOCAL": "Dieser Datensatz befindet sich nicht in Ihrer lokalen Kopie — er liegt möglicherweise außerhalb des Aufbewahrungszeitraums. Er wird sichtbar, sobald Sie wieder online sind.",
     "unknown": "Ein unbekannter Fehler ist aufgetreten."
   },
   "onlineOnly": {
@@ -77,7 +78,8 @@
     "description": "Auf diesem Gerät gibt es Änderungen, die noch nicht an den Server gesendet wurden. Wir empfehlen, vor dem Abmelden zu synchronisieren.",
     "discardWarning_one": "Beim Abmelden geht {{count}} nicht gesendete Änderung verloren.",
     "discardWarning_other": "Beim Abmelden gehen {{count}} nicht gesendete Änderungen verloren.",
-    "force": "Trotzdem abmelden"
+    "force": "Trotzdem abmelden",
+    "wipedLocalOnly": "Dieses Gerät wurde lokal abgemeldet, aber sein Eintrag auf dem Server konnte nicht entfernt werden. Sie können es auf der Seite „Geräte“ verwalten."
   },
   "bootstrap": {
     "title": "Ersteinrichtung",

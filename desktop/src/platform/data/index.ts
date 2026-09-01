@@ -1,4 +1,4 @@
-// The desktop `DataSource`: all 128 methods of the platform contract, assembled from the four
+// The desktop `DataSource`: all 138 methods of the platform contract, assembled from the four
 // domain modules.
 //
 // The strongest guarantee here is the type annotation. `const data: DataSource = {...}` makes

@@ -46,6 +46,15 @@ import type {
   UserOption as ContactUserOption,
 } from '../features/contacts/types'
 import type { DealPayload, DealsListResponse, DealsQuery } from '../features/deals/api/dealsApi'
+// The deal form's own lookups live in `components/dealsShared.ts` rather than in an `api/`
+// module (see that file's header — they are the lookups `dealsApi`/`boardApi` do NOT cover).
+// This is a type-only import, so nothing about that layering reaches the bundle.
+import type {
+  ContactOption as DealContactOption,
+  DealCompanyOption,
+  DealCustomField,
+  DealTagOption,
+} from '../features/deals/components/dealsShared'
 import type {
   BoardFilters,
   BoardResponse,
@@ -112,13 +121,18 @@ import type {
   TasksQuery,
   UserOption as TaskUserOption,
 } from '../features/tasks/types'
+import type { TicketTagOption } from '../features/tickets/components/ticketsShared'
 import type {
+  CompanyOption as TicketCompanyOption,
+  ContactOption as TicketContactOption,
   Ticket,
+  TicketCustomField,
   TicketPayload,
   TicketsListResponse,
   TicketsQuery,
   TicketStats,
   TicketStatus,
+  UserOption as TicketUserOption,
 } from '../features/tickets/types'
 import type {
   CreateUserPayload,
@@ -281,6 +295,41 @@ export interface DealsSource {
    * `tasks.userOptions`, `leads.ownerOptions` — and all of them read one `user_list` query.
    */
   ownerOptions(): Promise<DealOwnerOption[]>
+  /**
+   * <- `fetchDealTags` (`components/dealsShared.ts`) — `GET /api/tags`, the deal form's tag
+   * picker and the deals list's tag filter.
+   *
+   * A deals verb of its own rather than a call into `contacts.tags()`, for the reason
+   * `ownerOptions` states above in the other direction: `contacts`, `companies` and `leads`
+   * each already declare their own `tags()` over the same `tag_list` read, so borrowing one
+   * domain's verb from another form is the anomaly, not the economy. The request is
+   * identical (`GET /api/tags`, no parameters); the SHAPE is not — the form pickers type
+   * `color` as `string | null`, which is what `GET /api/tags` actually returns for an
+   * uncoloured tag, while `ContactTag`/`CompanyTag` narrow it to `string`.
+   */
+  tags(): Promise<DealTagOption[]>
+  /**
+   * <- `fetchDealCustomFields` — `GET /api/custom-fields?entity_type=deals`.
+   *
+   * NOT `contacts.customFields()`: that one pins `entity_type=contacts` and would fill the
+   * deal form with the contact module's fields. Each domain names its own entity type, the
+   * way `companies.customFields` and `leads.customFields` already do.
+   */
+  customFields(): Promise<DealCustomField[]>
+  /**
+   * <- `fetchDealContactOptions` — `GET /api/contacts` narrowed to the selected company
+   * (`filter[company_id]`), the typed search, `per_page=20`, `sort=last_name`.
+   *
+   * `companyId === undefined` means "no company selected", i.e. an unfiltered picker — the
+   * same thing the web request expresses by omitting the filter parameter.
+   */
+  contactOptions(companyId: number | undefined, search: string): Promise<DealContactOption[]>
+  /**
+   * <- `fetchDealCompanyOptionsSearch` — the deal form's SEARCHABLE company combobox
+   * (`GET /api/companies?q&per_page=20&sort=name`). Distinct from `board`'s fixed top-100
+   * list (`useDealCompanyOptions`, `boardApi.ts`), which takes no search term.
+   */
+  companyOptions(search: string): Promise<DealCompanyOption[]>
 }
 
 /** `features/contacts/api/contactsApi.ts` */
@@ -401,6 +450,36 @@ export interface TicketsSource {
   status(id: number, status: TicketStatus): Promise<Ticket>
   /** <- `assignTicketRequest` */
   assign(id: number, assignedTo: number | null): Promise<Ticket>
+  /**
+   * The six lookups the ticket form and the tickets list are built on. They live in
+   * `components/ticketsShared.ts` rather than in `api/ticketsApi.ts` (see that file's header),
+   * and they are declared here per-domain for the same reason `deals.tags` is — every other
+   * domain that needs one of these already owns its own verb.
+   */
+  /** <- `fetchTicketTags` — `GET /api/tags`. */
+  tags(): Promise<TicketTagOption[]>
+  /** <- `fetchTicketCustomFields` — `GET /api/custom-fields?entity_type=tickets`. */
+  customFields(): Promise<TicketCustomField[]>
+  /** <- `fetchTicketContactOptions` — `per_page=20`, `sort=last_name`, `filter[company_id]`. */
+  contactOptions(companyId: number | undefined, search: string): Promise<TicketContactOption[]>
+  /** <- `fetchTicketCompanyOptionsSearch` — the form's searchable combobox (`per_page=20`). */
+  companyOptions(search: string): Promise<TicketCompanyOption[]>
+  /** <- `useTicketCompanyOptions`' fetcher — the list page's fixed filter list (`per_page=100`). */
+  allCompanyOptions(): Promise<TicketCompanyOption[]>
+  /**
+   * <- `fetchTicketUserOptions` — `GET /api/users?per_page=100`, the assignee select and the
+   * list page's assignee filter.
+   *
+   * A verb of its own and NOT `users.list()`: `SYNCDESKTOP.md` §8 makes `users.*` online-only
+   * (KARAR A15), so an assignee dropdown fed from there would be EMPTY offline — the exact
+   * trap `deals.ownerOptions` was added to avoid. The `users` mirror is a read-only,
+   * non-windowed projection (§4.1, K2), which is what lets this answer offline.
+   *
+   * Note the request is NOT the one `contacts.userOptions` sends: this one has no `sort`
+   * parameter. The difference is transcribed rather than harmonised — changing the web's
+   * wire request is out of scope for this item.
+   */
+  userOptions(): Promise<TicketUserOption[]>
 }
 
 /** `features/quotes/api/quotesApi.ts`. The catalog picker (`catalogApi.ts`) is a separate module, outside this surface. */

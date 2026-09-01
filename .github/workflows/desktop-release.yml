@@ -11,10 +11,14 @@ name: Desktop Release
 # a working release, both called out at their step below —
 #   1. `plugins.updater` is not yet configured in `desktop/src-tauri/tauri.conf.json`
 #      (E.5.3 — real pubkey/endpoints land in F7 proper, not this pass).
-#   2. The CSP (and therefore `VITE_API_URL`/`VITE_REVERB_*`) this job builds with must come
-#      from a REAL production `frontend/.env`, not the localhost example — F7 needs to wire
-#      that in as a repo/environment secret or variable before a tag push produces a
-#      publishable artifact.
+#   2. The CSP and the baked-in API URL (`VITE_API_URL`/`VITE_REVERB_*`) this job builds with
+#      must come from a REAL production `frontend/.env`, not the localhost example. This is
+#      now ENFORCED rather than documented (open item O27): the env is seeded from
+#      `secrets.DESKTOP_RELEASE_ENV` when that secret exists, and the
+#      "Assert release host is publishable" step below fails the job before any build work if
+#      the resolved API/Reverb host is a loopback or link-local name. Until the secret is
+#      configured this job therefore fails fast and on purpose, instead of publishing a signed
+#      installer that talks to the runner's own localhost.
 #
 # Bundle targets (MSI+NSIS on Windows, DMG on macOS, AppImage+deb on Linux) are NOT
 # chosen by this workflow — they come from `desktop/src-tauri/tauri.conf.json`'s
@@ -137,18 +141,55 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # F3-E precondition (blocker #2 from the top-of-file note): `desktop/scripts/tauri.mjs`
-      # builds the packaged app's CSP from `../frontend/.env` (E.5.2 ACIK 1, closed). That
-      # file is gitignored and does not exist in CI. Seeding it from `.env.example` here
-      # keeps this workflow syntactically/mechanically exercisable, but it means the CSP
-      # `connect-src`/`img-src` hosts in ANY release built by this workflow as it stands
-      # today are `localhost` — NOT a real backend. Before this workflow can cut a real
-      # publishable release, F7 must replace this step with a real production
-      # `frontend/.env` (repo/environment secret or generated from vars), matching the same
-      # `VITE_API_URL`/`VITE_REVERB_*` contract KARAR D-3/D-2 already define.
-      - name: Seed frontend/.env for CSP generation (placeholder — see F7 note above)
+      # `desktop/scripts/tauri.mjs` builds the packaged app's CSP *and* the `SYNCRA_API_URL`
+      # baked into the binary from `../frontend/.env` (E.5.2 ACIK 1 / KARAR D-2, D-3). That
+      # file is gitignored and does not exist on a runner, so the release env has to be
+      # provided as a secret whose content is a literal `.env` body:
+      #
+      #   secrets.DESKTOP_RELEASE_ENV
+      #     VITE_API_URL=https://<production host>
+      #     VITE_REVERB_APP_KEY=<key>
+      #     VITE_REVERB_HOST=<production websocket host>
+      #     VITE_REVERB_PORT=<port>
+      #     VITE_REVERB_SCHEME=https
+      #
+      # The `.env.example` fallback is kept ONLY so this workflow stays mechanically
+      # exercisable end to end; it is localhost and the assert step below rejects it. `shell:
+      # bash` is explicit because this job also runs on `windows-latest`, where the default
+      # shell is pwsh.
+      - name: Seed frontend/.env for the packaged build
         working-directory: frontend
-        run: cp .env.example .env
+        shell: bash
+        env:
+          DESKTOP_RELEASE_ENV: ${{ secrets.DESKTOP_RELEASE_ENV }}
+        run: |
+          if [ -n "$DESKTOP_RELEASE_ENV" ]; then
+            printf '%s\n' "$DESKTOP_RELEASE_ENV" > .env
+            echo "frontend/.env written from secrets.DESKTOP_RELEASE_ENV"
+          else
+            cp .env.example .env
+            echo "::warning::secrets.DESKTOP_RELEASE_ENV is not set; fell back to the localhost frontend/.env.example. The release-host assert below will fail this job on purpose."
+          fi
+
+      # Open item O27 — the gate that makes blocker #2 a build failure instead of a comment.
+      #
+      # `VITE_API_URL` and `VITE_REVERB_*` are not runtime settings: the wrapper turns them
+      # into `SYNCRA_API_URL` (frozen into the binary by `state.rs`' `option_env!`) and into
+      # `app.security.csp` (frozen into the packaged webview). If they name the build
+      # machine — localhost, 127.0.0.0/8, ::1, a `.local` mDNS name — the published installer
+      # is a signed artifact that quietly talks to the end user's own computer. Nothing in the
+      # build or in `tauri-action` notices that; this step does, and it runs BEFORE the
+      # expensive build so the job fails in seconds.
+      #
+      # Deliberately NOT part of `desktop-ci.yml`: building against localhost is correct
+      # there (`tauri build --debug` matrix, `desktop-release-smoke`), so the check belongs on
+      # the release path only. `scripts/check-release-host.mjs` shares its resolution code with
+      # `scripts/tauri.mjs` (`scripts/build-env.mjs`), so it gates the exact values the build
+      # would inject rather than a re-implementation of them.
+      - name: Assert release host is publishable (no loopback/link-local)
+        working-directory: desktop
+        shell: bash
+        run: npm run check:release-host
 
       # tauri-action builds the app, creates/updates a (draft) GitHub Release tagged
       # with the pushed `desktop-v*` tag, uploads the platform bundle(s), and — because

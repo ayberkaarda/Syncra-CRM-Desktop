@@ -19,9 +19,27 @@ import type {
 } from '@/platform/types'
 
 import { http } from '../http'
-import { listPage, MAX_PAGE, num, runQuery, toInt, type EntityName, type LocalRow } from './engine'
+import {
+  listPage,
+  MAX_PAGE,
+  num,
+  rowId,
+  runQuery,
+  sortParams,
+  text,
+  toInt,
+  type EntityName,
+  type LocalRow,
+} from './engine'
 import { loadRefs, loadRefsByIds, type RefIndex } from './refs'
-import { loadTagRefs } from './crm'
+import {
+  customFieldRecords,
+  formCompanyOptions,
+  formContactOptions,
+  formTagOptions,
+  loadTagRefs,
+  userOptions,
+} from './crm'
 import {
   mapActivity,
   mapQuote,
@@ -338,6 +356,52 @@ export const ticketsSource: TicketsSource = {
     const row = await readBack('ticket', id)
     return mapTicket(row, await ticketRefs([row]))
   },
+
+  // ---- form lookups (defter O42) ---------------------------------------------------------
+  //
+  // The ticket form's six pickers, rebuilt from the mirror. Four of them read through the
+  // helpers `crm.ts` shares with the deal form (`formTagOptions`, `customFieldRecords`,
+  // `formContactOptions`, `formCompanyOptions`); the two that are ticket-specific in shape are
+  // spelled out here.
+
+  /** `GET /api/tags` — the tag picker and the tickets list's tag filter. */
+  tags: () => formTagOptions(),
+
+  /** `GET /api/custom-fields?entity_type=tickets`. */
+  customFields: () => customFieldRecords('tickets'),
+
+  /** `GET /api/contacts?filter[company_id]&q&per_page=20&sort=last_name`. */
+  contactOptions: (companyId, search) => formContactOptions(companyId, search),
+
+  /** `GET /api/companies?q&per_page=20&sort=name` — the form's searchable combobox. */
+  companyOptions: (search) => formCompanyOptions(search),
+
+  /**
+   * `GET /api/companies?per_page=100&sort=name` — the list page's fixed company filter. A
+   * second, wider read of `company_list` rather than a call into `companyOptions`: the two
+   * differ in page size and carry no search term in common, and the list filter must offer the
+   * same 100 companies whether or not the form's combobox has been typed into.
+   */
+  allCompanyOptions: async () => {
+    const rows = await runQuery({ query: 'company_list' }, { limit: 100, ...sortParams('name') })
+    return rows.map((row) => ({ id: rowId(row), name: text(row.name) }))
+  },
+
+  /**
+   * `GET /api/users?per_page=100` — the assignee select and the assignee filter, offline.
+   *
+   * The SHARED `userOptions()` helper `contacts.userOptions`, `companies.userOptions`,
+   * `tasks.userOptions`, `leads.ownerOptions` and `deals.ownerOptions` already read through,
+   * and emphatically NOT `users.list`: that one is `SYNCDESKTOP.md` §8 online-only (KARAR
+   * A15), so an assignee dropdown fed from it would be empty on a plane. `users` is a
+   * read-only, non-windowed projection (§4.1, K2).
+   *
+   * `useTicketUserOptions` reports `isForbidden` off a 403 from the web request; there is no
+   * 403 to read here, so the desktop simply shows the pickers. That is the mirror's honest
+   * answer — it holds no per-user policy — and it is the same behaviour every other offline
+   * `userOptions` already has.
+   */
+  userOptions: () => userOptions(),
 }
 
 /** See `crm.ts` — `tag_ids` is the REST field, `tags` the mirror column; both travel. */

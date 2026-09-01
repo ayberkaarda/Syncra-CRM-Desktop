@@ -2,7 +2,7 @@
 
 > ## ⚠️ BU DEPO ARTIK MASAÜSTÜ PROJESİDİR — ÖNCE BURAYI OKU
 >
-> **Son güncelleme: 2026-08-31 · branch `feat/desktop`**
+> **Son güncelleme: 2026-09-01 · branch `feat/desktop`**
 >
 > Aşağıdaki "Faz 0-15 tamamlandı, proje teslim edildi" metni **tamamlanmış web projesinin** tarihçesidir ve hâlâ doğrudur — ama **bu deponun bugünkü işi o değil.** Bu kopya, `SYNCDESKTOP.md`'ye göre Tauri 2 tabanlı offline-first bir masaüstü istemcisi ekliyor.
 >
@@ -18,8 +18,8 @@
 > | F3 Tauri kabuğu + adaptör | ✅ 128/128 metot bağlı (A19), A11 realtime köprüsü, 30/30 Tauri komutu — crate **160** + kabuk **113** + vitest **278** |
 > | F4 Offline UX | ✅ 5 ekran + gerçek senaryo koşumu (16,3 sn, yeniden başlatma yok, 0 reddedilen) |
 > | F5 OS özellikleri | ✅ 8 maddenin 8'i Windows'ta **elle ölçüldü** — tray · native bildirim · hotkey quick-capture · deep link (soğuk başlangıç dahil) · drag-drop + PDF cache · pano opt-in · autostart/window-state/badge · screenshot→ticket. **JumpList "son 5 kayıt" F7'ye devredildi** (defter O85, SYNCDESKTOP §6.4/§10 güncellendi): paketlenmiş kurulum olmadan doğrulanamaz. Ölçüm 4 üretim hatası buldu, 4'ü de kapandı (O80/O81/O86/O88). |
-> | F6 Güvenlik | ⏳ `docs/DESKTOP-THREAT-MODEL.md` + §9/9 log filtresi |
-> | F7 Paketleme + CI | ⏳ workflow'lar yazıldı, **hiç çalıştırılmadı** |
+> | F6 Güvenlik | ⏳ `docs/DESKTOP-THREAT-MODEL.md` (767 satır, bulgu/düzeltme tablosuyla) + §9 listesinin 8/10'u KAPALI. Kalan iki madde başka fazlara bağlıydı ve **ikisi de artık çözülebilir**: §9/6 pano (F5 kodu geldi), §9/8 updater imza doğrulaması (O12 kapandı — imzasız manifest reddi gerçek bir imzalı sürümle ölçülmeli) |
+> | F7 Paketleme + CI | ⏳ **O12 kapandı — paketlenmiş uygulama artık açılıyor** (release build EXIT=0, exe 10 sn ayakta). O4/O27 fail-closed guard'ları, `desktop-release-smoke` işi, `rust-version 1.89`, CI apt düzeltmeleri yerinde. **Kalan:** bundle (MSI+NSIS) üretip kurulumdan doğrulama (O85 JumpList, O86 soğuk başlangıç), oturum-açık boşta RAM ölçümü (<400 MB Private Bytes), MSI < 25 MB, ve **CI'ın gerçekten koşması** — push kullanıcıda (§0.2) |
 >
 > ### En kritik bilgi
 >

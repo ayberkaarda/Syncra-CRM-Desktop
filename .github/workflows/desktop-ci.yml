@@ -443,6 +443,10 @@ jobs:
       # exercises the CSP-generation path end-to-end; it is NOT a production host and must
       # not be treated as one (see the F7 precondition note in desktop-release.yml for the
       # real-host requirement on a signed release build).
+      #
+      # O27: `npm run check:release-host` — the gate that REJECTS these localhost values — is
+      # deliberately not run in this workflow. Building CI against localhost is correct; only
+      # `desktop-release.yml` (which publishes to end users) is entitled to demand a real host.
       - name: Seed frontend/.env for CSP generation (CI has no real one; gitignored)
         working-directory: frontend
         run: cp .env.example .env
@@ -557,6 +561,11 @@ jobs:
       # `desktop/scripts/tauri.mjs` derives the production CSP from `../frontend/.env`, which
       # is gitignored and does not exist on a runner. Seeded from the example so the CSP path
       # is exercised; these are localhost hosts and are NOT a production configuration.
+      #
+      # This seeding is also what keeps `src-tauri/build.rs`'s release guard (O4) satisfied:
+      # the build below is the RELEASE profile, and that guard refuses any release build whose
+      # `SYNCRA_API_URL` / CSP overlay did not come from the wrapper. Localhost is accepted
+      # here on purpose — the loopback rejection lives in `desktop-release.yml`, not in CI.
       - name: Seed frontend/.env for CSP generation (CI has no real one; gitignored)
         working-directory: frontend
         run: cp .env.example .env

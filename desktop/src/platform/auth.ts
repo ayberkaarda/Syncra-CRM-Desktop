@@ -628,15 +628,17 @@ function loginFailure(config: RequestConfig, error: unknown): Promise<never> {
  * Tell the user the server-side token could not be revoked, after a logout that wiped the
  * device anyway (`LogoutOutcome::WipedLocalOnly`).
  *
- * The recourse is the Devices page, so the sentence is built from the two `desktop:devices.*`
- * keys that say exactly that — "an error occurred while signing out the device" plus "manage
- * the devices linked to this account". `desktop.logout` has no key of its own for this variant;
- * inventing one would mean writing `frontend/src/i18n/locales/**`, which this strand may not do,
- * and hard-coding the sentence is forbidden outright (§0.6). Reported as missing vocabulary.
+ * defter O26: this used to be built by concatenating two `desktop:devices.*` keys borrowed for
+ * their wording ("an error occurred while signing out the device" + "manage the devices linked
+ * to this account") because `desktop.logout` had no key of its own and this strand could not
+ * write `frontend/src/i18n/locales/**`. That borrow was correct in all four languages but
+ * incidental: if either `devices.revokeError` or `devices.subtitle` ever changed for a reason
+ * specific to the Devices page, this sentence would silently drift with it. `desktop:logout.wipedLocalOnly`
+ * now owns this exact meaning under its own key, in all four locales.
  */
 function warnLocalOnlyLogout(reason: string): void {
   console.warn('[desktop] logout could not revoke the device token on the server:', reason)
-  toast.warning(`${translate('desktop:devices.revokeError')} ${translate('desktop:devices.subtitle')}`)
+  toast.warning(translate('desktop:logout.wipedLocalOnly'))
 }
 
 /** The request body, after axios' `transformRequest` has already turned it into JSON. */

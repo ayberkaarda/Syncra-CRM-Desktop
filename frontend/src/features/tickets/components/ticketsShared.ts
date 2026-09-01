@@ -5,7 +5,16 @@
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../../lib/axios'
+import { getPlatform } from '../../../platform'
 import type { CompanyOption, ContactOption, TicketCustomField, UserOption } from '../types'
+
+/**
+ * A tag as the ticket pickers consume it. `color` is `string | null` because that is what
+ * `GET /api/tags` returns for an uncoloured tag; `../types` declares no `Tag` of its own.
+ * Named rather than inline so `platform/types.ts` can declare `tickets.tags` against exactly
+ * the shape this module always returned.
+ */
+export type TicketTagOption = { id: number; name: string; color: string | null }
 
 export const ticketTagsKeys = { all: ['tags'] as const }
 export const ticketCustomFieldsKeys = { tickets: ['custom-fields', 'tickets'] as const }
@@ -15,19 +24,25 @@ export const ticketContactOptionsKeys = {
 export const ticketCompanyOptionsSearchKeys = { search: (q: string) => ['tickets', 'company-options', 'search', q] as const }
 export const ticketUserOptionsKeys = { all: ['tickets', 'user-options'] as const }
 
-async function fetchTicketTags(): Promise<{ id: number; name: string; color: string | null }[]> {
-  const { data } = await api.get<{ data: { id: number; name: string; color: string | null }[] }>('/api/tags')
+// The six fetchers below are the WEB half of `platform.data.tickets.{tags,customFields,
+// contactOptions,companyOptions,allCompanyOptions,userOptions}`; `platform/web.ts` delegates to
+// them by name, so each request stays defined exactly once, next to the query key it fills. The
+// hooks underneath go through `getPlatform()` instead of calling them directly, which is what
+// lets the desktop adapter answer the same six lookups from the local mirror (defter O42).
+
+export async function fetchTicketTags(): Promise<TicketTagOption[]> {
+  const { data } = await api.get<{ data: TicketTagOption[] }>('/api/tags')
   return data.data
 }
 
-async function fetchTicketCustomFields(): Promise<TicketCustomField[]> {
+export async function fetchTicketCustomFields(): Promise<TicketCustomField[]> {
   const { data } = await api.get<{ data: TicketCustomField[] }>('/api/custom-fields', {
     params: { entity_type: 'tickets' },
   })
   return data.data
 }
 
-async function fetchTicketContactOptions(companyId: number | undefined, search: string): Promise<ContactOption[]> {
+export async function fetchTicketContactOptions(companyId: number | undefined, search: string): Promise<ContactOption[]> {
   const { data } = await api.get<{ data: ContactOption[] }>('/api/contacts', {
     params: {
       q: search || undefined,
@@ -39,14 +54,19 @@ async function fetchTicketContactOptions(companyId: number | undefined, search: 
   return data.data
 }
 
-async function fetchTicketCompanyOptionsSearch(search: string): Promise<CompanyOption[]> {
+export async function fetchTicketCompanyOptionsSearch(search: string): Promise<CompanyOption[]> {
   const { data } = await api.get<{ data: CompanyOption[] }>('/api/companies', {
     params: { q: search || undefined, per_page: 20, sort: 'name' },
   })
   return data.data
 }
 
-async function fetchTicketUserOptions(): Promise<UserOption[]> {
+export async function fetchTicketAllCompanyOptions(): Promise<CompanyOption[]> {
+  const { data } = await api.get<{ data: CompanyOption[] }>('/api/companies', { params: { per_page: 100, sort: 'name' } })
+  return data.data
+}
+
+export async function fetchTicketUserOptions(): Promise<UserOption[]> {
   const { data } = await api.get<{ data: UserOption[] }>('/api/users', { params: { per_page: 100 } })
   return data.data
 }
@@ -54,7 +74,7 @@ async function fetchTicketUserOptions(): Promise<UserOption[]> {
 export function useTicketTags() {
   return useQuery({
     queryKey: ticketTagsKeys.all,
-    queryFn: fetchTicketTags,
+    queryFn: () => getPlatform().data.tickets.tags(),
     staleTime: 5 * 60_000,
   })
 }
@@ -62,7 +82,7 @@ export function useTicketTags() {
 export function useTicketCustomFields() {
   return useQuery({
     queryKey: ticketCustomFieldsKeys.tickets,
-    queryFn: fetchTicketCustomFields,
+    queryFn: () => getPlatform().data.tickets.customFields(),
     staleTime: 5 * 60_000,
   })
 }
@@ -70,7 +90,7 @@ export function useTicketCustomFields() {
 export function useTicketContactOptions(companyId: number | undefined, search = '', options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ticketContactOptionsKeys.forCompany(companyId, search),
-    queryFn: () => fetchTicketContactOptions(companyId, search),
+    queryFn: () => getPlatform().data.tickets.contactOptions(companyId, search),
     enabled: options?.enabled ?? true,
   })
 }
@@ -79,7 +99,7 @@ export function useTicketContactOptions(companyId: number | undefined, search = 
 export function useTicketCompanyOptionsSearch(search: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ticketCompanyOptionsSearchKeys.search(search),
-    queryFn: () => fetchTicketCompanyOptionsSearch(search),
+    queryFn: () => getPlatform().data.tickets.companyOptions(search),
     enabled: options?.enabled ?? true,
   })
 }
@@ -92,10 +112,7 @@ export function useTicketCompanyOptionsSearch(search: string, options?: { enable
 export function useTicketCompanyOptions() {
   const query = useQuery({
     queryKey: ['tickets', 'company-options', 'all'] as const,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: CompanyOption[] }>('/api/companies', { params: { per_page: 100, sort: 'name' } })
-      return data.data
-    },
+    queryFn: () => getPlatform().data.tickets.allCompanyOptions(),
     staleTime: 300_000,
     retry: false,
   })
@@ -108,7 +125,7 @@ export function useTicketCompanyOptions() {
 export function useTicketUserOptions() {
   const query = useQuery({
     queryKey: ticketUserOptionsKeys.all,
-    queryFn: fetchTicketUserOptions,
+    queryFn: () => getPlatform().data.tickets.userOptions(),
     staleTime: 300_000,
     retry: false,
   })

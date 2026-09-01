@@ -24,6 +24,7 @@
     "USER_INACTIVE": "Your account has been deactivated.",
     "INVALID_CREDENTIALS": "Incorrect email or password.",
     "PENDING_MUTATIONS": "You have changes that haven't synced yet. Sync first, or sign out anyway.",
+    "ROW_NOT_LOCAL": "This record isn't in your local copy — it may be outside the retention period. It becomes visible once you're back online.",
     "unknown": "An unknown error occurred."
   },
   "onlineOnly": {
@@ -77,7 +78,8 @@
     "description": "This device has changes that haven't been sent to the server yet. We recommend syncing before you sign out.",
     "discardWarning_one": "Signing out will discard {{count}} unsent change.",
     "discardWarning_other": "Signing out will discard {{count}} unsent changes.",
-    "force": "Sign out anyway"
+    "force": "Sign out anyway",
+    "wipedLocalOnly": "This device was signed out locally, but its record on the server could not be removed. You can manage it from the Devices page."
   },
   "bootstrap": {
     "title": "Initial setup",

@@ -24,6 +24,7 @@
     "USER_INACTIVE": "Hesabınız pasifleştirildi.",
     "INVALID_CREDENTIALS": "E-posta veya şifre hatalı.",
     "PENDING_MUTATIONS": "Senkronize edilmemiş değişiklikleriniz var. Önce senkronize edin veya zorla çıkış yapın.",
+    "ROW_NOT_LOCAL": "Bu kayıt cihazınızdaki yerel kopyada yok; saklama süresinin dışında kalmış olabilir. Çevrimiçi olduğunuzda görüntülenebilir.",
     "unknown": "Bilinmeyen bir hata oluştu."
   },
   "onlineOnly": {
@@ -77,7 +78,8 @@
     "description": "Bu cihazda henüz sunucuya gönderilmemiş değişiklikleriniz var. Çıkış yapmadan önce senkronize etmenizi öneririz.",
     "discardWarning_one": "Çıkış yaparsanız {{count}} gönderilmemiş değişiklik kaybolacak.",
     "discardWarning_other": "Çıkış yaparsanız {{count}} gönderilmemiş değişiklik kaybolacak.",
-    "force": "Yine de çıkış yap"
+    "force": "Yine de çıkış yap",
+    "wipedLocalOnly": "Bu cihazın oturumu yerel olarak kapatıldı, ancak sunucudaki cihaz kaydı kaldırılamadı. Cihazlar sayfasından yönetebilirsiniz."
   },
   "bootstrap": {
     "title": "İlk kurulum",

@@ -163,7 +163,6 @@ export interface EngineEventHandlers {
    */
   onTablesChanged?: (entities: readonly EntityName[]) => void
   onStatusChanged?: (status: unknown) => void
-  onConflictAdded?: (id: string) => void
   onStorageWarning?: (stats: unknown) => void
   onAuthLost?: () => void
   onProtocolMismatch?: (serverVersion: number) => void
@@ -191,7 +190,17 @@ export function applyEngineEvent(
       handlers.onStatusChanged?.(event.status)
       return
     case 'conflict_added':
-      handlers.onConflictAdded?.(event.id)
+      // Deliberately a no-op (defter O60). `syncra_sync::sync::mod::push_round` emits ONE of
+      // these per new conflict id, from inside the same round that unconditionally calls
+      // `refresh_status()` right after — so every `conflict_added` this bridge could ever see
+      // is immediately followed, in the same round, by a `status_changed` whose `conflicts`
+      // count already reflects it (`sync/mod.rs:544-546` vs. `:464`). `ConflictInbox.tsx`
+      // already re-fetches its list on that count changing, and `DesktopPanel`'s tab badge
+      // renders the same count live — wiring this event too would not add information, only a
+      // second, redundant trigger for the same refresh (and a second toast, if one were ever
+      // added here). The Rust emission itself stays: it is the wire contract
+      // (`crates/syncra-sync/src/events.rs`), owned outside this strand, and other future
+      // consumers may still want the per-conflict id `status_changed` does not carry.
       return
     case 'storage_warning':
       handlers.onStorageWarning?.(event.stats)

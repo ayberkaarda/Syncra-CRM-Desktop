@@ -56,6 +56,11 @@ const KNOWN_ERROR_CODES = new Set<string>([
   'FILE_TYPE_REJECTED',
   'FILE_TOO_LARGE',
   'QUEUE_FULL',
+  // O91: `MissingRowError` (`platform/data/engine.ts`) — a read addressed a row the local
+  // mirror does not currently hold (outside the retention window, or not pulled yet). Structural
+  // signal, not a generic failure: a page that sees this code can say so instead of showing the
+  // same sentence a real error would.
+  'ROW_NOT_LOCAL',
 ])
 
 /** `HTTP_403` and friends — `commands/auth.rs` builds this shape from any non-2xx response. */

@@ -65,23 +65,21 @@ pub fn run() {
         }));
     }
 
-    // ⚠️ THE UPDATER MINE (`docs/DESKTOP-ARCHITECTURE.md` §E.5.3). `tauri-plugin-updater`'s
-    // `Config` has a mandatory, default-less `pubkey: String`, read out of `plugins.updater` in
-    // `tauri.conf.json`. That block does not exist yet — F7 owns the real minisign key and the
-    // release manifest — so registering the plugin unconditionally makes `.setup()` fail and the
-    // app never opens at all. That is what blocked `tauri dev` before this turn.
+    // THE UPDATER MINE, defused (`docs/DESKTOP-ARCHITECTURE.md` §E.5.3, open item O12).
+    // `tauri-plugin-updater`'s `Config` has a mandatory, default-less `pubkey: String`, read out
+    // of `plugins.updater` in `tauri.conf.json`. That block was missing until F7, so registering
+    // the plugin made `.setup()` fail and the app never opened at all — measured, not predicted:
+    // `PluginInitialization("updater", "invalid type: null, expected struct Config")`, exit 101.
     //
-    // Fix chosen: register it only where it can actually do something, i.e. NOT in a debug build.
-    // The alternative (writing a throwaway pubkey into `tauri.conf.json`) was rejected: a fake
-    // signing key committed to the repo is the kind of placeholder that survives to production.
-    //
-    // Consequence, recorded on purpose: a real `--release` build still needs `plugins.updater`
-    // present. `tauri build --debug` (what CI runs) keeps `debug_assertions` on and is therefore
-    // unaffected. F7's FIRST task is to add the block and delete this `cfg`.
-    #[cfg(not(debug_assertions))]
-    {
-        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
-    }
+    // It used to be registered under `#[cfg(not(debug_assertions))]` so `tauri dev` could run at
+    // all. That `cfg` is gone on purpose, and its absence is the point: CI builds with
+    // `--debug`, which keeps `debug_assertions` on, so a `cfg(not(debug_assertions))` block is
+    // never compiled there — the panic above could not have been caught by any CI job. The
+    // registration is now unconditional, which means every build (debug, CI, release) exercises
+    // the same plugin-init path, and `desktop-ci.yml`'s Windows release smoke exercises the same
+    // binary shape we ship. Signing key: minisign `3E1D6B1F3C9F300F`, private half held only by
+    // the repo owner and in `TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)`, never in this tree.
+    builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder
         // `StateFlags::default()` is `all()`, which includes `VISIBLE` — and that one is a
@@ -115,10 +113,23 @@ pub fn run() {
         // Level and format are not the plugin's defaults (`Trace`, unmasked) — see
         // `logging.rs` (SYNCDESKTOP §9/9): release must not write DEBUG to disk, and no
         // record — ours or a dependency's — reaches any sink without the PII mask applied.
+        //
+        // Rotation is not the plugin's defaults either (O92): unconfigured, this plugin
+        // rotates at `RotationStrategy::KeepOne` (`tauri-plugin-log` 2.9.0,
+        // `DEFAULT_ROTATION_STRATEGY`) once `Syncra.log` crosses `DEFAULT_MAX_FILE_SIZE` —
+        // 40,000 bytes. `KeepOne`'s `rotate()` calls `fs::remove_file` on the file that just
+        // hit the cap, with no rename first — the lines in it are gone, not archived. At the
+        // default ~40 KB threshold that firing routinely mid-measurement was exactly the
+        // failure mode O92 caught: a `deep link rejected` line present on one run's disk and
+        // silently rotated away on the next. `logging::LOG_MAX_FILE_SIZE_BYTES` and
+        // `logging::LOG_ROTATION_STRATEGY` fix both factors — see `logging.rs` for the
+        // reasoning behind each value.
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(logging::level_for_build())
                 .format(logging::masking_format)
+                .max_file_size(logging::LOG_MAX_FILE_SIZE_BYTES)
+                .rotation_strategy(logging::LOG_ROTATION_STRATEGY)
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![

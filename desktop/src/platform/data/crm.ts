@@ -46,6 +46,7 @@ import {
   pagination,
   rowId,
   runQuery,
+  sortParams,
   str,
   text,
   toInt,
@@ -55,6 +56,7 @@ import {
 import { loadCounts, loadRefs, loadRefsByIds, EMPTY_REFS } from './refs'
 import {
   activityTimelineItem,
+  fullName,
   fullNameRef,
   mapCompany,
   mapContact,
@@ -477,6 +479,26 @@ export const dealsSource: DealsSource = {
    * (`SYNCDESKTOP.md` §4.1, K2), so the local copy is the whole set.
    */
   ownerOptions: () => userOptions(),
+
+  /**
+   * `GET /api/tags`, rebuilt from the `tags` mirror — the deal form's tag picker and the deals
+   * list's tag filter, offline. `tags` is a read-only, non-windowed projection
+   * (`SYNCDESKTOP.md` §4.1, K2), so the local copy is the whole set.
+   */
+  tags: () => formTagOptions(),
+
+  /**
+   * `GET /api/custom-fields?entity_type=deals`. The entity type is what makes this a DEALS
+   * verb: `contacts.customFields()` reads the same `custom_field_list` query pinned to
+   * `contacts`, and answering the deal form from it would offer the wrong fields.
+   */
+  customFields: () => customFieldRecords('deals'),
+
+  /** `GET /api/contacts?filter[company_id]&q&per_page=20&sort=last_name`, from the mirror. */
+  contactOptions: (companyId, search) => formContactOptions(companyId, search),
+
+  /** `GET /api/companies?q&per_page=20&sort=name`, from the mirror. */
+  companyOptions: (search) => formCompanyOptions(search),
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -775,7 +797,7 @@ async function customFieldDefs(entityType: string): Promise<ContactCustomFieldDe
  * The same definitions in the richer `CustomField` shape leads declares (`name`,
  * `entity_type`, `is_required`, `position`, and `options: string[] | null`).
  */
-async function customFieldRecords(entityType: string): Promise<LeadCustomField[]> {
+export async function customFieldRecords(entityType: string): Promise<LeadCustomField[]> {
   const rows = await runQuery({ query: 'custom_field_list', entity_type: entityType }, { limit: MAX_PAGE })
   return rows.map((row) => ({
     id: rowId(row),
@@ -787,6 +809,66 @@ async function customFieldRecords(entityType: string): Promise<LeadCustomField[]
     is_required: Boolean(row.is_required),
     position: Number(row.position ?? 0),
   }))
+}
+
+// ------------------------------------------------------------------------------------------------
+// Form lookups (defter O42)
+//
+// The deal form and the ticket form fill four of their pickers from the same three requests, so
+// the three live here once and both `dealsSource` (below) and `ticketsSource` (`work.ts`) read
+// through them — the reasoning `userOptions()` states for owner pickers, applied to the rest of
+// the form.
+//
+// They are NOT the `contacts.*` members that answer the neighbouring requests. Those are the
+// CONTACT module's verbs: `contacts.customFields` pins `entity_type=contacts`, and
+// `contacts.tags` narrows `color` to `string` because that is what `ContactTag` declares. Every
+// domain owning its own verb over a shared read is the convention here (`contacts.userOptions`,
+// `companies.userOptions`, `tasks.userOptions`, `leads.ownerOptions`, `deals.ownerOptions` are
+// five members over one `user_list` read).
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * `GET /api/tags` for the deal/ticket form pickers, which type `color` as `string | null` —
+ * the null a tag with no colour really has, kept rather than flattened to `''`.
+ */
+export async function formTagOptions(): Promise<{ id: number; name: string; color: string | null }[]> {
+  const rows = await runQuery({ query: 'tag_list' }, { limit: MAX_PAGE })
+  return rows.map((row) => ({ id: rowId(row), name: text(row.name), color: str(row.color) }))
+}
+
+/**
+ * The contact picker both forms use: `GET /api/contacts` narrowed to the selected company,
+ * `per_page=20`, `sort=last_name`.
+ *
+ * `companyId` falsy means "no company selected" — the filter parameter the web request simply
+ * omits, so the local read omits the column filter too rather than matching `company_id = 0`.
+ * `full_name` is rebuilt with the same `fullName()` accessor every mapper uses, so the label
+ * offline is the label online.
+ */
+export async function formContactOptions(
+  companyId: number | undefined,
+  search: string,
+): Promise<{ id: number; full_name: string }[]> {
+  const rows = await runQuery(
+    { query: 'contact_list', company_id: companyId || undefined, q: search || undefined },
+    { limit: 20, ...sortParams('last_name') },
+  )
+  return rows.map((row) => ({ id: rowId(row), full_name: fullName(row) }))
+}
+
+/**
+ * The SEARCHABLE company combobox both forms use — `GET /api/companies?q&per_page=20&sort=name`.
+ *
+ * The `sort=name` the web request carries is passed through here (`contacts.companyOptions`
+ * predates this helper and leaves the order to the query's natural one; it is left exactly as
+ * approved rather than quietly changed).
+ */
+export async function formCompanyOptions(search: string): Promise<{ id: number; name: string }[]> {
+  const rows = await runQuery(
+    { query: 'company_list', q: search || undefined },
+    { limit: 20, ...sortParams('name') },
+  )
+  return rows.map((row) => ({ id: rowId(row), name: text(row.name) }))
 }
 
 /** `{id, name}` options for owner/assignee pickers, from the `users` mirror projection. */

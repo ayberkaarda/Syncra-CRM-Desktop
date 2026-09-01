@@ -20,6 +20,16 @@ import * as companies from '../features/companies/api/companiesApi'
 import * as leads from '../features/leads/api/leadsApi'
 import * as tasks from '../features/tasks/api/tasksApi'
 import * as tickets from '../features/tickets/api/ticketsApi'
+// The deal-form and ticket-form lookups (tags, custom-field definitions, the contact picker and
+// the searchable company combobox) are the one group whose plain fetchers do NOT live in an
+// `api/` module: both feature modules keep them next to the query keys they fill, in
+// `components/<domain>Shared.ts` — see those files' headers. Delegating to them from here rather
+// than re-issuing the requests keeps each one defined exactly once. The import cycle this closes
+// (`web.ts` -> `dealsShared.ts` -> `platform/index.ts` -> `web.ts`) is the same legitimate one
+// every feature api module already forms, and it is harmless for the same reason: the members
+// below are arrow wrappers, so `<ns>.<fn>` resolves at CALL time, not at module evaluation.
+import * as dealsShared from '../features/deals/components/dealsShared'
+import * as ticketsShared from '../features/tickets/components/ticketsShared'
 import * as quotes from '../features/quotes/api/quotesApi'
 import * as activities from '../features/activities/api/activitiesApi'
 import * as chat from '../features/chat/api'
@@ -127,6 +137,10 @@ const data: Platform['data'] = {
     // than copied: both verbs are `GET /api/users?per_page=100`, and a second local fetcher
     // would be a second place for that request to drift.
     ownerOptions: () => leads.fetchOwnerOptions(),
+    tags: () => dealsShared.fetchDealTags(),
+    customFields: () => dealsShared.fetchDealCustomFields(),
+    contactOptions: (companyId, search) => dealsShared.fetchDealContactOptions(companyId, search),
+    companyOptions: (search) => dealsShared.fetchDealCompanyOptionsSearch(search),
   },
   contacts: {
     list: (query) => contacts.fetchContacts(query),
@@ -187,6 +201,15 @@ const data: Platform['data'] = {
     delete: (id) => tickets.deleteTicketRequest(id),
     status: (id, status) => tickets.changeTicketStatusRequest(id, status),
     assign: (id, assignedTo) => tickets.assignTicketRequest(id, assignedTo),
+    tags: () => ticketsShared.fetchTicketTags(),
+    customFields: () => ticketsShared.fetchTicketCustomFields(),
+    contactOptions: (companyId, search) => ticketsShared.fetchTicketContactOptions(companyId, search),
+    companyOptions: (search) => ticketsShared.fetchTicketCompanyOptionsSearch(search),
+    allCompanyOptions: () => ticketsShared.fetchTicketAllCompanyOptions(),
+    // NOT `contacts.fetchUserOptions()`: this request carries no `sort` parameter. The two are
+    // transcribed as they stand rather than harmonised — changing a web request is not this
+    // item's business.
+    userOptions: () => ticketsShared.fetchTicketUserOptions(),
   },
   quotes: {
     list: (query) => quotes.fetchQuotes(query),

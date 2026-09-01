@@ -1,4 +1,4 @@
-// The wiring table: what every one of the 128 `DataSource` methods is actually bound to.
+// The wiring table: what every one of the 138 `DataSource` methods is actually bound to.
 //
 // This exists so the classification can be **checked** rather than asserted in prose.
 // `desktop/scripts/check-data-wiring.mjs` reads three things and cross-references them:
@@ -57,7 +57,7 @@ export interface MethodBinding {
 }
 
 /**
- * `"<domain>.<method>"` -> binding, for all 128 methods of `DataSource`.
+ * `"<domain>.<method>"` -> binding, for all 138 methods of `DataSource`.
  *
  * Ordered exactly as `frontend/src/platform/types.ts` declares them, so the two can be read
  * side by side.
@@ -84,6 +84,19 @@ export const DATA_METHOD_MANIFEST: Record<string, MethodBinding> = {
   // `leads.ownerOptions`, through the same shared helper. NOT `users.list`: that one is
   // §8 online-only (see below), and an owner filter fed from it would be empty offline.
   'deals.ownerOptions': { kind: 'query', via: 'user_list' },
+  // The deal FORM's four lookups (defter O42). Before this they were four raw `api.get` calls
+  // inside `features/deals/components/dealsShared.ts`, so the form's tag, custom-field, contact
+  // and company pickers were all empty offline while the board next to them was not.
+  //
+  // Each is a deals verb rather than a call into `contacts.*`, for two different reasons worth
+  // keeping apart: `customFields` MUST be its own (the contacts verb pins
+  // `entity_type=contacts`), while the other three COULD have borrowed and do not, because a
+  // domain borrowing another domain's lookup is the anomaly this project already decided
+  // against for owner options.
+  'deals.tags': { kind: 'query', via: 'tag_list' },
+  'deals.customFields': { kind: 'query', via: 'custom_field_list' },
+  'deals.contactOptions': { kind: 'query', via: 'contact_list' },
+  'deals.companyOptions': { kind: 'query', via: 'company_list' },
 
   // ---- contacts ------------------------------------------------------------------------
   'contacts.list': { kind: 'query', via: 'contact_list' },
@@ -148,6 +161,18 @@ export const DATA_METHOD_MANIFEST: Record<string, MethodBinding> = {
   'tickets.delete': { kind: 'mutate', via: 'ticket.delete' },
   'tickets.status': { kind: 'mutate', via: 'ticket.status (action)' },
   'tickets.assign': { kind: 'mutate', via: 'ticket.assign (action)' },
+  // The ticket form's / tickets list's six lookups (defter O42) — the `ticketsShared.ts`
+  // counterpart of the four above. `userOptions` is the one that could NOT have been borrowed
+  // from an existing verb at all: the request it replaces is `GET /api/users`, and `users.list`
+  // is §8 online-only (KARAR A15), so binding the assignee picker there would have left it
+  // silently empty offline. It reads the same non-windowed `user_list` projection every other
+  // domain's owner/assignee picker reads.
+  'tickets.tags': { kind: 'query', via: 'tag_list' },
+  'tickets.customFields': { kind: 'query', via: 'custom_field_list' },
+  'tickets.contactOptions': { kind: 'query', via: 'contact_list' },
+  'tickets.companyOptions': { kind: 'query', via: 'company_list' },
+  'tickets.allCompanyOptions': { kind: 'query', via: 'company_list' },
+  'tickets.userOptions': { kind: 'query', via: 'user_list' },
 
   // ---- quotes --------------------------------------------------------------------------
   'quotes.list': { kind: 'query', via: 'quote_list' },
