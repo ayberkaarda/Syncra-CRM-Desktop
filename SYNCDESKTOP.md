@@ -15,18 +15,19 @@ Bu belge bağlayıcıdır. Belgede "ZORUNLU", "YASAK", "KARAR" ile işaretli mad
 
 ## 0. OPERASYONEL KURALLAR
 
-### 0.1 Şerit hiyerarşisi
-- **Teknik lider (sen):** planlama, sözleşme yazımı, faz bütünleştirme, şerit çıktısı doğrulama.
-- **Heavy şerit:** sync protokolü, çakışma algoritması, Rust crate tasarımı, migration risk analizi.
-- **Default şerit:** i18n key ekleme, test yazma, boilerplate, doküman güncelleme.
-- Her şeride 0.2–0.6 aynen iletilir.
+### 0.1 İş bölümü
+- **Teknik lider:** planlama, sözleşme yazımı, faz bütünleştirme, şerit çıktısı doğrulama.
+- **Ağır şerit:** sync protokolü, çakışma algoritması, Rust crate tasarımı, migration risk analizi.
+- **Standart şerit:** i18n key ekleme, test yazma, boilerplate, doküman güncelleme.
+- Her şeride §0.2–0.6 aynen iletilir.
 
 ### 0.2 Git — ZORUNLU
-- Çalışma branch'i `feat/desktop`; **ben** açarım. Sen `git status | diff | log | ls-files` dışında hiçbir git komutu çalıştırmazsın. Commit/push/stash/reset/checkout/merge/rebase/cherry-pick/branch/worktree YASAK; ben "commit et" dediğimde, verdiğim mesajla tek commit.
+- Çalışma branch'i `feat/desktop`; branch'i ve worktree'leri teknik lider açar. Şeritler `git status | diff | log | ls-files` dışında git komutu çalıştırmaz: commit/push/stash/reset/checkout/merge/rebase/cherry-pick/branch/worktree yalnızca teknik liderin işidir.
+- Commit, faz kapısında, kararlaştırılan mesajla ve **tek commit** olarak atılır. Yazma yapan bir git komutuna ihtiyaç duyan şerit onu kendisi çalıştırmaz; teknik lidere talep olarak iletir.
 
 ### 0.3 Faz kapıları — ZORUNLU
 - Her faz sonunda DUR, §11 formatında raporla, onay bekle. Onaysız sonraki faza geçmek YASAK.
-- "Çalışıyor / test ettim / doğrulandı" iddiası yalnızca komut + gerçek çıktı ile. Çalıştırılmayan test raporlanmaz. Şeridin "confirmed" dediği her şeyi kendin yeniden çalıştır.
+- "Çalışıyor / test ettim / doğrulandı" iddiası yalnızca komut + gerçek çıktı ile. Çalıştırılmayan test raporlanmaz. Bir şeridin "confirmed" dediği her şey faz kapısında teknik lider tarafından yeniden çalıştırılır.
 
 ### 0.4 Regresyon — ZORUNLU
 Her faz sonunda aşağıdakiler yeşil olmalı, çıktıları raporda:
@@ -830,6 +831,7 @@ Bu belge F0 öncesinde yazıldı ve keşif ilerledikçe **projenin en yanlış b
 
 | Bölüm | Karar ID | Ne değişti | Tarih |
 |---|---|---|---|
+| §0.2 | `docs/ENGINEERING-RULES.md` §1 | İzinli git komutlarına `ls-files` eklendi; yasak liste `merge/rebase/cherry-pick/branch/worktree` ile tamamlandı; yazma yapan komutların teknik lidere devri kayda geçti | 2026-08-31 |
 | §0.4 | `docs/ENGINEERING-RULES.md` §2 | Regresyon bloğu `docs/ENGINEERING-RULES.md` ile birebir eşitlendi; iki tuzak notu, gerçek test tabanı (1411) ve kapı-olmayan yapısal kontroller (`check:data`, `check:realtime`) eklendi | 2026-08-31 |
 | §6.2 | O5 / `check:commands` | `auth::session` listeye eklendi; `storage::stats` → `storage_stats` (üç taraf hizalandı); komut adı üçlü-tutarlılık kuralı tüm komutlara genişletildi | 2026-08-31 |
 | §6.2 | O29 | `data::get` sözleşmeden düşürüldü — kayıtlıydı, hiçbir tüketicisi yoktu; komut + `generate_handler!` + kontrolör `CONTRACT`'ı birlikte silindi | 2026-08-31 |

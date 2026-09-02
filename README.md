@@ -26,28 +26,28 @@ The desktop client ships the same CRM as the web app — leads, contacts, compan
 ### Offline-first mirror
 The engine keeps a local, SQLCipher-encrypted SQLite copy of your data (`rusqlite`, `bundled-sqlcipher-vendored-openssl`) plus an outbox of pending mutations. This isn't a read-only cache: both reading records and creating/editing them work with no network at all — a create, update, move, or delete queues in the outbox and is pushed the moment a connection comes back, in the right order. Delta sync pulls only what changed since your last `sync_version` cursor, so reconnecting after being offline doesn't mean re-downloading everything.
 
-![Offline mode](docs/images/offline-mode.png)
+<!-- TODO(screenshot): ![Offline mode](docs/images/offline-mode.png) — not captured yet; see the capture brief below. Commented out rather than left broken: a missing image renders as a broken-image icon on GitHub, which is worse than no image. -->
 <!-- capture: ConnectivityBar in the "Offline" state, with at least one record showing a pending-sync badge -->
 *The connectivity bar switches to "Offline" the moment the network drops — records you create or edit while offline carry a pending badge until they're pushed.*
 
 ### Conflict management
 When two people edit the same record and both changes reach the server, the system doesn't silently pick a winner: a server-side rule takes priority where one exists, otherwise it falls back to field-level last-write-wins, and anything still ambiguous lands in the **Conflict Inbox** for a human to resolve — keep your version, take the server's, or merge specific fields. Nothing is overwritten silently.
 
-![Conflict Inbox](docs/images/conflict-inbox.png)
+<!-- TODO(screenshot): ![Conflict Inbox](docs/images/conflict-inbox.png) — not captured yet; see the capture brief below. Commented out rather than left broken: a missing image renders as a broken-image icon on GitHub, which is worse than no image. -->
 <!-- capture: Conflict Inbox screen with at least two pending conflicts, diff view visible -->
 *The Conflict Inbox shows a diff of your change against the server's and lets you keep yours, take the server's, or resolve field by field.*
 
 ### System tray & background sync
 Closing the window doesn't quit the app — it drops to the system tray and keeps syncing in the background. The tray icon itself reflects the current state (online / offline / syncing / conflict), and its menu — Open, Sync now, Quick capture, Pause sync, Quit — is drawn in whichever of the four UI languages your account is set to, since the tray exists before the web view (and its i18n instance) has even started.
 
-![Tray menu](docs/images/tray-menu.png)
+<!-- TODO(screenshot): ![Tray menu](docs/images/tray-menu.png) — not captured yet; see the capture brief below. Commented out rather than left broken: a missing image renders as a broken-image icon on GitHub, which is worse than no image. -->
 <!-- capture: right-click tray menu open, showing Open/Sync now/Quick capture/Pause sync/Quit, tray icon in its "syncing" state -->
 *The tray menu — Open, Sync now, Quick capture, Pause sync, Quit — with the tray icon's status dot reflecting the engine's current state.*
 
 ### Native notifications
 New tickets, deal assignments, mentions and the rest of the `notifications` table raise a native OS toast and update the taskbar badge, whether the row arrived from a background pull or a live Reverb event. Notifications you've already seen are never re-toasted, and a large backlog restored on first launch is counted in the badge without opening a wall of toasts.
 
-![Native notification](docs/images/native-notification.png)
+<!-- TODO(screenshot): ![Native notification](docs/images/native-notification.png) — not captured yet; see the capture brief below. Commented out rather than left broken: a missing image renders as a broken-image icon on GitHub, which is worse than no image. -->
 <!-- capture: an OS-level toast notification raised by the app (e.g. a new ticket assignment), with the OS notification area visible for context -->
 *A new assignment raises a native OS toast — this is the platform's own notification, not an in-app banner.*
 
@@ -373,7 +373,7 @@ If you're producing a build meant to leave your own machine, run the release-hos
 
 This repository was developed and verified on Windows — `dev.bat`, the XAMPP/WSL2-Redis setup, and every version number in this guide are Windows measurements (`docs/PROGRESS.md`). For Linux/macOS:
 
-- **Linux:** CI compiles a debug package on `ubuntu-24.04` (`desktop-ci.yml`) and a release package on `ubuntu-22.04` (`desktop-release.yml`, held back deliberately — see that workflow's matrix comment on the glibc floor), both against `libwebkit2gtk-4.1-dev`. That's a compile check, not a running-app verification: this repo has no record of the desktop shell's OS features (tray, notifications, deep links, etc.) actually being exercised on a live Linux WebKitGTK build. SYNCDESKTOP K11 names Linux (Ubuntu 22.04+/Fedora 39+, WebKitGTK 2.42+) a first-class target equal to Windows, but that verification pass hadn't landed in this repo's docs as of this guide.
+- **Linux:** CI compiles a debug package on `ubuntu-24.04` (`desktop-ci.yml`) and a release package on `ubuntu-24.04` (`desktop-release.yml`, held back deliberately — see that workflow's matrix comment on the glibc floor), both against `libwebkit2gtk-4.1-dev`. That's a compile check, not a running-app verification: this repo has no record of the desktop shell's OS features (tray, notifications, deep links, etc.) actually being exercised on a live Linux WebKitGTK build. SYNCDESKTOP K11 names Linux (Ubuntu 22.04+/Fedora 39+, WebKitGTK 2.42+) a first-class target equal to Windows, but that verification pass hadn't landed in this repo's docs as of this guide.
 - **macOS:** SYNCDESKTOP K11 states macOS is compile-only, deliberately not tested. A macOS release leg exists in `desktop-release.yml` (`macos-latest`), but there are no macOS-specific setup or runtime notes anywhere in this repo.
 - The backend/frontend themselves (PHP/Node/MariaDB/Redis) are an ordinary cross-platform Laravel + Vite stack with no Windows-specific requirement beyond the CORS/CSRF notes in step 3 above. `dev.bat`'s automation (starting MySQL/Redis, opening windows) is the one genuinely Windows-only piece here — substitute your platform's own service management for it.
 

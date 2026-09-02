@@ -2,7 +2,7 @@ name: Desktop Release
 
 # DRAFT — SYNCDESKTOP.md F7 ("Paketleme ve CI").
 #
-# Never executed (push forbidden for lanes in this repo, docs/ENGINEERING-RULES.md §1 / SYNCDESKTOP.md
+# Never executed (pushing is reserved for the tech lead, docs/ENGINEERING-RULES.md §1 / SYNCDESKTOP.md
 # §0.2). Syntax is validated locally with a YAML parser and `bash -n` on every `run:`
 # block — see the F3-E phase report. `desktop/` (Tauri app, package.json,
 # src-tauri/tauri.conf.json) now exists (landed F2/W2-b/F3-A) and every path this workflow

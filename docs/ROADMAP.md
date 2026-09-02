@@ -250,7 +250,7 @@
 
 ## 3. Paralelleştirme Planı (docs/ENGINEERING-RULES.md Bölüm 3 & 4)
 
-Genel kurallar: Teknik lider dosya değiştirmez — işi böler, sözleşmeyi yazar, çıktıyı inceler ve commit mesajını hazırlayıp kullanıcıya verir (commit'i kullanıcı atar). En kritik parça teknik liderin doğrudan yönettiği/üstlendiği iştir; **aynı anda ikinci bir eşit kritiklikte parça varsa** deneyimli bir şeride verilir (nadiren); hacimli/mekanik her şey standart şeritlere. Aynı dalgada iki şeride asla aynı dosya atanmaz. Düzeltmeler yeni şerit açılmadan aynı şeride iletilir; Bir şerit aynı görevde 2 kez başarısız olursa deneyimli bir şeride, o da başarısız olursa teknik lidere eskalasyon. Hiçbir şerit — teknik lider dahil — Git komutu çalıştırmaz; commit yalnızca kullanıcı tarafından atılır.
+Genel kurallar: Teknik lider dosya değiştirmez — işi böler, sözleşmeyi yazar, çıktıyı inceler ve commit mesajını hazırlayıp kullanıcıya verir (commit'i kullanıcı atar). En kritik parça teknik liderin doğrudan yönettiği/üstlendiği iştir; **aynı anda ikinci bir eşit kritiklikte parça varsa** deneyimli bir şeride verilir (nadiren); hacimli/mekanik her şey standart şeritlere dağıtılır. Aynı dalgada iki şeride asla aynı dosya atanmaz. Düzeltmeler yeni şerit açılmadan aynı şeride iletilir; bir şerit aynı görevde 2 kez başarısız olursa iş deneyimli bir şeride, o da başarısız olursa teknik lidere devredilir. Hiçbir şerit — teknik lider dahil — Git komutu çalıştırmaz; commit yalnızca kullanıcı tarafından atılır.
 
 | Faz | Dalga | Kritik parça (teknik lider) | 2. kritik parça (deneyimli şerit) | Hacimli parçalar (standart şerit, çakışmayan dosya sahipliği) | Contract-first |
 |---|---|---|---|---|---|

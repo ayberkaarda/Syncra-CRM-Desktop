@@ -26,28 +26,28 @@ Masaüstü istemcisi web uygulamasıyla aynı CRM'i taşır — lead, kişi, fir
 ### Offline-first ayna
 Motor, verinizin yerel, SQLCipher ile şifrelenmiş bir SQLite kopyasını (`rusqlite`, `bundled-sqlcipher-vendored-openssl`) artı bekleyen mutasyonların bir outbox'ını tutar. Bu salt-okunur bir önbellek değildir: hem kayıtları okumak hem de oluşturmak/düzenlemek ağ olmadan tamamen çalışır — bir create, update, move veya delete outbox'a kuyruğa girer ve bağlantı geri geldiği anda, doğru sırayla gönderilir. Delta sync yalnızca son `sync_version` imlecinizden bu yana değişeni çeker, böylece offline'dan sonra yeniden bağlanmak her şeyi yeniden indirmek anlamına gelmez.
 
-![Offline mod](docs/images/offline-mode.png)
+<!-- TODO(screenshot): ![Offline mod](docs/images/offline-mode.png) — not captured yet; see the capture brief below. Commented out rather than left broken: a missing image renders as a broken-image icon on GitHub, which is worse than no image. -->
 <!-- capture: ConnectivityBar "Offline" durumunda, en az bir kaydın pending-sync rozeti görünür -->
 *Bağlantı çubuğu ağ kesilir kesilmez "Offline"a döner — offline iken oluşturduğunuz veya düzenlediğiniz kayıtlar, gönderilene kadar bekliyor rozeti taşır.*
 
 ### Çakışma yönetimi
 İki kişi aynı kaydı düzenler ve her iki değişiklik de sunucuya ulaşırsa, sistem sessizce bir kazanan seçmez: varsa önce sunucu-tarafı bir kural devreye girer, yoksa alan bazlı last-write-wins'e düşer, ve hâlâ belirsiz kalan her şey bir insanın çözmesi için **Conflict Inbox**'a düşer — kendi versiyonunuzu koruyun, sunucununkini alın, veya alan alan birleştirin. Hiçbir şey sessizce üzerine yazılmaz.
 
-![Conflict Inbox](docs/images/conflict-inbox.png)
+<!-- TODO(screenshot): ![Conflict Inbox](docs/images/conflict-inbox.png) — not captured yet; see the capture brief below. Commented out rather than left broken: a missing image renders as a broken-image icon on GitHub, which is worse than no image. -->
 <!-- capture: en az iki bekleyen çakışmalı Conflict Inbox ekranı, diff görünümü görünür -->
 *Conflict Inbox, değişikliğinizi sunucununkiyle karşılaştıran bir diff gösterir ve kendinizinkini korumanıza, sunucununkini almanıza veya alan alan çözmenize izin verir.*
 
 ### Sistem tepsisi & arka plan senkron
 Pencereyi kapatmak uygulamayı kapatmaz — sistem tepsisine iner ve arka planda senkronlamaya devam eder. Tepsi ikonunun kendisi güncel durumu yansıtır (online / offline / syncing / conflict), ve menüsü — Open, Sync now, Quick capture, Pause sync, Quit — hesabınızın ayarlı olduğu dört arayüz dilinden hangisiyse onunla çizilir, çünkü tepsi web view'ından (ve onun i18n örneğinden) önce var olur.
 
-![Tray menüsü](docs/images/tray-menu.png)
+<!-- TODO(screenshot): ![Tray menüsü](docs/images/tray-menu.png) — not captured yet; see the capture brief below. Commented out rather than left broken: a missing image renders as a broken-image icon on GitHub, which is worse than no image. -->
 <!-- capture: sağ tık tray menüsü açık, Open/Sync now/Quick capture/Pause sync/Quit görünür, tray ikonu "syncing" durumunda -->
 *Tray menüsü — Open, Sync now, Quick capture, Pause sync, Quit — tray ikonunun durum noktası motorun güncel durumunu yansıtıyor.*
 
 ### Native bildirimler
 Yeni ticket'lar, fırsat atamaları, mention'lar ve `notifications` tablosunun geri kalanı, satır ister arka plan pull'undan ister canlı bir Reverb olayından gelsin, native bir OS toast'ı tetikler ve görev çubuğu rozetini günceller. Daha önce görülmüş bildirimler bir daha toast'lanmaz, ve ilk açılışta geri yüklenen büyük bir birikinti, bir toast duvarı açmadan rozette sayılır.
 
-![Native bildirim](docs/images/native-notification.png)
+<!-- TODO(screenshot): ![Native bildirim](docs/images/native-notification.png) — not captured yet; see the capture brief below. Commented out rather than left broken: a missing image renders as a broken-image icon on GitHub, which is worse than no image. -->
 <!-- capture: uygulamanın tetiklediği bir OS-seviyesi toast bildirimi (örn. yeni ticket ataması), bağlam için OS bildirim alanı görünür -->
 *Yeni bir atama native bir OS toast'ı tetikler — bu uygulama-içi bir banner değil, platformun kendi bildirimidir.*
 
@@ -373,7 +373,7 @@ Kendi makinenizden çıkacak bir build üretiyorsanız önce release-host kapıs
 
 Bu repo Windows üzerinde geliştirildi ve doğrulandı — `dev.bat`, XAMPP/WSL2-Redis kurulumu ve bu rehberdeki her sürüm numarası Windows ölçümleridir (`docs/PROGRESS.md`). Linux/macOS için:
 
-- **Linux:** CI, `ubuntu-24.04` üzerinde bir debug paketi (`desktop-ci.yml`) ve `ubuntu-22.04` üzerinde bir release paketi (`desktop-release.yml`, bilinçli olarak geride tutuluyor — o iş akışının matrix yorumundaki glibc tabanına bakın) derliyor, ikisi de `libwebkit2gtk-4.1-dev`'e karşı. Bu bir derleme kontrolüdür, çalışan-uygulama doğrulaması değil: bu repoda masaüstü kabuğunun OS özelliklerinin (tray, bildirimler, deep link'ler vb.) gerçekten canlı bir Linux WebKitGTK build'inde çalıştırıldığına dair bir kayıt yok. SYNCDESKTOP K11, Linux'u (Ubuntu 22.04+/Fedora 39+, WebKitGTK 2.42+) Windows ile eşit birinci sınıf hedef olarak adlandırıyor, ama bu doğrulama turu bu rehber yazıldığı sırada bu reponun dokümanlarına henüz inmemişti.
+- **Linux:** CI, `ubuntu-24.04` üzerinde bir debug paketi (`desktop-ci.yml`) ve `ubuntu-24.04` üzerinde bir release paketi (`desktop-release.yml`, bilinçli olarak geride tutuluyor — o iş akışının matrix yorumundaki glibc tabanına bakın) derliyor, ikisi de `libwebkit2gtk-4.1-dev`'e karşı. Bu bir derleme kontrolüdür, çalışan-uygulama doğrulaması değil: bu repoda masaüstü kabuğunun OS özelliklerinin (tray, bildirimler, deep link'ler vb.) gerçekten canlı bir Linux WebKitGTK build'inde çalıştırıldığına dair bir kayıt yok. SYNCDESKTOP K11, Linux'u (Ubuntu 22.04+/Fedora 39+, WebKitGTK 2.42+) Windows ile eşit birinci sınıf hedef olarak adlandırıyor, ama bu doğrulama turu bu rehber yazıldığı sırada bu reponun dokümanlarına henüz inmemişti.
 - **macOS:** SYNCDESKTOP K11, macOS'un yalnızca derlendiğini, bilinçli olarak test edilmediğini belirtiyor. `desktop-release.yml`'de bir macOS release ayağı var (`macos-latest`), ama bu repoda macOS'a özgü hiçbir kurulum veya çalışma zamanı notu yok.
 - Backend/frontend'in kendisi (PHP/Node/MariaDB/Redis) yukarıdaki 3. adımdaki CORS/CSRF notları dışında Windows'a özgü bir gereksinimi olmayan sıradan bir cross-platform Laravel + Vite yığınıdır. `dev.bat`'in otomasyonu (MySQL/Redis başlatma, pencere açma) burada gerçekten Windows'a özgü tek parçadır — onun yerine platformunuzun kendi servis yönetimini kullanın.
 

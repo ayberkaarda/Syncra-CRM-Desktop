@@ -21,5 +21,6 @@ npm-debug.log*
 /tmp/
 *.tmp
 
-***REMOVED***
-# ekip geneli hook'lar ve izinler commit edilir (SYNCDESKTOP §0.2 / docs/ENGINEERING-RULES.md §8).
+# Editör / IDE yerel ayarları
+.vscode/settings.json
+.idea/

@@ -2,7 +2,7 @@ name: Desktop CI
 
 # DRAFT — SYNCDESKTOP.md F7 ("Paketleme ve CI").
 #
-# This workflow has never been executed (push is forbidden for lanes in this repo per
+# This workflow has never been executed (pushing is reserved for the tech lead per
 # docs/ENGINEERING-RULES.md §1 / SYNCDESKTOP.md §0.2, so nothing can trigger a real run from here).
 # Syntax is validated locally with a YAML parser and `bash -n` on every `run:` block — see
 # the F3-E phase report for the exact commands and output. Do not treat this file as

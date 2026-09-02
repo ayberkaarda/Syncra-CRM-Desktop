@@ -544,8 +544,8 @@ kurulu — kabul listesine alınmadı.
 
 Genel kural: Teknik lider dosya değiştirmez — işi böler, sözleşmeyi yazar, çıktıyı
 inceler; commit'i kullanıcı atar. En kritik parça teknik liderin; aynı anda ikinci eşit-kritik
-parça varsa deneyimli şerit; hacimli/mekanik parçalar standart şerit. Aynı dalgada iki şeride asla aynı
-dosya verilmez. Düzeltmeler aynı şeride iletilir. Hiçbir şerit Git çalıştırmaz.
+parça varsa deneyimli bir şeridin; hacimli/mekanik parçalar standart şeritlerin. Aynı dalgada iki şeride asla aynı
+dosya verilmez. Düzeltmeler yeni şerit açılmadan aynı şeride iletilir. Hiçbir şerit Git çalıştırmaz.
 **Contract-first:** güvenlik testleri `tests/Feature/Security/` altında; her düzeltmenin uç/
 alan sözleşmesi (§7 dosya sahipliği) dispatch'ten önce sabit.
 
