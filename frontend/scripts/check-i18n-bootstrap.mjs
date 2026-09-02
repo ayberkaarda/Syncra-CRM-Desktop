@@ -41,7 +41,7 @@
  * check-i18n-parity.mjs / check-money-currency-symbols.mjs ile ayni desen.
  */
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -51,6 +51,10 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const FRONTEND_DIR = join(SCRIPT_DIR, '..')
 const I18N_TS_PATH = join(FRONTEND_DIR, 'src', 'i18n', 'index.ts')
 const MAIN_TSX_PATH = join(FRONTEND_DIR, 'src', 'main.tsx')
+// KARAR D-6: masaustu kabugunun kendi giris noktasi ayni acilis kapisini tasimali.
+// Repo agacinda `frontend/`in bir ust dizininde yasar; `desktop/` klasoru henuz
+// kurulmamis bir checkout'ta OLMAYABILIR — bu yuzden asagida existsSync ile korunur.
+const DESKTOP_MAIN_PATH = join(FRONTEND_DIR, '..', 'desktop', 'src', 'main.desktop.tsx')
 
 /**
  * Probe dosyalari OS gecici klasorune yazilir — proje agacina hicbir sey birakilmaz
@@ -269,6 +273,54 @@ for (const symbol of [
   if (!i18nSource.includes(symbol)) fail(`Dis imza kaybolmus: \`${symbol}\``)
 }
 if (failures === 0) ok('dis imzalarin hepsi yerinde (180+ dosya bunlara bagli)')
+
+// ---------------------------------------------------------------------------
+// 1h) MASAUSTU GIRIS NOKTASI (KARAR D-6) — main.desktop.tsx ayni acilis kapisini
+// tasimali. `frontend/src/main.tsx` (1e) icin yapilan kontrolun aynisi burada
+// `desktop/src/main.desktop.tsx` icin tekrarlanir. Desktop henuz kurulmamis bir
+// checkout'ta bu dosya YOKTUR — o durumda kontrol CROKMEDEN atlanir.
+// ---------------------------------------------------------------------------
+console.log('\n== 1h) Statik kontrol: masaustu giris noktasi (main.desktop.tsx, KARAR D-6) ==')
+
+if (!existsSync(DESKTOP_MAIN_PATH)) {
+  console.log(`  ATLANDI: desktop girisi bulunamadi (${DESKTOP_MAIN_PATH}) — bu checkout'ta desktop/ yok.`)
+} else if (!readyName) {
+  console.log('  ATLANDI: i18n/index.ts acilis sozu bulunamadigi icin masaustu girisi karsilastirilamadi.')
+} else {
+  const desktopSource = readFileSync(DESKTOP_MAIN_PATH, 'utf8')
+
+  if (
+    !new RegExp(`import\\s*\\{[^}]*\\b${readyName}\\b[^}]*\\}\\s*from\\s*['"][^'"]*i18n['"]`).test(desktopSource)
+  ) {
+    fail(`main.desktop.tsx \`${readyName}\` sembolunu i18n modulunden import ETMIYOR.`)
+  } else {
+    ok(`main.desktop.tsx acilis sozunu import ediyor: \`${readyName}\``)
+  }
+
+  const desktopGateIndex = Math.max(
+    desktopSource.indexOf(`${readyName}.then(`),
+    desktopSource.indexOf(`await ${readyName}`)
+  )
+  const desktopRenderIndex = desktopSource.indexOf('createRoot(')
+
+  if (desktopRenderIndex === -1) {
+    fail('main.desktop.tsx icinde createRoot( bulunamadi.')
+  } else if (desktopGateIndex === -1) {
+    fail(
+      `main.desktop.tsx \`${readyName}\`i BEKLEMIYOR (ne \`.then(\` ne \`await\`). Ilk render sozluk ` +
+        'inmeden yapilir -> yanlis dil / flash geri gelir.'
+    )
+  } else if (desktopGateIndex > desktopRenderIndex) {
+    fail('main.desktop.tsx once render edip SONRA acilis sozunu bekliyor — sira ters, flash geri gelir.')
+  } else {
+    ok('main.desktop.tsx ilk boyayi acilis sozu cozulene kadar geciktiriyor (render, kapinin ARDINDA)')
+  }
+
+  // Kapinin disinda kacak bir render olmasin: satir basinda `createRoot(` = ust duzey cagri
+  if (/^\s*createRoot\s*\(/m.test(desktopSource) && !/\.then\(|await/.test(desktopSource)) {
+    fail('main.desktop.tsx ust duzeyde kosulsuz createRoot( cagiriyor.')
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 2) DAVRANISSAL KONTROL — gercek index.ts kaynagi, sahte glob, gercek i18next

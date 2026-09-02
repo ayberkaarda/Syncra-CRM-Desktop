@@ -1,0 +1,81 @@
+{
+  "id": "push/deal.action.move",
+  "why": "Whitelist 1/12, and the mutation B1 proved was dead: `action` is the BARE verb `move`. An entity-qualified `deal.move` is refused outright (O45). Note the absence of base_sync_version: to_wire() sends it for update/delete only.",
+  "op": "action",
+  "entity": "deal",
+  "action": "move",
+  "local_mutation": {
+    "entity": "deal",
+    "op": "action",
+    "action": "move",
+    "client_id": "c1000000-0000-4000-8000-000000000004",
+    "payload": {
+      "to_stage_id": 7,
+      "before_deal_id": null,
+      "after_deal_id": null,
+      "version": 3,
+      "pipeline_stage_id": 7
+    }
+  },
+  "outbox": {
+    "seq": 4,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000004",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 5201,
+    "base_sync_version": 185002,
+    "scope": null
+  },
+  "wire": {
+    "seq": 4,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000004",
+    "op": "action",
+    "entity": "deal",
+    "server_id": 5201,
+    "action": "move",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "to_stage_id": 7,
+      "before_deal_id": null,
+      "after_deal_id": null,
+      "version": 3,
+      "pipeline_stage_id": 7
+    }
+  },
+  "composer": {
+    "domain": "deals",
+    "method": "move",
+    "args": [
+      5201,
+      {
+        "to_stage_id": 7,
+        "before_deal_id": null,
+        "after_deal_id": null,
+        "version": 3
+      }
+    ],
+    "note": "`pipeline_stage_id` is added by crm.ts::move for the mirror column and travels to the server as an unvalidated extra key; `position` is deliberately NOT sent (MoveDealRequest marks it `prohibited`).",
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000004",
+      "server_id": 5201,
+      "local_rowid": 4,
+      "title": "Fixture anlaşması",
+      "pipeline_stage_id": 6,
+      "version": 3,
+      "sync_version": 185002,
+      "amount": "1000.00",
+      "currency": "TRY",
+      "status": "open",
+      "position": "1024"
+    }
+  },
+  "server": {
+    "scenario": "deal",
+    "bind": {
+      "server_id": "deal.id",
+      "payload.to_stage_id": "stage_b.id",
+      "payload.pipeline_stage_id": "stage_b.id",
+      "payload.version": "deal.version"
+    },
+    "expect": "applied"
+  }
+}

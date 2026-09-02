@@ -1,9 +1,10 @@
 // Konuşma OKUMA kancaları (liste + detay). Kayda bağlı sohbet `useRecordConversation.ts`,
 // mutasyonlar `useConversationMutations.ts` içindedir.
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { chatKeys, fetchConversation, fetchConversations } from '../api'
+import { chatKeys } from '../api'
 import { sortConversations } from '../utils'
 import type { ConversationsQuery } from '../types'
+import { getPlatform } from '../../../platform'
 
 /**
  * Konuşma listesi. Sıralama İSTEMCİDE de garanti altına alınır (`select: sortConversations`):
@@ -17,7 +18,7 @@ export function useConversations(params: ConversationsQuery = {}) {
   const query: ConversationsQuery = { type: params.type, q: params.q?.trim() || undefined }
   return useQuery({
     queryKey: chatKeys.conversationList(query),
-    queryFn: () => fetchConversations(query),
+    queryFn: () => getPlatform().data.chat.conversations(query),
     select: sortConversations,
     placeholderData: keepPreviousData,
   })
@@ -27,7 +28,7 @@ export function useConversations(params: ConversationsQuery = {}) {
 export function useConversation(id: number | null) {
   return useQuery({
     queryKey: chatKeys.conversation(id ?? -1),
-    queryFn: () => fetchConversation(id as number),
+    queryFn: () => getPlatform().data.chat.conversation(id as number),
     enabled: id !== null,
   })
 }

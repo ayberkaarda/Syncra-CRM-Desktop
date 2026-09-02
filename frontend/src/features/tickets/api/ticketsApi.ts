@@ -9,6 +9,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useTranslation } from 'react-i18next'
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
+import { getPlatform } from '../../../platform'
 import type {
   Ticket,
   TicketPayload,
@@ -26,7 +27,7 @@ export const ticketsKeys = {
   stats: ['tickets', 'stats'] as const,
 }
 
-async function fetchTickets(query: TicketsQuery): Promise<TicketsListResponse> {
+export async function fetchTickets(query: TicketsQuery): Promise<TicketsListResponse> {
   const { data } = await api.get<TicketsListResponse>('/api/tickets', {
     params: {
       page: query.page,
@@ -48,36 +49,36 @@ async function fetchTickets(query: TicketsQuery): Promise<TicketsListResponse> {
   return data
 }
 
-async function fetchTicketStats(): Promise<TicketStats> {
+export async function fetchTicketStats(): Promise<TicketStats> {
   const { data } = await api.get<{ data: TicketStats }>('/api/tickets/stats')
   return data.data
 }
 
-async function fetchTicket(id: number): Promise<Ticket> {
+export async function fetchTicket(id: number): Promise<Ticket> {
   const { data } = await api.get<{ data: Ticket }>(`/api/tickets/${id}`)
   return data.data
 }
 
-async function createTicketRequest(payload: TicketPayload): Promise<Ticket> {
+export async function createTicketRequest(payload: TicketPayload): Promise<Ticket> {
   const { data } = await api.post<{ data: Ticket }>('/api/tickets', payload)
   return data.data
 }
 
-async function updateTicketRequest(id: number, payload: Partial<TicketPayload>): Promise<Ticket> {
+export async function updateTicketRequest(id: number, payload: Partial<TicketPayload>): Promise<Ticket> {
   const { data } = await api.patch<{ data: Ticket }>(`/api/tickets/${id}`, payload)
   return data.data
 }
 
-async function deleteTicketRequest(id: number): Promise<void> {
+export async function deleteTicketRequest(id: number): Promise<void> {
   await api.delete(`/api/tickets/${id}`)
 }
 
-async function changeTicketStatusRequest(id: number, status: TicketStatus): Promise<Ticket> {
+export async function changeTicketStatusRequest(id: number, status: TicketStatus): Promise<Ticket> {
   const { data } = await api.patch<{ data: Ticket }>(`/api/tickets/${id}/status`, { status })
   return data.data
 }
 
-async function assignTicketRequest(id: number, assignedTo: number | null): Promise<Ticket> {
+export async function assignTicketRequest(id: number, assignedTo: number | null): Promise<Ticket> {
   const { data } = await api.patch<{ data: Ticket }>(`/api/tickets/${id}/assign`, { assigned_to: assignedTo })
   return data.data
 }
@@ -92,7 +93,7 @@ async function assignTicketRequest(id: number, assignedTo: number | null): Promi
 export function useTickets(query: TicketsQuery) {
   return useQuery({
     queryKey: ticketsKeys.list(query),
-    queryFn: () => fetchTickets(query),
+    queryFn: () => getPlatform().data.tickets.list(query),
     placeholderData: keepPreviousData,
     refetchInterval: 60_000,
   })
@@ -107,7 +108,7 @@ export function useTickets(query: TicketsQuery) {
 export function useTicketStats() {
   return useQuery({
     queryKey: ticketsKeys.stats,
-    queryFn: fetchTicketStats,
+    queryFn: () => getPlatform().data.tickets.stats(),
   })
 }
 
@@ -115,7 +116,7 @@ export function useTicketStats() {
 export function useTicket(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ticketsKeys.detail(id ?? -1),
-    queryFn: () => fetchTicket(id as number),
+    queryFn: () => getPlatform().data.tickets.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
     refetchInterval: 60_000,
   })
@@ -133,7 +134,7 @@ export function useCreateTicket() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('tickets')
   return useMutation({
-    mutationFn: createTicketRequest,
+    mutationFn: (payload: TicketPayload) => getPlatform().data.tickets.create(payload),
     onSuccess: (ticket) => {
       invalidateTicketCaches(queryClient, ticket.id)
       toast.success(t('toast.created'))
@@ -146,7 +147,7 @@ export function useUpdateTicket() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('tickets')
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<TicketPayload> }) => updateTicketRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<TicketPayload> }) => getPlatform().data.tickets.update(id, payload),
     onSuccess: (ticket) => {
       invalidateTicketCaches(queryClient, ticket.id)
       toast.success(t('toast.updated'))
@@ -159,7 +160,7 @@ export function useDeleteTicket() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('tickets')
   return useMutation({
-    mutationFn: (id: number) => deleteTicketRequest(id),
+    mutationFn: (id: number) => getPlatform().data.tickets.delete(id),
     onSuccess: () => {
       invalidateTicketCaches(queryClient)
       toast.success(t('toast.deleted'))
@@ -172,7 +173,7 @@ export function useChangeTicketStatus() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('tickets')
   return useMutation({
-    mutationFn: ({ id, status }: { id: number; status: TicketStatus }) => changeTicketStatusRequest(id, status),
+    mutationFn: ({ id, status }: { id: number; status: TicketStatus }) => getPlatform().data.tickets.status(id, status),
     onSuccess: (ticket) => {
       invalidateTicketCaches(queryClient, ticket.id)
       toast.success(t('toast.statusUpdated'))
@@ -185,7 +186,7 @@ export function useAssignTicket() {
   const queryClient = useQueryClient()
   const { t } = useTranslation('tickets')
   return useMutation({
-    mutationFn: ({ id, assignedTo }: { id: number; assignedTo: number | null }) => assignTicketRequest(id, assignedTo),
+    mutationFn: ({ id, assignedTo }: { id: number; assignedTo: number | null }) => getPlatform().data.tickets.assign(id, assignedTo),
     onSuccess: (ticket) => {
       invalidateTicketCaches(queryClient, ticket.id)
       toast.success(t('toast.assignUpdated'))

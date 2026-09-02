@@ -8,6 +8,8 @@ use App\Models\PriceList;
 use App\Models\Product;
 use App\Repositories\PriceListRepository;
 use App\Repositories\ProductRepository;
+use App\Services\Sync\TagSyncService;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -48,7 +50,7 @@ class ProductService
             $product = $this->products->create($data);
 
             if ($tagIds !== null) {
-                $product->tags()->sync($tagIds);
+                TagSyncService::apply($product, $tagIds);
             }
 
             if ($customFields !== null) {
@@ -74,7 +76,7 @@ class ProductService
             }
 
             if ($tagIds !== null) {
-                $product->tags()->sync($tagIds);
+                TagSyncService::apply($product, $tagIds);
             }
 
             if ($customFields !== null) {
@@ -213,6 +215,8 @@ class ProductService
     {
         $definitions = CustomField::query()->forEntity('products')->get()->keyBy('key');
 
+        $changed = false;
+
         foreach ($values as $key => $value) {
             $field = $definitions->get($key);
 
@@ -220,7 +224,7 @@ class ProductService
                 continue;
             }
 
-            CustomFieldValue::query()->updateOrCreate(
+            $row = CustomFieldValue::query()->updateOrCreate(
                 [
                     'custom_field_id' => $field->id,
                     'customizable_type' => Product::class,
@@ -230,6 +234,18 @@ class ProductService
                     'value' => is_array($value) ? json_encode($value) : $value,
                 ]
             );
+
+            $changed = $changed || $row->wasRecentlyCreated || $row->wasChanged();
+        }
+
+        // Embedded child (protocol §1.5): `custom_field_values` is not a pull
+        // table - its rows ride inside the owner's `custom_fields` payload.
+        // When ONLY a custom field changed, the owner row itself is clean, no
+        // observer fires, and the edit would never cross a client's cursor.
+        // Bumped only when something actually changed, so a no-op upsert does
+        // not manufacture a phantom delta.
+        if ($changed) {
+            SyncVersionBumper::bump($product);
         }
     }
 }

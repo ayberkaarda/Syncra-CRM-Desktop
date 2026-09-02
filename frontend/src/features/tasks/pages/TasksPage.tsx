@@ -43,6 +43,8 @@ import {
   toast,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
 import { getErrorMessage } from '../../../lib/axios'
 import { formatDateTime } from '../../../lib/datetime'
 import { useQueryClient } from '@tanstack/react-query'
@@ -513,9 +515,12 @@ export function TasksPage() {
                               )}
                             </Td>
                             <Td>
-                              <p className={cn('font-medium text-fg', task.status === 'completed' && 'text-fg-muted line-through')}>
-                                {task.title}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className={cn('font-medium text-fg', task.status === 'completed' && 'text-fg-muted line-through')}>
+                                  {task.title}
+                                </p>
+                                <SyncStateBadge state={recordSyncState(task)} compact />
+                              </div>
                               {task.description && <p className="mt-0.5 max-w-xs truncate text-xs text-fg-muted">{task.description}</p>}
                             </Td>
                             <Td>

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Root-absolute asset paths work under Tauri's asset protocol: the handler strips the
+         leading `/` and resolves against `frontendDist` (`docs/DESKTOP-ARCHITECTURE.md`
+         §4.3-1). These files come from `frontend/public` via `publicDir`. -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Syncra</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- The ONLY difference from `frontend/index.html`: the desktop entry, which selects the
+         platform before the first render (KARAR A3). -->
+    <script type="module" src="/src/main.desktop.tsx"></script>
+  </body>
+</html>

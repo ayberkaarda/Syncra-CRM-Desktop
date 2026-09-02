@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AttachmentController;
+use App\Http\Controllers\Api\Auth\DeviceTokenController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AutomationRuleController;
 use App\Http\Controllers\Api\CompanyController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Api\ExchangeRateController;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\LeadImportController;
 use App\Http\Controllers\Api\LogController;
+use App\Http\Controllers\Api\Me\DeviceController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PageVisitController;
@@ -30,10 +32,14 @@ use App\Http\Controllers\Api\RoleMatrixController;
 use App\Http\Controllers\Api\SavedViewController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\SettingController;
+use App\Http\Controllers\Api\Sync\ManifestController;
+use App\Http\Controllers\Api\Sync\PullController;
+use App\Http\Controllers\Api\Sync\PushController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\UserController;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -61,6 +67,74 @@ Route::post('/login', [AuthController::class, 'login'])
 Route::post('/password/forgot', [AuthController::class, 'forgotPassword'])
     ->middleware('throttle:6,1')
     ->name('password.forgot');
+
+/*
+ * Faz F1 — masaüstü cihaz belirteci (SYNCDESKTOP §4.3).
+ *
+ * Public for the same reason POST /api/login is: this is the endpoint that
+ * CREATES a credential. It is not unthrottled - DeviceTokenService counts every
+ * failure against the SAME keyed lockout (email + IP) the web login uses, and
+ * answers 423 LOCKED_OUT. The throttle lives in the service rather than in
+ * `throttle:login` middleware because a named limiter's response callback is
+ * fixed at registration (429) while §4.3 requires 423, and a second named
+ * limiter would create a SEPARATE counter - defeating the shared lockout.
+ */
+Route::post('/auth/device', [DeviceTokenController::class, 'store'])->name('auth.device');
+
+/*
+ * Faz F1 — kanal yetkilendirmesi, bearer belirteçle (protokol §3.7 / D9).
+ *
+ * `withBroadcasting()` is NOT called a second time in bootstrap/app.php. That
+ * helper hard-codes the URI, so a second registration would produce another
+ * `/broadcasting/auth`; the routes carry no name, RouteCollection returns the
+ * FIRST match, and the second registration would SILENTLY never run. A quiet
+ * no-op is worse than a loud failure, so the desktop channel route is declared
+ * here instead, at a DIFFERENT uri: `api/broadcasting/auth`.
+ *
+ * Registered inside routes/api.php on purpose: ApplicationBuilder loads this
+ * file inside `Route::middleware('api')->prefix('api')`, so this group inherits
+ * the api stack (statefulApi + SetLocale) and the prefix for free.
+ *
+ * `password.changed` is DELIBERATELY ABSENT, exactly as on the cookie route -
+ * see the reasoning in bootstrap/app.php: a user under a forced password change
+ * still needs a live socket, since that is the session in which UserDeactivated
+ * has to reach them. This is why the route appears as the fifth entry in
+ * PasswordChangeGateTest's whitelist assertion.
+ */
+Broadcast::routes(['middleware' => ['auth:sanctum', 'active']]);
+
+/*
+ * Faz F1 — delta senkron uçları (SYNCDESKTOP §4.4, protokol §4).
+ *
+ * The middleware chain is the security contract, in order:
+ *   auth:sanctum      identity (session OR bearer)
+ *   active            a deactivated account loses access on its next request
+ *   password.changed  a forced password change is not bypassable offline
+ *   ability:desktop   the token must carry the `desktop` ability
+ *   device.token      ...and must be a REAL PersonalAccessToken. Without this
+ *                     last one the previous check is decorative: since User
+ *                     gained HasApiTokens, a cookie session is handed a
+ *                     TransientToken whose can() returns an unconditional true
+ *                     (protocol §3.3/K-A).
+ *
+ * Separate throttle buckets: pull is read-only and chatty (30/min), push
+ * writes and contends on the global sync counter (20/min).
+ */
+Route::prefix('sync')
+    ->middleware(['auth:sanctum', 'active', 'password.changed', 'ability:desktop', 'device.token'])
+    ->group(function () {
+        Route::get('/manifest', ManifestController::class)
+            ->middleware('throttle:30,1,sync')
+            ->name('sync.manifest');
+
+        Route::post('/pull', PullController::class)
+            ->middleware('throttle:30,1,sync')
+            ->name('sync.pull');
+
+        Route::post('/push', PushController::class)
+            ->middleware('throttle:20,1,sync-push')
+            ->name('sync.push');
+    });
 
 /*
  * Authenticated endpoints.
@@ -110,6 +184,22 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
          * oturumdan gelir. Gerekçenin tamamı AuthController::updatePreferences()'ta.
          */
         Route::patch('/me/preferences', [AuthController::class, 'updatePreferences'])->name('me.preferences');
+
+        /*
+         * Faz F1 — kullanıcının kendi cihazları (SYNCDESKTOP §4.3).
+         *
+         * INSIDE the `password.changed` group on purpose (protokol §7.1): a
+         * user who still owes a forced password change must not be enrolling
+         * or managing devices - the temporary password is exactly the
+         * credential that should not be turned into a long-lived token. This
+         * also keeps PasswordChangeGateTest's whitelist untouched by these two
+         * routes.
+         *
+         * No permission gate: these are the caller's OWN tokens, scoped through
+         * $user->tokens(), and somebody else's token id answers 404.
+         */
+        Route::get('/me/devices', [DeviceController::class, 'index'])->name('me.devices.index');
+        Route::delete('/me/devices/{token}', [DeviceController::class, 'destroy'])->name('me.devices.destroy');
 
         /*
          * Herkese açık güncel kur ucu (Faz 14 / İz E — docs/PHASE-INTL.md §2 Karar B) —

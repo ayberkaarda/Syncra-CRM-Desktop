@@ -13,7 +13,9 @@ use App\Models\Lead;
 use App\Models\PipelineStage;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Sync\TagSyncService;
 use App\Support\FractionalIndex;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -343,15 +345,45 @@ class LeadConversionService
         $contactType = $contact->getMorphClass();
         $contactId = $contact->getKey();
 
+        /*
+         * Protocol §2.3 #3/#4 - `Model::query()->update()` instantiates no
+         * models, so SyncVersionObserver never sees these rows and a converted
+         * lead's tasks/activities would keep pointing at the lead on every
+         * desktop client, forever.
+         *
+         * The bulk statement itself STAYS. The docblock above states why:
+         * looping 50 models would write 50 audit rows and bury the single
+         * meaningful "converted" entry. SyncVersionBumper::bumpRows() writes
+         * only `sync_version`, one distinct value per row as protocol §2.5
+         * requires, with no model event, no audit row and no `updated_at`
+         * movement - so the delta is fixed without touching the decision this
+         * method was built around.
+         */
+        $movedTaskIds = Task::withTrashed()
+            ->where('taskable_type', $leadType)
+            ->where('taskable_id', $leadId)
+            ->pluck('id')
+            ->all();
+
         Task::withTrashed()
             ->where('taskable_type', $leadType)
             ->where('taskable_id', $leadId)
             ->update(['taskable_type' => $contactType, 'taskable_id' => $contactId]);
 
+        SyncVersionBumper::bumpRows('tasks', $movedTaskIds);
+
+        $movedActivityIds = Activity::withTrashed()
+            ->where('activityable_type', $leadType)
+            ->where('activityable_id', $leadId)
+            ->pluck('id')
+            ->all();
+
         Activity::withTrashed()
             ->where('activityable_type', $leadType)
             ->where('activityable_id', $leadId)
             ->update(['activityable_type' => $contactType, 'activityable_id' => $contactId]);
+
+        SyncVersionBumper::bumpRows('activities', $movedActivityIds);
 
         Attachment::withTrashed()
             ->where('attachable_type', $leadType)
@@ -359,6 +391,13 @@ class LeadConversionService
             ->update(['attachable_type' => $contactType, 'attachable_id' => $contactId]);
 
         $this->moveTaggables($leadType, (int) $leadId, $contactType, (int) $contactId);
+
+        // Both sides move: the lead loses the pivot rows, the contact gains
+        // them. `taggables` carries no version of its own (protocol §1.4),
+        // so the only way either change reaches a client is through the two
+        // owner rows.
+        TagSyncService::bumpOwner($lead);
+        TagSyncService::bumpOwner($contact);
     }
 
     /**
@@ -453,6 +492,8 @@ class LeadConversionService
             ->get()
             ->keyBy('key');
 
+        $copied = false;
+
         foreach ($values as $value) {
             $source = $value->customField;
 
@@ -472,7 +513,7 @@ class LeadConversionService
             }
 
             // firstOrCreate: hedefte değer varsa dokunulmaz.
-            CustomFieldValue::query()->firstOrCreate(
+            $row = CustomFieldValue::query()->firstOrCreate(
                 [
                     'custom_field_id' => $target->getKey(),
                     'customizable_type' => $contact->getMorphClass(),
@@ -480,6 +521,15 @@ class LeadConversionService
                 ],
                 ['value' => $value->value]
             );
+
+            $copied = $copied || $row->wasRecentlyCreated;
+        }
+
+        // Embedded child (protocol §1.5): the contact's `custom_fields` payload
+        // just grew, but the contact row itself is untouched - without this the
+        // copied values would never reach a desktop client.
+        if ($copied) {
+            SyncVersionBumper::bump($contact);
         }
     }
 

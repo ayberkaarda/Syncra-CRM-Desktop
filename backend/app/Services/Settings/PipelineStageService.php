@@ -7,6 +7,7 @@ use App\Models\Deal;
 use App\Models\PipelineStage;
 use App\Models\User;
 use App\Support\FractionalIndex;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -236,6 +237,17 @@ class PipelineStageService
         DB::transaction(function () use ($orderedIds): void {
             foreach ($orderedIds as $index => $id) {
                 PipelineStage::query()->whereKey($id)->update(['position' => $index + 1]);
+
+                /*
+                 * Protocol §2.3 #6 - a query-builder update instantiates no
+                 * model, so SyncVersionObserver never fires. Column order is
+                 * the one piece of `pipeline_stages` an offline Kanban board
+                 * cannot render without: a stale order draws the board wrong,
+                 * silently. The statement above is left untouched (it is the
+                 * keyed single-row update the reorder contract is built on);
+                 * only the version is added.
+                 */
+                SyncVersionBumper::bumpRows('pipeline_stages', [$id]);
             }
         });
 

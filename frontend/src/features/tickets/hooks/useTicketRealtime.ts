@@ -2,9 +2,12 @@
 // `.ticket.sla.breached` olayları (docs/SLA-DESIGN.md §5.5, `tickets:scan-sla` tarayıcısı her
 // 5 dakikada üretir).
 //
-// Abonelik/temizlik deseni `src/features/deals/hooks/useDealRealtime.ts` ile AYNIDIR (görev
-// tanımının açıkça işaret ettiği dosya): `src/lib/echo.ts`'ye DOKUNULMAZ, yalnızca `getEcho()` /
-// `onConnectionStateChange()` kullanılır ve bileşen unmount olduğunda `echo.leave()` çağrılır.
+// Abonelik/temizlik deseni `src/features/deals/hooks/useDealRealtime.ts` ile AYNIDIR:
+// `src/lib/echo.ts`'ye DOKUNULMAZ, yalnızca `getEcho()` / `onConnectionStateChange()` kullanılır.
+// Kanal aboneliği PAYLAŞILAN, referans sayan `src/lib/channelRegistry.ts` üzerinden alınır —
+// doğrudan `echo.leave()` ÇAĞRILMAZ (referans saymaz, başka bir aboneyi de düşürürdü); unmount'ta
+// yalnızca KENDİ iki dinleyicimiz `channel.stopListening()` ile bırakılır ve `releaseChannel()`
+// çağrılır.
 //
 // ==============================================================================================
 // CACHE GÜNCELLEME STRATEJİSİ — görev tanımı: "ilgili ticket cache'te varsa alanlarını
@@ -25,6 +28,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { getEcho, onConnectionStateChange } from '../../../lib/echo'
 import type { EchoConnectionState } from '../../../lib/echo'
+import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { toast } from '../../../components/ui'
 import { ticketsKeys } from '../api/ticketsApi'
 import type { Ticket, TicketsListResponse, TicketSlaBreachedEvent, TicketSlaWarningEvent } from '../types'
@@ -72,10 +76,8 @@ export function useTicketRealtime(): UseTicketRealtimeResult {
 
   useEffect(() => {
     if (!echoAvailable) return
-    const echo = getEcho()
-    if (!echo) return
-
-    const channel = echo.private(CHANNEL_NAME)
+    const channel = acquireChannel(CHANNEL_NAME)
+    if (!channel) return
 
     function applyPatch(ticketId: number, patch: Partial<Ticket>) {
       let foundAnywhere = false
@@ -104,7 +106,7 @@ export function useTicketRealtime(): UseTicketRealtimeResult {
       void queryClient.invalidateQueries({ queryKey: ticketsKeys.stats })
     }
 
-    channel.listen(WARNING_EVENT, (payload: TicketSlaWarningEvent) => {
+    const handleWarning = (payload: TicketSlaWarningEvent) => {
       applyPatch(payload.ticket_id, {
         sla_due_at: payload.sla_due_at,
         sla_remaining_seconds: payload.remaining_seconds,
@@ -113,9 +115,9 @@ export function useTicketRealtime(): UseTicketRealtimeResult {
         priority: payload.priority,
       })
       toast.warning(t('toast.slaWarning', { ticketNumber: payload.ticket_number, subject: payload.subject }))
-    })
+    }
 
-    channel.listen(BREACHED_EVENT, (payload: TicketSlaBreachedEvent) => {
+    const handleBreached = (payload: TicketSlaBreachedEvent) => {
       applyPatch(payload.ticket_id, {
         sla_due_at: payload.sla_due_at,
         sla_remaining_seconds: -payload.overdue_seconds,
@@ -125,10 +127,15 @@ export function useTicketRealtime(): UseTicketRealtimeResult {
         priority: payload.priority,
       })
       toast.error(t('toast.slaBreached', { ticketNumber: payload.ticket_number, subject: payload.subject }))
-    })
+    }
+
+    channel.listen(WARNING_EVENT, handleWarning)
+    channel.listen(BREACHED_EVENT, handleBreached)
 
     return () => {
-      echo.leave(CHANNEL_NAME)
+      channel.stopListening(WARNING_EVENT, handleWarning)
+      channel.stopListening(BREACHED_EVENT, handleBreached)
+      releaseChannel(CHANNEL_NAME)
     }
   }, [echoAvailable, queryClient, t])
 

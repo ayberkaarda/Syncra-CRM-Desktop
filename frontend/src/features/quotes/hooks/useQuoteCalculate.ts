@@ -13,10 +13,10 @@
 //     `data` DEĞİŞMEDEN kalır, sıfır gösterilmez (görev tanımı).
 //   - "Hesaplanıyor" göstergesi: `isFetching` — manuel bir state/effect gerekmez.
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { calculateQuote } from '../api/quotesApi'
 import { getErrorMessage } from '../../../lib/axios'
 import type { DiscountType, QuoteCalculateResult, QuoteItemInput } from '../types'
 import { useDebouncedValue } from './useDebouncedValue'
+import { getPlatform } from '../../../platform'
 
 const DEBOUNCE_MS = 400
 
@@ -42,7 +42,7 @@ export function useQuoteCalculate(input: QuoteCalculateInput, enabled = true): U
 
   const query = useQuery({
     queryKey: ['quotes', 'calculate', debounced],
-    queryFn: ({ signal }) => calculateQuote(JSON.parse(debounced) as QuoteCalculateInput, { signal }),
+    queryFn: ({ signal }) => getPlatform().data.quotes.calculate(JSON.parse(debounced) as QuoteCalculateInput, { signal }),
     enabled,
     placeholderData: keepPreviousData,
     retry: false,

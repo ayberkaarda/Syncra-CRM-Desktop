@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { Paperclip, Send, X } from 'lucide-react'
 import { Button, Textarea } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { foldTurkish } from '../../../lib/turkishCase'
 import { useSendMessage } from '../hooks/useMessageMutations'
 import { useUploadAttachment } from '../hooks/useUploadAttachment'
@@ -36,6 +37,10 @@ export function MessageComposer({ conversationId, members, notifyTyping }: Messa
   const { t } = useTranslation('chat')
   const sendMessage = useSendMessage(conversationId)
   const uploadAttachment = useUploadAttachment()
+  // SYNCDESKTOP §8 (O102) — "attachments upload (kuyruk)". There is no queue yet
+  // (`files::attach_from_paths` is F5-5, see `platform/data/comms.ts`), so offline the attach
+  // button is disabled and the dictionary sentence explains what will happen to the file.
+  const attachGuard = useOnlineOnly('attachments.upload')
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -132,6 +137,9 @@ export function MessageComposer({ conversationId, members, notifyTyping }: Messa
   }
 
   function handleFile(file: File) {
+    // The drop zone is the attach button's twin: a disabled button would otherwise be trivially
+    // bypassed by dragging the file in. `attachGuard.offline` is always false on the web build.
+    if (attachGuard.offline) return
     setPendingFileName(file.name)
     setAttachment(null)
     uploadAttachment.mutate(file, {
@@ -230,10 +238,13 @@ export function MessageComposer({ conversationId, members, notifyTyping }: Messa
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
+          disabled={attachGuard.offline}
+          title={attachGuard.title}
           aria-label={t('composer.attachFileAria')}
           className={cn(
             'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg',
             'transition-colors duration-150 motion-reduce:transition-none',
+            'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-muted',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1'
           )}
         >

@@ -1,0 +1,61 @@
+{
+  "id": "push/task.action.assign",
+  "why": "Whitelist 4/12. `assigned_to` here, `owner_id` on deal/lead - the field name is per entity and there is no shared 'assignee' spelling.",
+  "op": "action",
+  "entity": "task",
+  "action": "assign",
+  "local_mutation": {
+    "entity": "task",
+    "op": "action",
+    "action": "assign",
+    "client_id": "c1000000-0000-4000-8000-000000000007",
+    "payload": {
+      "assigned_to": 9
+    }
+  },
+  "outbox": {
+    "seq": 7,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000007",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 6301,
+    "base_sync_version": 185003,
+    "scope": null
+  },
+  "wire": {
+    "seq": 7,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000007",
+    "op": "action",
+    "entity": "task",
+    "server_id": 6301,
+    "action": "assign",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "assigned_to": 9
+    }
+  },
+  "composer": {
+    "domain": "tasks",
+    "method": "assign",
+    "args": [
+      6301,
+      9
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000007",
+      "server_id": 6301,
+      "local_rowid": 7,
+      "title": "Fixture görevi",
+      "status": "pending",
+      "priority": "medium",
+      "sync_version": 185003
+    }
+  },
+  "server": {
+    "scenario": "task",
+    "bind": {
+      "server_id": "task.id",
+      "payload.assigned_to": "user.id"
+    },
+    "expect": "applied"
+  }
+}

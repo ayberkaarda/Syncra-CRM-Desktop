@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Syncra",
+  "version": "0.1.0",
+  "identifier": "com.syncra.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev:desktop",
+    "beforeBuildCommand": "npm run build:desktop",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Syncra",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true,
+        "visible": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'none'; connect-src 'none'; img-src 'none'; style-src 'none'; font-src 'none'; object-src 'none'; frame-ancestors 'none'; x-syncra-placeholder-csp 'this-is-not-the-real-policy-run-npm-run-tauri-from-desktop-scripts-tauri-mjs-generates-it-from-frontend-dot-env'"
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["syncra"]
+      }
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/ayberkaarda/Syncra-CRM-Desktop/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRDRTk3RjcwQjRCRUZFNDgKUldSSS9yNjBjSC9wVEVuS0FOY1dyMHQ3VVJXOTJTSytnUld3cUVadDRhb2c1czFaNWFNaDArNloK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ]
+  }
+}

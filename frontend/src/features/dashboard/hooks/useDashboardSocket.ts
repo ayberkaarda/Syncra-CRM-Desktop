@@ -1,8 +1,14 @@
 // Dashboard canlılığı — `private-dashboard` kanalı, `.dashboard.invalidate` olayı (bkz. görev
 // tanımı §Canlılık — baştaki nokta ZORUNLU, laravel-echo'nun broadcast-özel olayları için
-// kuralı). Abonelik/temizlik deseni `features/logs/hooks/useActivityStream.ts` ve
-// `features/deals/hooks/useDealRealtime.ts` ile aynıdır: `src/lib/echo.ts`ye DOKUNULMAZ,
-// yalnızca `getEcho()`/`onConnectionStateChange()` kullanılır, unmount'ta `echo.leave()`.
+// kuralı).
+//
+// Abonelik/temizlik deseni `features/tickets/hooks/useTicketRealtime.ts` ile AYNIDIR:
+// `src/lib/echo.ts`ye DOKUNULMAZ, yalnızca `getEcho()`/`onConnectionStateChange()` kullanılır.
+// Kanal aboneliği PAYLAŞILAN, referans sayan `src/lib/channelRegistry.ts` üzerinden alınır —
+// doğrudan `echo.leave()` ÇAĞRILMAZ (referans saymaz; bu kanalın bugün başka bir abonesi olmasa
+// da `Echo.leave()` StrictMode'un çift mount'unda ya da hızlı unmount/remount'ta kendi ikinci
+// aboneliğini altından çekebilir — registry bunu sayaçla çözer). Unmount'ta yalnızca KENDİ
+// dinleyicimiz `channel.stopListening()` ile bırakılır ve `releaseChannel()` çağrılır.
 //
 // GEÇ BAĞLANMA: `getEcho()` mount anında `null` olabilir — Echo örneği kimlik doğrulama
 // tamamlandıktan sonra kurulur (bkz. `useDealRealtime.ts`). Bu yüzden abonelik efekti
@@ -18,6 +24,7 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getEcho, onConnectionStateChange } from '../../../lib/echo'
+import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { dashboardKeys } from '../api'
 import type { DashboardInvalidateEvent, DashboardInvalidateKey } from '../types'
 
@@ -40,12 +47,10 @@ export function useDashboardSocket() {
 
   useEffect(() => {
     if (!echoAvailable) return
-    const echo = getEcho()
-    if (!echo) return
+    const channel = acquireChannel(CHANNEL_NAME)
+    if (!channel) return
 
-    const channel = echo.private(CHANNEL_NAME)
-
-    channel.listen(EVENT_NAME, (payload: DashboardInvalidateEvent) => {
+    const handleInvalidate = (payload: DashboardInvalidateEvent) => {
       const keys = Array.isArray(payload?.keys) ? payload.keys : []
       if (keys.length === 0) {
         void queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
@@ -55,10 +60,13 @@ export function useDashboardSocket() {
         const prefix = KEY_PREFIX[key]
         void queryClient.invalidateQueries({ queryKey: prefix ?? dashboardKeys.all })
       }
-    })
+    }
+
+    channel.listen(EVENT_NAME, handleInvalidate)
 
     return () => {
-      echo.leave(CHANNEL_NAME)
+      channel.stopListening(EVENT_NAME, handleInvalidate)
+      releaseChannel(CHANNEL_NAME)
     }
   }, [echoAvailable, queryClient])
 }

@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next'
 import { Building2, CalendarDays, Lock, TriangleAlert } from 'lucide-react'
 import { Avatar, Badge } from '../../../../components/ui'
 import { cn } from '../../../../lib/cn'
+import { recordSyncState } from '../../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../../components/shared/SyncStateBadge'
 import { formatDate, tokenBadgeVariant } from './boardUtils'
 import { ConvertedAmount } from '../../../exchange/components/ConvertedAmount'
 import { useConvertedAmountText } from '../../../exchange/hooks/useConvertedAmountText'
@@ -40,16 +42,22 @@ function DealCardBody({ card, movedBy, isOverlay = false, lockedByOwnership = fa
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <Link
-          to={`/deals/${card.id}`}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
-          }}
-          className="rounded-sm text-sm font-medium text-fg hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        >
-          {card.title}
-        </Link>
+        <span className="inline-flex items-center gap-1.5">
+          <Link
+            to={`/deals/${card.id}`}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
+            }}
+            className="rounded-sm text-sm font-medium text-fg hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            {card.title}
+          </Link>
+          {/* Masaüstünde çevrimdışı taşınan bir kart sunucuya ulaşana kadar burada işaretli
+              kalır; web'in board yanıtında `sync_state` hiç yer almadığı için rozet `null`
+              döner ve kart bugünküyle birebir aynıdır (bkz. `crm.ts` `boardCard()`). */}
+          <SyncStateBadge state={recordSyncState(card)} compact />
+        </span>
         <div className="flex shrink-0 items-center gap-1.5">
           {lockedByOwnership && !isOverlay && (
             <span

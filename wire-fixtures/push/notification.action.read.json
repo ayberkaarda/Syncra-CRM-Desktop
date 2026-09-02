@@ -1,0 +1,56 @@
+{
+  "id": "push/notification.action.read",
+  "why": "Whitelist 11/12. Addressed by client_id even though the row exists on the server: notifications.id IS a server-minted UUID and there is no second column (protocol 6.1 D10). The payload is an EMPTY object, not absent.",
+  "op": "action",
+  "entity": "notification",
+  "action": "read",
+  "local_mutation": {
+    "entity": "notification",
+    "op": "action",
+    "action": "read",
+    "client_id": "e7c0ffee-0000-4000-8000-000000000014",
+    "payload": {}
+  },
+  "outbox": {
+    "seq": 14,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000014",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": null,
+    "base_sync_version": null,
+    "scope": null
+  },
+  "wire": {
+    "seq": 14,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000014",
+    "op": "action",
+    "entity": "notification",
+    "client_id": "e7c0ffee-0000-4000-8000-000000000014",
+    "action": "read",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {}
+  },
+  "composer": {
+    "domain": "notifications",
+    "method": "markRead",
+    "args": [
+      "e7c0ffee-0000-4000-8000-000000000014"
+    ],
+    "row": {
+      "client_id": "e7c0ffee-0000-4000-8000-000000000014",
+      "server_id": null,
+      "local_rowid": 14,
+      "type": "App\\Notifications\\Dummy",
+      "data": {},
+      "read_at": null,
+      "created_at": "2026-08-30T11:00:00.000Z",
+      "sync_version": 185008
+    }
+  },
+  "server": {
+    "scenario": "notification",
+    "bind": {
+      "client_id": "notification.id"
+    },
+    "expect": "applied"
+  }
+}

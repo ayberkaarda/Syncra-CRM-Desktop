@@ -44,6 +44,8 @@
 
 `activity_log`, `page_visit_logs`, `session_logs`, `sessions`, `personal_access_tokens`, `password_reset_tokens`, `email_templates`, `automation_rules`, `attachments`, `jobs*`, `cache*`.
 
+> **Not (KARAR A29, defter O90):** `attachments` bu listede **kalır** — satırları da dosya baytları da hiç senkronlanmaz. Ancak `messages` pull satırı, bağlı ekin metadata'sını düzleştirilmiş dört alan olarak taşır: `attachment_name`, `attachment_mime`, `attachment_size`, `attachment_is_image` (`SyncPullService::attachMessageAttachments()`; `deleted_at` dolu satırda eklenmez). Amaç, ekli bir mesajın masaüstünde **boş balon** olarak görünmemesidir. Bkz. `SYNCDESKTOP.md` §4.4 A29.
+
 ### 1.4 KARAR P1 — `taggables` kendi `sync_version`'ını ALMAZ
 
 `taggables` **pull tablo setinden çıkarılır** ve `sync_deletions`'a hiç girmez.

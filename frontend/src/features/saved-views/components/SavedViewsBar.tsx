@@ -15,6 +15,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Bookmark, Loader2, Share2, Trash2 } from 'lucide-react'
 import { Button, Checkbox, Input, Modal } from '../../../components/ui'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { getFieldErrors } from '../../../lib/axios'
 import { useCreateSavedView, useDeleteSavedView, useSavedViews, useUpdateSavedView } from '../api/savedViewsApi'
 import type { SavedView, SavedViewModule, SavedViewQuery } from '../types'
@@ -55,6 +56,11 @@ export function SavedViewsBar({ module, filterKeys }: SavedViewsBarProps) {
   const createSavedView = useCreateSavedView(module)
   const updateSavedView = useUpdateSavedView(module)
   const deleteSavedView = useDeleteSavedView(module)
+  // SYNCDESKTOP §8 (O102): `saved-views create/update`. The DELETE is deliberately NOT guarded —
+  // §8 names create and update only, and `SPEC_8_METHODS` follows it, so widening the list here
+  // would be this strand inventing a rule the specification does not state.
+  const createGuard = useOnlineOnly('savedViews.create')
+  const updateGuard = useOnlineOnly('savedViews.update')
 
   const [manageOpen, setManageOpen] = useState(false)
   const [showSaveForm, setShowSaveForm] = useState(false)
@@ -149,7 +155,13 @@ export function SavedViewsBar({ module, filterKeys }: SavedViewsBarProps) {
       >
         <div className="flex flex-col gap-4">
           {!showSaveForm ? (
-            <Button type="button" variant="secondary" onClick={() => setShowSaveForm(true)}>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={createGuard.offline}
+              title={createGuard.title}
+              onClick={() => setShowSaveForm(true)}
+            >
               {t('savedViews:actions.saveCurrent')}
             </Button>
           ) : (
@@ -172,7 +184,13 @@ export function SavedViewsBar({ module, filterKeys }: SavedViewsBarProps) {
                 <Button type="button" variant="secondary" size="sm" onClick={closeSaveForm}>
                   {t('common:actions.cancel')}
                 </Button>
-                <Button type="submit" size="sm" loading={createSavedView.isPending} disabled={!name.trim()}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  loading={createSavedView.isPending}
+                  disabled={!name.trim() || createGuard.offline}
+                  title={createGuard.title}
+                >
                   {t('common:actions.save')}
                 </Button>
               </div>
@@ -231,9 +249,13 @@ export function SavedViewsBar({ module, filterKeys }: SavedViewsBarProps) {
                           <button
                             type="button"
                             onClick={() => toggleShare(view)}
+                            disabled={updateGuard.offline}
                             aria-label={view.is_shared ? t('savedViews:aria.unshare', { name: view.name }) : t('savedViews:aria.share', { name: view.name })}
-                            title={view.is_shared ? t('savedViews:actions.unshare') : t('savedViews:actions.share')}
-                            className="inline-flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg"
+                            title={
+                              updateGuard.title ??
+                              (view.is_shared ? t('savedViews:actions.unshare') : t('savedViews:actions.share'))
+                            }
+                            className="inline-flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Share2 className={view.is_shared ? 'size-3.5 text-primary' : 'size-3.5'} aria-hidden="true" />
                           </button>

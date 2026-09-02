@@ -1,9 +1,13 @@
 // Global okunmamış sohbet rozeti — `private-user.{currentUserId}` kanalındaki `.chat.unread`.
 //
-// KANAL SAHİPLİĞİ NOTU: `user.{id}` kanalı Faz 10'dan beri `useNotificationSocket` tarafından
-// da dinleniyor. `Echo.leave()` referans SAYMADIĞI için burada ASLA çağrılmaz — çağrılsaydı
-// bildirim zilinin dinleyicisi de sessizce düşerdi. Bu kanca yalnızca kendi dinleyicisini
-// bağlar ve `stopListening` ile bırakır; kanalın ömrü bildirim kancasına aittir.
+// KANAL SAHİPLİĞİ NOTU: `user.{id}` kanalı `useNotificationSocket`, `useTaskReminders` ve
+// `useRealtimeSession` tarafından da dinleniyor. `Echo.leave()` referans SAYMADIĞI için burada
+// DOĞRUDAN çağrılmaz — bunun yerine kanal PAYLAŞILAN, referans sayan
+// `src/lib/channelRegistry.ts` üzerinden alınır/bırakılır: `releaseChannel` yalnızca TÜM
+// `user.{id}` abonelerinin (dört kanca) sayacı sıfıra indiğinde gerçek `echo.leave`'i tetikler,
+// bu yüzden burada da güvenle çağrılabilir. Bu kanca yine yalnızca KENDİ dinleyicisini bağlar
+// ve `stopListening` ile bırakır — kanalın ömrü artık hiçbir tek kancaya ait değil, registry'ye
+// ait.
 //
 // Rozet SUNUCU OTORİTELİDİR: ilk değer `GET /api/conversations/unread-count` ile alınır,
 // sonrasında her olay hem konuşma bazlı hem toplam sayacı taşıdığı için istemcide toplama
@@ -11,11 +15,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getEcho, onConnectionStateChange } from '../../../lib/echo'
+import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { useAuthStore } from '../../auth/store'
-import { chatKeys, fetchChatUnreadCount } from '../api'
+import { chatKeys } from '../api'
 import { bumpConversationPreview, hasConversationInLists } from './chatCache'
 import { useChatStore } from '../store'
 import type { ChatUnreadEvent } from '../types'
+import { getPlatform } from '../../../platform'
 
 const EVENT_NAME = '.chat.unread'
 
@@ -47,7 +53,7 @@ export function useChatUnread(): UseChatUnreadResult {
 
   const snapshotQuery = useQuery({
     queryKey: chatKeys.unreadCount,
-    queryFn: fetchChatUnreadCount,
+    queryFn: () => getPlatform().data.chat.unreadCount(),
     enabled: userId !== undefined,
     staleTime: 60_000,
   })
@@ -59,10 +65,10 @@ export function useChatUnread(): UseChatUnreadResult {
 
   useEffect(() => {
     if (!echoAvailable || userId === undefined) return
-    const echo = getEcho()
-    if (!echo) return
+    const channelName = `user.${userId}`
+    const channel = acquireChannel(channelName)
+    if (!channel) return
 
-    const channel = echo.private(`user.${userId}`)
     sharedSubscriberCount += 1
 
     if (!sharedUnbind) {
@@ -93,13 +99,17 @@ export function useChatUnread(): UseChatUnreadResult {
     }
 
     return () => {
+      // `sharedSubscriberCount`/`sharedUnbind` yalnızca BU KANCANIN kendi dinleyicisini kaç
+      // mount'un paylaştığını izler — sayaç sıfıra inince yalnızca KENDİ dinleyicimiz bırakılır.
+      // `releaseChannel` ise HER unmount'ta, bu sayaçtan BAĞIMSIZ çağrılır: her `acquireChannel`
+      // (yukarıda, HER mount'ta) tam olarak BİR `releaseChannel` ile eşleşmelidir.
       sharedSubscriberCount -= 1
       if (sharedSubscriberCount <= 0) {
         sharedSubscriberCount = 0
         sharedUnbind?.()
         sharedUnbind = null
-        // `echo.leave('user.{id}')` BİLEREK ÇAĞRILMAZ — bkz. dosya başındaki kanal sahipliği notu.
       }
+      releaseChannel(channelName)
     }
   }, [echoAvailable, userId, applyUnreadEvent, queryClient])
 

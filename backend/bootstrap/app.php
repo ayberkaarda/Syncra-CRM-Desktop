@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureDeviceToken;
 use App\Http\Middleware\EnsurePasswordIsChanged;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\SecurityHeaders;
@@ -13,6 +14,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -109,10 +111,27 @@ return Application::configure(basePath: dirname(__DIR__))
          */
         $middleware->prepend(SecurityHeaders::class);
 
-        // Sanctum SPA cookie mode: requests whose Origin/Referer matches
-        // config('sanctum.stateful') get the full session stack (cookies,
-        // StartSession, CSRF, AuthenticateSession) on the `api` group.
-        // No API tokens are used anywhere - User does not use HasApiTokens.
+        /*
+         * Sanctum SPA cookie mode: requests whose Origin/Referer matches
+         * config('sanctum.stateful') get the full session stack (cookies,
+         * StartSession, CSRF, AuthenticateSession) on the `api` group.
+         *
+         * UPDATED IN F1: API tokens now exist. User uses HasApiTokens and the
+         * desktop client authenticates with a Sanctum personal access token
+         * (POST /api/auth/device, ability `desktop`). The two modes coexist
+         * without a switch - Sanctum's guard tries the session first and falls
+         * back to the bearer token - and the SPA's path is byte-for-byte
+         * unchanged.
+         *
+         * TRAP, worth stating here because this is the line that arms it
+         * (protocol §3.8): fromFrontend() decides statefulness from the
+         * Origin/Referer header ALONE. If the desktop webview's origin (on
+         * Windows `http://tauri.localhost`) ever appears in
+         * SANCTUM_STATEFUL_DOMAINS, its bearer requests become stateful,
+         * ValidateCsrfToken engages, and every POST - /api/broadcasting/auth
+         * first - fails with 419 CSRF_TOKEN_MISMATCH while carrying a
+         * perfectly valid token. The desktop origin stays OUT of that list.
+         */
         $middleware->statefulApi();
 
         /*
@@ -157,6 +176,28 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'password.changed' => EnsurePasswordIsChanged::class,
+
+            /*
+             * `ability` is NOT a framework default (F1 / protocol §3.4).
+             * Laravel 11 dropped it from Middleware::defaultAliases() and
+             * Sanctum registers no aliases of its own, so the sync route
+             * group's `ability:desktop` would fail at BOOT with
+             * BindingResolutionException rather than at request time. The
+             * error mapping needs no new code: MissingAbilityException
+             * extends AuthorizationException, which surfaces as
+             * AccessDeniedHttpException and lands on the 403 branch below;
+             * an absent token raises AuthenticationException -> 401.
+             */
+            'ability' => CheckForAnyAbility::class,
+
+            /*
+             * `ability:desktop` alone is not a gate (protocol §3.3/K-A):
+             * TransientToken::can() returns an unconditional true, so every
+             * SPA cookie session passes it. EnsureDeviceToken demands the
+             * concrete PersonalAccessToken class, which is the only check
+             * that actually separates a device from a browser.
+             */
+            'device.token' => EnsureDeviceToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) use ($apiError, $statusCodes) {

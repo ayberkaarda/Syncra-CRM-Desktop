@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Models\PriceList;
 use App\Models\PriceListItem;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -141,10 +142,24 @@ class PriceListRepository
      */
     public function clearOtherDefaults(int $exceptPriceListId): void
     {
-        PriceList::query()
+        // Protocol §2.3 #7: same shape as ContactRepository::
+        // clearOtherPrimaryContacts() - keep the bulk UPDATE, collect the keys,
+        // version each demoted row separately (§2.5).
+        $demoted = PriceList::query()
             ->where('id', '!=', $exceptPriceListId)
             ->where('is_default', true)
+            ->pluck('id')
+            ->all();
+
+        if ($demoted === []) {
+            return;
+        }
+
+        PriceList::query()
+            ->whereIn('id', $demoted)
             ->update(['is_default' => false]);
+
+        SyncVersionBumper::bumpRows('price_lists', $demoted);
     }
 
     /**
@@ -192,11 +207,29 @@ class PriceListRepository
         return $item->load('product');
     }
 
+    /**
+     * Protocol §2.3 #8 - the bulk `delete()` deletes rows without ever
+     * instantiating a model, so nothing in PHP observes the removal. Resolving
+     * the row first and deleting THAT model makes the `deleting` event fire,
+     * which is what any deletion-side mechanism (today: none for this table,
+     * protocol §2.7) has to hang off. At most one row can match - the
+     * (price_list_id, product_id) pair is unique - so this is not an N+1.
+     *
+     * That event is now load-bearing: KARAR P19 registers SyncDeletionObserver
+     * on PriceListItem, so this delete writes a `sync_deletions` row. Before
+     * P19 the table was the one HARD-DELETE surface on the read-only side of
+     * the sync scope with no tombstone at all, which meant a desktop client's
+     * price mirror could only ever GROW - a withdrawn price stayed on screen
+     * forever. Reverting this method to a bulk `delete()` would silently
+     * reopen that hole.
+     */
     public function removePrice(PriceList $priceList, int $productId): void
     {
-        PriceListItem::query()
+        $item = PriceListItem::query()
             ->where('price_list_id', $priceList->id)
             ->where('product_id', $productId)
-            ->delete();
+            ->first();
+
+        $item?->delete();
     }
 }

@@ -2,7 +2,8 @@
 // sınırlanır, verilmezse kullanıcının erişebildiği tüm sohbetlerde arar.
 import { useEffect, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { chatKeys, searchMessagesRequest } from '../api'
+import { chatKeys } from '../api'
+import { getPlatform } from '../../../platform'
 
 /** Bu uzunluğun altındaki sorgular sunucuya HİÇ gitmez — tek harflik arama tüm arşivi tarar. */
 export const MIN_SEARCH_LENGTH = 2
@@ -25,7 +26,7 @@ export function useSearchMessages(q: string, conversationId?: number) {
 
   return useQuery({
     queryKey: chatKeys.search(debounced, conversationId),
-    queryFn: () => searchMessagesRequest(debounced, conversationId),
+    queryFn: () => getPlatform().data.chat.searchMessages(debounced, conversationId),
     enabled: debounced.length >= MIN_SEARCH_LENGTH,
     // Yeni sonuçlar gelene kadar önceki liste ekranda kalsın (boş-dolu titremesi olmasın).
     placeholderData: keepPreviousData,

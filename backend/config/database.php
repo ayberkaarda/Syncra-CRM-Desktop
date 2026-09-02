@@ -54,8 +54,32 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            /*
+             * Faz F1 — `innodb_lock_wait_timeout` CONNECTION LEVEL (protokol §2.4/P4a).
+             *
+             * Desktop sync serialises every write on a single `sync_counter`
+             * row (K-B: that serialisation IS the "commit order == version
+             * order" guarantee the pull cursor depends on). Contention is
+             * therefore normal, and probes C1/C2 measured it ending in
+             * `1205 Lock wait timeout`.
+             *
+             * MySQL/MariaDB default to 50 SECONDS. A push request hanging for
+             * 50 seconds is indistinguishable from a hung server: the client
+             * has already retried, the PHP worker is pinned, and the user sees
+             * nothing. 10 seconds turns that into a loud, fast failure that
+             * SyncPushService then retries deliberately (1205/1213, three
+             * attempts, 100/400/900 ms with jitter).
+             *
+             * Set through PDO::MYSQL_ATTR_INIT_COMMAND rather than in my.cnf so
+             * the value is DETERMINISTIC per deployment - it travels with the
+             * application instead of depending on whichever server config the
+             * environment happens to have. It is a SESSION setting, so it
+             * affects only connections this application opens.
+             */
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                PDO::MYSQL_ATTR_INIT_COMMAND => 'SET SESSION innodb_lock_wait_timeout = '
+                    .(int) env('DB_LOCK_WAIT_TIMEOUT', 10),
             ]) : [],
         ],
 

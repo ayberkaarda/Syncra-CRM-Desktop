@@ -13,6 +13,15 @@
 // gösterir: boş bir grup BAŞLIĞI bile "bu modül var, sen göremiyorsun" bilgisini
 // sızdırır (bkz. GlobalSearchService sınıf dokümanı, aynı gerekçe).
 //
+// KAYNAK ETİKETİ (`SYNCDESKTOP.md` §7.2) — PLATFORM DALLANMASI YOK:
+// Masaüstünde arama İKİ dizinden gelir (yerel FTS + `GET /api/search`, `desktop/src/platform/
+// data/comms.ts`), bu yüzden her sonuç hangisinden geldiğini `search_source` alanıyla taşır ve
+// aşağıda küçük bir etiket olarak görünür. Web'de tek dizin vardır (sunucu): `web.ts`
+// `fetchGlobalSearch` yanıtını olduğu gibi döner, alan HİÇ dolmaz, `searchResultSource()`
+// `null` okur ve etiket hiç basmaz. Yani ayrımı yapan `isDesktop` değil, ALANIN VARLIĞIdir —
+// `SyncStateBadge` / `recordSyncState` ile BİREBİR AYNI desen (KARAR A19). Tek kaynaklı bir
+// listede her satıra "Sunucu" basmak zaten bilgi değil gürültü olurdu.
+//
 // ERİŞİLEBİLİRLİK: ARIA "listbox içinde combobox" deseni — odak her zaman input'ta kalır,
 // sanal seçim `aria-activedescendant` ile duyurulur (Modal.tsx'teki gerçek odak tuzağının
 // aksine, burada yalnızca input + kapat düğmesi arasında iki durak var — bkz. `handleKeyDown`
@@ -27,6 +36,7 @@ import { cn } from '../../../lib/cn'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { MIN_QUERY_LENGTH, useGlobalSearch } from '../api/searchApi'
 import type { SearchGroupKey, SearchResultItem } from '../types'
+import type { SearchResultSource } from '../../../platform/types'
 
 export type CommandPaletteProps = {
   open: boolean
@@ -57,6 +67,23 @@ const MODULE_ORDER: ModuleConfig[] = [
   { key: 'tickets', icon: LifeBuoy, navKey: 'nav.tickets' },
   { key: 'users', icon: UserCog, navKey: 'nav.users' },
 ]
+
+/**
+ * Bir sonucun hangi dizinden geldiği — `recordSyncState()` ile AYNI disiplin: değer
+ * DOĞRULANIR, cast EDİLMEZ.
+ *
+ * Argüman `unknown`, çünkü `search_source` bir alan DEĞİLDİR — `SearchResultItem` onu bilmez;
+ * `WithSearchSource<T>` (`platform/types.ts`) ile yalnızca çift dizinli bir platformun
+ * doldurduğu isteğe bağlı bir ektir. Tanınmayan her değer (web'in ürettiği `undefined`
+ * dahil) `null` döner ve etiket basmaz. Dışa AKTARILMAZ: bir `.tsx` dosyasının hem bileşen
+ * hem düz fonksiyon ihraç etmesi o dosyanın Fast Refresh'ini bozar (bkz.
+ * `components/shared/recordSyncState.ts` başlığı).
+ */
+function searchResultSource(item: unknown): SearchResultSource | null {
+  if (item === null || typeof item !== 'object') return null
+  const source = (item as { search_source?: unknown }).search_source
+  return source === 'local' || source === 'server' ? source : null
+}
 
 type FlatItem = SearchResultItem & { groupKey: SearchGroupKey; domId: string; index: number }
 
@@ -304,6 +331,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     <ul className="flex flex-col">
                       {group.items.map((item) => {
                         const active = item.index === activeIndex
+                        const source = searchResultSource(item)
                         return (
                           <li key={item.domId} role="presentation">
                             <button
@@ -327,6 +355,18 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                                   <span className="truncate text-xs text-fg-muted">{item.subtitle}</span>
                                 )}
                               </span>
+                              {source && (
+                                <span
+                                  className={cn(
+                                    'ml-auto shrink-0 rounded border border-border-subtle px-1.5 py-0.5',
+                                    'text-[10px] font-medium uppercase tracking-wide text-fg-muted'
+                                  )}
+                                >
+                                  {source === 'local'
+                                    ? t('desktop:search.sourceLocal')
+                                    : t('desktop:search.sourceServer')}
+                                </span>
+                              )}
                             </button>
                           </li>
                         )

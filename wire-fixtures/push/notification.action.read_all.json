@@ -1,0 +1,49 @@
+{
+  "id": "push/notification.action.read_all",
+  "why": "Whitelist 12/12 and protocol 4.3 P10: the ONE mutation with no row identity at all. No client_id, no server_id, no payload - and `scope: \"user\"`, which the OUTBOX adds, not the composer. Without the scope the server answers INVALID_MUTATION.",
+  "op": "action",
+  "entity": "notification",
+  "action": "read_all",
+  "local_mutation": {
+    "entity": "notification",
+    "op": "action",
+    "action": "read_all"
+  },
+  "outbox": {
+    "seq": 15,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000015",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": null,
+    "base_sync_version": null,
+    "scope": "user"
+  },
+  "wire": {
+    "seq": 15,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000015",
+    "op": "action",
+    "entity": "notification",
+    "action": "read_all",
+    "scope": "user",
+    "occurred_at": "2026-08-30T12:00:00.000Z"
+  },
+  "composer": {
+    "domain": "notifications",
+    "method": "markAllRead",
+    "args": [],
+    "row": {
+      "client_id": "e7c0ffee-0000-4000-8000-000000000014",
+      "server_id": null,
+      "local_rowid": 15,
+      "type": "App\\Notifications\\Dummy",
+      "data": {},
+      "read_at": null,
+      "created_at": "2026-08-30T11:00:00.000Z",
+      "sync_version": 185008
+    }
+  },
+  "server": {
+    "scenario": "notification",
+    "bind": {},
+    "expect": "applied"
+  }
+}

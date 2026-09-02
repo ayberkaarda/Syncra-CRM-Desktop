@@ -13,7 +13,6 @@ import type { UseMutationResult } from '@tanstack/react-query'
 import { toast } from '../../../components/ui'
 import { getErrorMessage } from '../../../lib/axios'
 import { useAuthStore } from '../../auth/store'
-import { deleteMessageRequest, editMessageRequest, sendMessageRequest } from '../api'
 import {
   createOptimisticMessage,
   findMessage,
@@ -28,6 +27,7 @@ import {
 import type { MessagesInfiniteData } from '../utils'
 import { bumpConversationPreview, getMessagesCache, updateMessagesCache } from './chatCache'
 import type { Attachment, ChatMessage, ChatUser, Message, SendMessagePayload } from '../types'
+import { getPlatform } from '../../../platform'
 
 /** İyimser kaydı en yeni sayfanın başına ekler (sıralama sözleşmesi: `utils.ts` başı). */
 function insertOptimistic(data: MessagesInfiniteData, message: ChatMessage): MessagesInfiniteData {
@@ -62,7 +62,7 @@ export function useSendMessage(conversationId: number): UseSendMessageResult {
 
   const mutation = useMutation<Message, Error, SendMessageVariables, { clientId: number }>({
     mutationFn: (variables) =>
-      sendMessageRequest(conversationId, {
+      getPlatform().data.chat.sendMessage(conversationId, {
         body: variables.body,
         attachment_id: variables.attachment_id,
         mentions: variables.mentions,
@@ -148,7 +148,7 @@ export function useEditMessage(conversationId: number) {
   const currentUserId = useAuthStore((state) => state.user?.id ?? null)
 
   return useMutation<Message, Error, EditMessageVariables, { previous: ChatMessage | undefined }>({
-    mutationFn: ({ messageId, body }) => editMessageRequest(messageId, body),
+    mutationFn: ({ messageId, body }) => getPlatform().data.chat.editMessage(messageId, body),
 
     onMutate: ({ messageId, body }) => {
       const previous = findMessage(getMessagesCache(queryClient, conversationId), messageId)
@@ -192,7 +192,7 @@ export function useDeleteMessage(conversationId: number) {
   return useMutation<void, Error, number, { previous: ChatMessage | undefined; local: boolean }>({
     mutationFn: async (messageId) => {
       if (messageId < 0) return
-      await deleteMessageRequest(messageId)
+      await getPlatform().data.chat.deleteMessage(messageId)
     },
 
     onMutate: (messageId) => {

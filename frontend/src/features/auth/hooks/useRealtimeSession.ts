@@ -5,7 +5,8 @@
 // deneyimini iyileştirir — Reverb ulaşılamazsa kullanıcı zaten bir sonraki
 // istekte katman 1 tarafından durdurulur.
 import { useEffect } from 'react'
-import { disconnectEcho, getEcho } from '../../../lib/echo'
+import { disconnectEcho } from '../../../lib/echo'
+import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { toast } from '../../../components/ui'
 import { useAuthStore } from '../store'
 import { router } from '../../../router'
@@ -27,6 +28,11 @@ type UserDeactivatedPayload = {
  * `registerAuthRedirect()` içindeki 401/`USER_DEACTIVATED` callback'iyle
  * BİREBİR aynı iki adımı (store temizle → aynı `router` örneğiyle `/login`'e
  * git) izler, böylece ikinci bir yönlendirme yolu icat edilmemiş olur.
+ *
+ * Kanal aboneliği PAYLAŞILAN, referans sayan `src/lib/channelRegistry.ts` üzerinden alınır —
+ * aynı `user.{id}` kanalını `useTaskReminders.ts`, `useNotificationSocket.ts` ve
+ * `useChatUnread.ts` da dinliyor; `Echo.leave()` referans SAYMADIĞI için doğrudan çağrılsaydı
+ * bu diğer abonelerin dinleyicilerini de düşürürdü.
  */
 export function useRealtimeSession() {
   const userId = useAuthStore((state) => state.user?.id)
@@ -34,21 +40,22 @@ export function useRealtimeSession() {
   useEffect(() => {
     if (!userId) return
 
-    const echo = getEcho()
-    if (!echo) return
-
     const channelName = `user.${userId}`
-    const channel = echo.private(channelName)
+    const channel = acquireChannel(channelName)
+    if (!channel) return
 
-    channel.listen('.user.deactivated', (payload: UserDeactivatedPayload) => {
+    const handleDeactivated = (payload: UserDeactivatedPayload) => {
       toast.error(payload.message || i18n.t('auth:session.deactivated'))
       disconnectEcho()
       useAuthStore.getState().clear()
       void router.navigate('/login')
-    })
+    }
+
+    channel.listen('.user.deactivated', handleDeactivated)
 
     return () => {
-      echo.leave(channelName)
+      channel.stopListening('.user.deactivated', handleDeactivated)
+      releaseChannel(channelName)
     }
     // Kullanıcı değişince (logout/login) abonelik temizlenip yeniden kurulur.
   }, [userId])

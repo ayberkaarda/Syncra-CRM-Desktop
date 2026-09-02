@@ -1,0 +1,67 @@
+{
+  "id": "push/quote.action.status",
+  "why": "Whitelist 8/12. `quote.status` survives being made offline; `quote.send` and `quote.revise` do not (ONLINE_ONLY). `reason` has no column - it lands in activity_log.",
+  "op": "action",
+  "entity": "quote",
+  "action": "status",
+  "local_mutation": {
+    "entity": "quote",
+    "op": "action",
+    "action": "status",
+    "client_id": "c1000000-0000-4000-8000-000000000011",
+    "payload": {
+      "status": "accepted",
+      "reason": "Müşteri onayladı."
+    }
+  },
+  "outbox": {
+    "seq": 11,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000011",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 9601,
+    "base_sync_version": 185006,
+    "scope": null
+  },
+  "wire": {
+    "seq": 11,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000011",
+    "op": "action",
+    "entity": "quote",
+    "server_id": 9601,
+    "action": "status",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "status": "accepted",
+      "reason": "Müşteri onayladı."
+    }
+  },
+  "composer": {
+    "domain": "quotes",
+    "method": "status",
+    "args": [
+      9601,
+      "accepted",
+      "Müşteri onayladı."
+    ],
+    "note": "Called WITH a reason on purpose. work.ts::status passes `reason || undefined`, and an undefined value disappears in JSON - so the reason-less call produces a different body, not this one.",
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000011",
+      "server_id": 9601,
+      "local_rowid": 11,
+      "quote_number": "Q-2026-0001",
+      "status": "sent",
+      "currency": "TRY",
+      "subtotal": "1000.00",
+      "total": "1180.00",
+      "items": [],
+      "sync_version": 185006
+    }
+  },
+  "server": {
+    "scenario": "quote",
+    "bind": {
+      "server_id": "quote.id"
+    },
+    "expect": "applied"
+  }
+}

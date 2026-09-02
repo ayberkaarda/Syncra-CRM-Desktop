@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\Models\Quote;
 use App\Models\QuoteItem;
 use App\Services\Quotes\QuoteExpiry;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -185,6 +186,16 @@ class QuoteRepository
         }
 
         $quote->unsetRelation('items');
+
+        /*
+         * Protocol §2.3 #1 / §1.5 - quote items are NOT a sync table: they ride
+         * inside the quote's `items` payload (K-F). The bulk delete above stays
+         * exactly as it is, and no per-item tombstone is owed. What IS owed is
+         * the owner's version: editing only line amounts leaves every column of
+         * `quotes` untouched, so without this bump the totals a client shows
+         * would silently diverge from the server's.
+         */
+        SyncVersionBumper::bump($quote);
     }
 
     /**

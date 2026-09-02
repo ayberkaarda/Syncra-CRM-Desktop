@@ -26,6 +26,9 @@ import {
   Tr,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { usePermission } from '../../auth/hooks/usePermission'
 import { SavedViewsBar } from '../../saved-views/components/SavedViewsBar'
 import { useDeleteLead, useLeads, useOwnerOptions, useTags } from '../api/leadsApi'
@@ -66,6 +69,11 @@ export function LeadsPage() {
   const [assignLead, setAssignLead] = useState<Lead | null>(null)
   const [deleteLead, setDeleteLeadState] = useState<Lead | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  // SYNCDESKTOP §8 (O102): both actions are server-only. On the web build both guards are
+  // permanently `{ offline: false, title: undefined }`, so the two triggers below render
+  // exactly as they did before.
+  const convertGuard = useOnlineOnly('leads.convert')
+  const importGuard = useOnlineOnly('leads.import')
 
   function updateParams(patch: Record<string, string | null>) {
     setSearchParams((prev) => {
@@ -158,7 +166,13 @@ export function LeadsPage() {
                 filterKeys={['status', 'source', 'owner_id', 'tag_id', 'score_min', 'score_max', 'from', 'to']}
               />
               {can('leads.import') && (
-                <Button variant="secondary" leftIcon={<Upload className="size-4" aria-hidden="true" />} onClick={() => setImportOpen(true)}>
+                <Button
+                  variant="secondary"
+                  leftIcon={<Upload className="size-4" aria-hidden="true" />}
+                  disabled={importGuard.offline}
+                  title={importGuard.title}
+                  onClick={() => setImportOpen(true)}
+                >
                   {t('leads:list.importButton')}
                 </Button>
               )}
@@ -332,9 +346,12 @@ export function LeadsPage() {
                       return (
                         <Tr key={lead.id}>
                           <Td>
-                            <Link to={`/leads/${lead.id}`} className="font-medium text-fg hover:text-primary hover:underline">
-                              {lead.full_name}
-                            </Link>
+                            <span className="inline-flex items-center gap-2">
+                              <Link to={`/leads/${lead.id}`} className="font-medium text-fg hover:text-primary hover:underline">
+                                {lead.full_name}
+                              </Link>
+                              <SyncStateBadge state={recordSyncState(lead)} compact />
+                            </span>
                           </Td>
                           <Td>{lead.company_name ?? '—'}</Td>
                           <Td className="text-fg-secondary">{lead.email ?? '—'}</Td>
@@ -392,8 +409,16 @@ export function LeadsPage() {
                               {!isConverted && can('leads.convert') && (
                                 <IconButton
                                   label={t('leads:actions.convert')}
-                                  disabled={!lead.can.convert}
-                                  title={lead.can.convert ? t('leads:actions.convert') : t('leads:actions.convertDisabledTitle')}
+                                  disabled={!lead.can.convert || convertGuard.offline}
+                                  // The §8 sentence WINS over the permission tooltip when both
+                                  // apply: "you cannot do this offline" is the condition the user
+                                  // can actually change, and it is the newer of the two.
+                                  title={
+                                    convertGuard.title ??
+                                    (lead.can.convert
+                                      ? t('leads:actions.convert')
+                                      : t('leads:actions.convertDisabledTitle'))
+                                  }
                                   onClick={() => setConvertLead(lead)}
                                 >
                                   <Repeat className="size-4" aria-hidden="true" />

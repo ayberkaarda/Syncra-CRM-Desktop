@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "i18n:check": "node scripts/check-i18n-parity.mjs",
     "i18n:check-bootstrap": "node scripts/check-i18n-bootstrap.mjs",
+    "i18n:dead-keys": "node scripts/check-i18n-dead-keys.mjs",
+    "i18n:notifications": "node scripts/check-notification-catalogue.mjs",
     "test:money-currency": "node scripts/check-money-currency-symbols.mjs"
   },
   "dependencies": {

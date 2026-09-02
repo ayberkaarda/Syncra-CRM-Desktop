@@ -1,8 +1,9 @@
 // Canlı Akış sekmesi — `private-logs` / `.activity.logged`. Bağlantı durumu göstergesi,
 // Duraklat/Devam butonu, yeni kayıt vurgusu (`motion-reduce` ile devre dışı) ve en fazla 100
 // kayıt sınırı `useActivityStream` içinde uygulanır. Bu bileşen unmount olduğunda (sekme
-// değişince `TabPanel` onu unmount eder) hook'un `useEffect` temizleyicisi `echo.leave()` çağırır
-// — ayrıca bir "leave" çağrısına gerek yok.
+// değişince `TabPanel` onu unmount eder) hook'un `useEffect` temizleyicisi kendi dinleyicisini
+// bırakıp `releaseChannel()` çağırır — kanalın kendisi PAYLAŞILAN, referans sayan
+// `src/lib/channelRegistry.ts` üzerinden yönetilir; ayrıca bir "leave" çağrısına gerek yok.
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'

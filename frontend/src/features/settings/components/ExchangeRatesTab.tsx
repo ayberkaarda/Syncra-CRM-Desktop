@@ -17,6 +17,7 @@ import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CircleAlert, TriangleAlert } from 'lucide-react'
 import { Badge, Button, Input, Select, Skeleton } from '../../../components/ui'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { formatDate } from '../../../lib/datetime'
 import { getFieldErrors } from '../../../lib/axios'
 import { useCreateManualExchangeRate, useExchangeRates } from '../hooks/useExchangeRates'
@@ -30,6 +31,10 @@ export function ExchangeRatesTab() {
   const { t } = useTranslation(['settings', 'common'])
   const { data, isLoading, isError, refetch } = useExchangeRates()
   const createRate = useCreateManualExchangeRate()
+  // SYNCDESKTOP §8 (O102) — "exchange-rates manuel". The rate LIST is a mirrored read
+  // (`exchange.current`, `kind: 'query'`) and stays available offline; only entering a new
+  // rate is server-only, so exactly the submit button is guarded and nothing else on the tab.
+  const rateGuard = useOnlineOnly('exchangeRates')
 
   const [currency, setCurrency] = useState<SupportedCurrency | ''>('')
   const [rate, setRate] = useState('')
@@ -173,7 +178,12 @@ export function ExchangeRatesTab() {
             error={fieldErrors.rate_date?.[0]}
           />
 
-          <Button type="submit" loading={createRate.isPending}>
+          <Button
+            type="submit"
+            loading={createRate.isPending}
+            disabled={rateGuard.offline}
+            title={rateGuard.title}
+          >
             {t('settings:exchangeRates.form.submit')}
           </Button>
         </div>

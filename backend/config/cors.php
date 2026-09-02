@@ -22,7 +22,31 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:5173')],
+    /*
+     * CORS-1: the desktop webview's origins do not equal the SPA origin and
+     * both must be listed, or every preflight from the Tauri app fails
+     * silently (browser reports a generic network error, no server-side
+     * clue). Measured origins:
+     *   - `http://localhost:1420`  `tauri dev` (Vite dev server on that app)
+     *   - `http://tauri.localhost` packaged/bundled build on Windows
+     *
+     * Configurable via DESKTOP_ORIGINS (comma-separated) so a different
+     * platform's origin (e.g. Linux's `tauri://localhost`) can be added
+     * without touching this file; the default below covers Windows dev +
+     * packaged, which is what this repo ships today.
+     *
+     * NOT the same list as SANCTUM_STATEFUL_DOMAINS (config/sanctum.php) -
+     * see the warning next to that setting. This is CORS only: it decides
+     * whether the browser lets the response through, not whether Laravel
+     * treats the request as a stateful (cookie) session.
+     */
+    'allowed_origins' => array_values(array_unique(array_merge(
+        [env('FRONTEND_URL', 'http://localhost:5173')],
+        array_filter(array_map(
+            'trim',
+            explode(',', (string) env('DESKTOP_ORIGINS', 'http://localhost:1420,http://tauri.localhost')),
+        )),
+    ))),
 
     'allowed_origins_patterns' => [],
 

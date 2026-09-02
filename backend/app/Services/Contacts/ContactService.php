@@ -5,6 +5,7 @@ namespace App\Services\Contacts;
 use App\Models\Contact;
 use App\Models\CustomFieldValue;
 use App\Repositories\ContactRepository;
+use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -114,6 +115,8 @@ class ContactService
     {
         $definitions = $this->contacts->customFieldDefinitions();
 
+        $changed = false;
+
         foreach ($values as $key => $value) {
             $field = $definitions->get($key);
 
@@ -121,7 +124,7 @@ class ContactService
                 continue;
             }
 
-            CustomFieldValue::query()->updateOrCreate(
+            $row = CustomFieldValue::query()->updateOrCreate(
                 [
                     'custom_field_id' => $field->id,
                     'customizable_type' => Contact::class,
@@ -131,6 +134,18 @@ class ContactService
                     'value' => is_array($value) ? json_encode($value) : $value,
                 ]
             );
+
+            $changed = $changed || $row->wasRecentlyCreated || $row->wasChanged();
+        }
+
+        // Embedded child (protocol §1.5): `custom_field_values` is not a pull
+        // table - its rows ride inside the owner's `custom_fields` payload.
+        // When ONLY a custom field changed, the owner row itself is clean, no
+        // observer fires, and the edit would never cross a client's cursor.
+        // Bumped only when something actually changed, so a no-op upsert does
+        // not manufacture a phantom delta.
+        if ($changed) {
+            SyncVersionBumper::bump($contact);
         }
     }
 }

@@ -1,0 +1,674 @@
+// `DataSource` implementations for chat, notifications and global search.
+//
+// Two contract details shape most of this file:
+//
+// * **`notifications.client_id` IS the id** (protocol §6.1 P12). That table has no
+//   `server_id` column, so every notification method addresses rows by their UUID string and
+//   never goes through the numeric-id path the other domains use.
+// * **`ACTION_WHITELIST` is the offline boundary.** `conversation.read` and
+//   `conversation.delivered` are on it and survive being done offline; conversation
+//   membership changes are not, and go to `platform.http` rather than into an outbox that
+//   would report success the server never granted.
+//
+// The global search at the bottom is the one method in this file that is neither purely
+// local nor purely remote: `SYNCDESKTOP.md` §7.2 asks for the local FTS index and the
+// online server search **unified**, with every hit labelled by the index that produced it.
+import type {
+  Attachment,
+  ChatUnreadCount,
+  Conversation,
+  ConversationCursorAck,
+  Message,
+  MessagesPage,
+} from '@/features/chat/types'
+import type { Notification, NotificationsListResponse } from '@/features/notifications/types'
+import type { SearchGroupKey, SearchResponse, SearchResultItem } from '@/features/search/types'
+import type {
+  ChatSource,
+  NotificationsSource,
+  SearchResultSource,
+  SearchSource,
+  WithSearchSource,
+} from '@/platform/types'
+
+import { http } from '../http'
+import { requireOnline } from '../onlineOnly'
+import { isEngineOnline } from '../status'
+import { sessionUserId } from '../session'
+import {
+  countRows,
+  MAX_PAGE,
+  num,
+  pagination,
+  runQuery,
+  searchLocal,
+  toInt,
+  type EntityName,
+  type LocalRow,
+  type NamedQuery,
+} from './engine'
+import { loadRefs, loadRefsByIds } from './refs'
+import {
+  mapConversation,
+  mapMessage,
+  mapNotification,
+  mapSearchResult,
+  SEARCH_GROUPS,
+} from './mappers'
+import {
+  createRow,
+  deleteRow,
+  deleteRowByClientId,
+  readBack,
+  runAction,
+  runActionByClientId,
+  runUserScopedAction,
+  updateRow,
+  updateRowByClientId,
+  type WritePayload,
+} from './writes'
+
+// ------------------------------------------------------------------------------------------------
+// Chat
+// ------------------------------------------------------------------------------------------------
+
+/** Conversations a record can be attached to (`conversable_type`). */
+const CONVERSABLE_ENTITIES: Record<string, EntityName> = { deal: 'deal', ticket: 'ticket' }
+
+async function conversationRefs(rows: LocalRow[]) {
+  // One membership read covers the whole page; the alternative is a query per conversation.
+  const membership = await runQuery({ query: 'conversation_membership' }, { limit: MAX_PAGE })
+  const [users, morphs] = await Promise.all([
+    loadRefs('user', membership, ['user_id', 'user_client_id']),
+    loadConversableRefs(rows),
+  ])
+  return { users, morphs, membership, sessionUserId: sessionUserId() }
+}
+
+async function loadConversableRefs(rows: LocalRow[]) {
+  const byType = new Map<string, Set<number>>()
+  for (const row of rows) {
+    const raw = typeof row.conversable_type === 'string' ? row.conversable_type : ''
+    const type = (raw.split('\\').pop() ?? raw).toLowerCase()
+    const id = toInt(row.conversable_id)
+    if (!CONVERSABLE_ENTITIES[type] || id === undefined || id <= 0) continue
+    const bucket = byType.get(type) ?? new Set<number>()
+    bucket.add(id)
+    byType.set(type, bucket)
+  }
+  const entries = await Promise.all(
+    [...byType].map(
+      async ([type, ids]) => [type, await loadRefsByIds(CONVERSABLE_ENTITIES[type], [...ids])] as const,
+    ),
+  )
+  return new Map(entries)
+}
+
+/** My `conversation_user` row for one conversation, which is where mute and unread live. */
+async function myMembership(conversationId: number): Promise<LocalRow | null> {
+  const userId = sessionUserId()
+  if (userId === undefined) return null
+  const rows = await runQuery(
+    { query: 'conversation_membership', user_id: userId, conversation_id: conversationId },
+    { limit: 1 },
+  )
+  return rows[0] ?? null
+}
+
+async function conversationById(id: number): Promise<Conversation> {
+  const row = await readBack('conversation', id)
+  return mapConversation(row, await conversationRefs([row]))
+}
+
+export const chatSource: ChatSource = {
+  conversations: async (query): Promise<Conversation[]> => {
+    const rows = await runQuery(
+      { query: 'conversation_list', kind: query.type, q: query.q?.trim() || undefined },
+      { limit: MAX_PAGE },
+    )
+    const refs = await conversationRefs(rows)
+    return rows.map((row) => mapConversation(row, refs))
+  },
+
+  conversation: (id) => conversationById(id),
+
+  /** The global badge: the sum of my own membership rows, plus the per-conversation split. */
+  unreadCount: async (): Promise<ChatUnreadCount> => {
+    const userId = sessionUserId()
+    if (userId === undefined) return { total_unread: 0, per_conversation: {} }
+    const rows = await runQuery(
+      { query: 'conversation_membership', user_id: userId },
+      { limit: MAX_PAGE },
+    )
+    const perConversation: Record<number, number> = {}
+    let total = 0
+    for (const row of rows) {
+      const conversationId = toInt(row.conversation_id)
+      const unread = num(row.unread_count)
+      if (conversationId === undefined) continue
+      perConversation[conversationId] = unread
+      total += unread
+    }
+    return { total_unread: total, per_conversation: perConversation }
+  },
+
+  createConversation: async (payload): Promise<Conversation> => {
+    // `member_ids` is not a mirror column; the local applier drops it and the server reads
+    // it off the pushed payload, which is exactly the split `collect_payload` is built for.
+    const clientId = await createRow('conversation', payload as unknown as WritePayload)
+    const row = await readBack('conversation', clientId)
+    return mapConversation(row, await conversationRefs([row]))
+  },
+
+  /**
+   * ONLINE-ONLY. `POST /api/conversations/for-record` is a server-side GET-OR-CREATE: the
+   * server decides whether a thread already exists for that record. Doing it locally would
+   * create a second thread for a record that already has one, and the two would never merge.
+   */
+  recordConversation: (conversableType, conversableId) =>
+    http
+      .post<{ data: Conversation }>('/api/conversations/for-record', {
+        conversable_type: conversableType,
+        conversable_id: conversableId,
+      })
+      .then((body) => body.data),
+
+  renameConversation: async (id, name): Promise<Conversation> => {
+    await updateRow('conversation', id, { name })
+    return conversationById(id)
+  },
+
+  deleteConversation: (id) => deleteRow('conversation', id),
+
+  /**
+   * ONLINE-ONLY. Membership is not one of the whitelisted `op = action` values
+   * (`syncra_sync::protocol::ACTION_WHITELIST`), which is the wire's way of saying the server
+   * answers `rejected` with `ONLINE_ONLY`. Queuing it would show the user a member who was
+   * never added.
+   */
+  addMembers: (id, userIds) =>
+    http
+      .post<{ data: Conversation }>(`/api/conversations/${id}/members`, { user_ids: userIds })
+      .then((body) => body.data),
+
+  /** ONLINE-ONLY, same reason as `addMembers`. */
+  removeMember: (id, userId) => http.delete<void>(`/api/conversations/${id}/members/${userId}`),
+
+  /** ONLINE-ONLY, same reason as `addMembers`. */
+  leaveConversation: (id) => http.post<void>(`/api/conversations/${id}/leave`),
+
+  /**
+   * Mute is a per-member column on `conversation_user` (protocol §2.2 names `is_muted` as one
+   * of the three per-person columns), and that table is read-write in the sync scope — so
+   * this is a plain field update, not an action, and it works offline.
+   */
+  muteConversation: async (id, isMuted): Promise<Conversation> => {
+    const membership = await myMembership(id)
+    if (membership && typeof membership.client_id === 'string') {
+      await updateRowByClientId('conversation_user', membership.client_id, { is_muted: isMuted })
+    }
+    return conversationById(id)
+  },
+
+  markRead: async (id, messageId): Promise<ConversationCursorAck> => {
+    // The request body field is `message_id`, NOT `last_read_message_id` — a wrong name is
+    // accepted silently by the server and marks the whole thread read (`features/chat/api.ts`).
+    await runAction('conversation', id, 'read', { message_id: messageId })
+    return cursorAck(id)
+  },
+
+  markDelivered: async (id, messageId): Promise<ConversationCursorAck> => {
+    await runAction('conversation', id, 'delivered', { message_id: messageId })
+    return cursorAck(id)
+  },
+
+  messages: async (conversationId, before, perPage): Promise<MessagesPage> => {
+    const limit = perPage ?? 30
+    const rows = await runQuery(
+      {
+        query: 'conversation_messages',
+        conversation_id: conversationId,
+        before_server_id: before,
+      },
+      // One extra row answers `has_more` without a second count query.
+      { limit: limit + 1 },
+    )
+    const hasMore = rows.length > limit
+    const page = hasMore ? rows.slice(0, limit) : rows
+    const users = await loadRefs('user', page, ['user_id', 'user_client_id'])
+    const data = page.map((row) => mapMessage(row, users))
+    return {
+      data,
+      // The page is newest-first, so the cursor for the next (older) page is its last row.
+      meta: { has_more: hasMore, next_before: hasMore ? (data[data.length - 1]?.id ?? null) : null },
+    }
+  },
+
+  /**
+   * Send a message, writing the row the way a pull would have written it.
+   *
+   * Two fields here are NOT free-form; both are copies of a server-side rule (KARAR A29):
+   *
+   * * **`type` is DERIVED from the attachment, never chosen.** `MessageService::create()`
+   *   writes `$attachmentId !== null ? Message::TYPE_FILE : Message::TYPE_TEXT`, and
+   *   `StoreMessageRequest` does not even accept a client `type` (a client that could pick one
+   *   could forge a `system` line). A hard-coded `'text'` therefore contradicted the server on
+   *   every attached message: the local row said `text` until the next pull replaced it with
+   *   `file`, and the bubble changed type under the user.
+   *
+   * * **the three `attachment_*` fields come from the upload response**, not from anything
+   *   re-derived here — see `rememberAttachmentMeta` below. Without them `mapMessage` answers
+   *   `attachment: null` (`mapAttachment` needs name + mime + size), `useSendMessage`'s
+   *   `onSuccess` replaces the correct optimistic bubble with that `null`, and the card the
+   *   user just dragged in DISAPPEARS until the next pull brings it back.
+   *
+   * `attachment_is_image` is deliberately NOT written. The mirror's copy of it is
+   * `str_starts_with($mime, 'image/')` (`SyncPullService::attachMessageAttachments()`, i.e. the
+   * `ChatAttachmentResource::payload()` definition), whereas the upload response's `is_image`
+   * is `Attachment::isInlineEligibleImage()` — a config allowlist, a strictly NARROWER set.
+   * Two different definitions behind one name: filling the column from the upload's answer
+   * would reintroduce exactly the kind of local/server disagreement this method is fixing, in
+   * the one field K7 is most explicit about. Left unset, the next pull writes the
+   * authoritative value; nothing on screen depends on it meanwhile, because `mapAttachment`
+   * forces `is_image: false` on desktop regardless.
+   */
+  sendMessage: async (conversationId, payload): Promise<Message> => {
+    const attachmentId = payload.attachment_id ?? undefined
+    const meta = attachmentId === undefined ? undefined : takeAttachmentMeta(attachmentId)
+    const clientId = await createRow('message', {
+      conversation_id: conversationId,
+      body: payload.body ?? undefined,
+      attachment_id: attachmentId,
+      mentions: payload.mentions?.length ? payload.mentions : undefined,
+      // The server's rule, mirrored — see docblock.
+      type: attachmentId === undefined ? 'text' : 'file',
+      // Spread rather than four `undefined`s: the local applier copies every payload key that
+      // is a real column, and writing explicit NULLs over a row a pull may already have filled
+      // would be a downgrade rather than a no-op.
+      ...(meta
+        ? {
+            attachment_name: meta.name,
+            attachment_mime: meta.mime,
+            attachment_size: meta.size,
+          }
+        : {}),
+    })
+    const row = await readBack('message', clientId)
+    return mapMessage(row, await loadRefs('user', [row], ['user_id', 'user_client_id']))
+  },
+
+  editMessage: async (messageId, body): Promise<Message> => {
+    await updateRow('message', messageId, { body })
+    const row = await readBack('message', messageId)
+    return mapMessage(row, await loadRefs('user', [row], ['user_id', 'user_client_id']))
+  },
+
+  deleteMessage: (messageId) => deleteRow('message', messageId),
+
+  searchMessages: async (q, conversationId): Promise<Message[]> => {
+    const hits = await searchLocal(q, ['message'], 50)
+    if (hits.length === 0) return []
+    const rows = await runQuery(
+      { query: 'rows_by_client_ids', entity: 'message', client_ids: hits.map((hit) => hit.client_id) },
+      { limit: hits.length },
+    )
+    const scoped =
+      conversationId === undefined
+        ? rows
+        : rows.filter((row) => toInt(row.conversation_id) === conversationId)
+    const users = await loadRefs('user', scoped, ['user_id', 'user_client_id'])
+    return scoped.map((row) => mapMessage(row, users))
+  },
+
+  /**
+   * ONLINE-ONLY, and listed as such in `SYNCDESKTOP.md` §8 ("attachments upload").
+   *
+   * §8 files it under "queued", but the queue is `files::attach_from_paths` (F5-5) and it does
+   * not exist yet — nor could this signature feed it: a `File` handle from the webview has no
+   * path to hand the Rust side. Until F5-5 lands the upload goes straight to the network,
+   * which fails visibly offline instead of pretending to have queued anything.
+   */
+  uploadAttachment: (file, onProgress, signal) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    // §8 defence layer 2 (O102). Until `files::attach_from_paths` (F5-5) exists there IS no
+    // queue, so offline this refuses with `action: 'attachments.upload'` rather than letting
+    // axios fail on a transport error — the dictionary sentence for this action is the one that
+    // tells the user what happens to the file, which a generic HTTP failure cannot.
+    return requireOnline('attachments.upload', () =>
+      http
+        .post<{ data: Attachment }>('/api/attachments', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          signal,
+          onUploadProgress: (event: { loaded: number; total?: number }) => {
+            if (!onProgress || !event.total) return
+            onProgress(Math.min(100, Math.round((event.loaded * 100) / event.total)))
+          },
+        })
+        .then((body) => {
+          // The one place the client ever learns an attachment's metadata. Remembered here so
+          // the send that follows can write it onto the message row — see below.
+          rememberAttachmentMeta(body.data)
+          return body.data
+        }),
+    )
+  },
+}
+
+// ------------------------------------------------------------------------------------------------
+// Attachment metadata carried from upload to send (KARAR A29)
+// ------------------------------------------------------------------------------------------------
+
+/** The three fields `mapAttachment` needs off a `messages` row. */
+type AttachmentMeta = { name: string; mime: string; size: number }
+
+/**
+ * How many uploaded-but-not-yet-sent attachments to remember.
+ *
+ * Small on purpose: what this bounds is "files the user has attached and not sent yet", which
+ * is a handful in practice. The number is a leak ceiling, not a capacity target.
+ */
+const ATTACHMENT_META_LIMIT = 32
+
+/**
+ * Metadata held between the upload that learned it and the send that writes it.
+ *
+ * **Why a hand-off exists at all.** `attachments` is outside sync scope (protocol §1.3): there
+ * is no local table to join, so an attachment's metadata lives on the `messages` row itself as
+ * four flat fields. The pull side flattens them server-side
+ * (`SyncPullService::attachMessageAttachments()`); the SEND side had nobody doing it, so a row
+ * the user's own message created carried `attachment_id` and nothing else.
+ *
+ * The client already holds the answer — `POST /api/attachments` replies with
+ * `AttachmentResource` (`original_name`, `mime_type`, `size`) — and was simply dropping it.
+ * `sendMessage`'s payload cannot carry it: that payload is the REST body of
+ * `POST /api/conversations/{id}/messages`, and widening it would change the shared `ChatSource`
+ * signature for a desktop-only need. This map is the contained alternative and keeps the whole
+ * fix inside this file.
+ *
+ * **Lifetime — it does not accumulate.** An entry is written by `uploadAttachment` and REMOVED
+ * by the first `sendMessage` that names it (`takeAttachmentMeta`); the normal flow is one
+ * upload then one send, so the map is empty again the moment the message exists.
+ * `ATTACHMENT_META_LIMIT` bounds the abnormal flows — files attached and then abandoned, or a
+ * composer that uploads several before sending any — by evicting the oldest entry. Eviction is
+ * safe: a miss degrades to the pre-A29 behaviour (the row still carries `attachment_id`, and
+ * the next pull fills the four fields in), never to a wrong value. Nothing is persisted, so a
+ * restart empties it with the same harmless outcome.
+ *
+ * The `Map` is insertion-ordered, which is what makes "evict the oldest" a `keys().next()`.
+ */
+const attachmentMeta = new Map<number, AttachmentMeta>()
+
+function rememberAttachmentMeta(attachment: Attachment): void {
+  // Delete-then-set so re-uploading the same id moves it to the BACK of the eviction order
+  // instead of keeping its original, older position.
+  attachmentMeta.delete(attachment.id)
+  attachmentMeta.set(attachment.id, {
+    name: attachment.original_name,
+    mime: attachment.mime_type,
+    size: attachment.size,
+  })
+  while (attachmentMeta.size > ATTACHMENT_META_LIMIT) {
+    const oldest = attachmentMeta.keys().next()
+    if (oldest.done) break
+    attachmentMeta.delete(oldest.value)
+  }
+}
+
+/** Read an entry and drop it: metadata is CONSUMED by the send, never kept afterwards. */
+function takeAttachmentMeta(attachmentId: number): AttachmentMeta | undefined {
+  const meta = attachmentMeta.get(attachmentId)
+  attachmentMeta.delete(attachmentId)
+  return meta
+}
+
+/**
+ * The cursor acknowledgement both read endpoints return.
+ *
+ * `unread_count` is server-authoritative on the web (a partial read may leave it non-zero);
+ * locally the membership row is the only source there is, and it is what the next pull will
+ * correct.
+ */
+async function cursorAck(conversationId: number): Promise<ConversationCursorAck> {
+  const membership = await myMembership(conversationId)
+  return {
+    last_read_message_id: membership ? (toInt(membership.last_read_message_id) ?? null) : null,
+    // The mirror has no delivered cursor; protocol §2.2 lists only the three per-person
+    // columns, and `last_delivered_message_id` is not among them.
+    last_delivered_message_id: null,
+    unread_count: membership ? num(membership.unread_count) : 0,
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Notifications
+// ------------------------------------------------------------------------------------------------
+
+export const notificationsSource: NotificationsSource = {
+  list: async (query): Promise<NotificationsListResponse> => {
+    const named: NamedQuery = { query: 'notification_list', read: query.read }
+    const [rows, total] = await Promise.all([
+      runQuery(named, { limit: 15, offset: (Math.max(1, query.page ?? 1) - 1) * 15 }),
+      countRows(named),
+    ])
+    return {
+      data: rows.map(mapNotification),
+      meta: { pagination: pagination({ page: query.page, per_page: 15 }, total) },
+    }
+  },
+
+  unreadCount: () => countRows({ query: 'notification_list', read: 'unread' }),
+
+  markRead: async (id): Promise<Notification> => {
+    // Addressed by `client_id`: `notifications.id` IS the local identity (protocol §6.1 P12).
+    await runActionByClientId('notification', id, 'read')
+    return mapNotification(await readBack('notification', id))
+  },
+
+  /** The one mutation with no row identity at all (protocol §4.3 P10, `scope: "user"`). */
+  markAllRead: () => runUserScopedAction('notification', 'read_all'),
+
+  delete: (id) => deleteRowByClientId('notification', id),
+}
+
+// ------------------------------------------------------------------------------------------------
+// Global search — the ONE unified read (`SYNCDESKTOP.md` §7.2)
+//
+// > "Command palette lokal FTS + online sunucu **birleşik** (kaynak etiketi)"
+//
+// Two indexes answer, not one:
+//
+//   * **local FTS always runs.** Offline it is the only index there is, and a palette that
+//     went quiet without a network would be worse than no palette.
+//   * **the server runs too, whenever the engine reports online.** The mirror holds a
+//     retention window, not the whole database (`SYNCDESKTOP.md` §5.1), so a record that has
+//     never been pulled exists ONLY on the server — and before this, an online user simply
+//     could not find it, with nothing on screen to say why.
+//
+// The failure direction is asymmetric on purpose: the server half is allowed to fail and the
+// local half is not. A 5xx, a timeout or a dropped link degrades the palette to local results
+// (with a warning in the console); it never turns search into something that returns nothing.
+// ------------------------------------------------------------------------------------------------
+
+/** How many hits the palette asks the local index for before grouping. */
+const SEARCH_LIMIT = 40
+
+/**
+ * Tag every item in a response with the index it came from.
+ *
+ * `search_source` is an optional extra field (`WithSearchSource`, `platform/types.ts`), so a
+ * tagged response is still a plain `SearchResponse` — which is exactly why the web adapter,
+ * which never calls this, needs no change and shows no label.
+ */
+function tagged(response: SearchResponse, source: SearchResultSource): SearchResponse {
+  const out: SearchResponse = {}
+  for (const [group, items] of Object.entries(response)) {
+    if (!Array.isArray(items)) continue
+    out[group as SearchGroupKey] = items.map(
+      (item): WithSearchSource<SearchResultItem> => ({ ...item, search_source: source }),
+    )
+  }
+  return out
+}
+
+/**
+ * The identity the two halves share.
+ *
+ * The mirror keeps `server_id` for every row that has ever been pushed, and `mapSearchResult`
+ * reports it as the item's `id` (`rowId()`), which is the same number `GET /api/search`
+ * returns. A row created offline has no `server_id` yet and reports `-local_rowid` instead —
+ * negative, so it cannot collide with anything the server sends, which is correct: the server
+ * has never heard of that record.
+ */
+function searchIdentity(item: SearchResultItem): string {
+  return `${item.type}:${item.id}`
+}
+
+/**
+ * The local half: FTS5, grouped into the same envelope `GET /api/search` returns.
+ *
+ * The server omits a group entirely when the user cannot see that module (an absent key is
+ * NOT the same as `[]` — `features/search/types.ts`). Locally the same rule holds for a
+ * different reason: a module the user cannot see was never pulled, so it produces no hits
+ * and therefore no key.
+ */
+async function localSearchGroups(term: string): Promise<SearchResponse> {
+  const entities = Object.keys(SEARCH_GROUPS) as EntityName[]
+  const hits = await searchLocal(term, entities, SEARCH_LIMIT)
+  if (hits.length === 0) return {}
+
+  const byEntity = new Map<string, string[]>()
+  for (const hit of hits) {
+    const bucket = byEntity.get(hit.entity) ?? []
+    bucket.push(hit.client_id)
+    byEntity.set(hit.entity, bucket)
+  }
+
+  const pages = await Promise.all(
+    [...byEntity].map(
+      async ([entity, clientIds]) =>
+        [
+          entity,
+          await runQuery(
+            { query: 'rows_by_client_ids', entity: entity as EntityName, client_ids: clientIds },
+            { limit: clientIds.length },
+          ),
+        ] as const,
+    ),
+  )
+
+  const response: SearchResponse = {}
+  for (const [entity, rows] of pages) {
+    const group = SEARCH_GROUPS[entity]?.group as keyof SearchResponse | undefined
+    if (!group) continue
+    const items = rows
+      .map((row) => mapSearchResult(entity, row))
+      .filter((item): item is SearchResultItem => item !== null)
+    if (items.length > 0) response[group] = items
+  }
+  return tagged(response, 'local')
+}
+
+/**
+ * The server half: the very same `GET /api/search` the web adapter calls.
+ *
+ * No client-side permission filter is added here either — the whitelist is
+ * `GlobalSearchService::search()`'s `Gate::allows('viewAny', ...)` pass, and re-filtering a
+ * set the server already filtered would only create a false sense of two checks
+ * (`CommandPalette.tsx`, `docs/PHASE-AUDIT.md` §5.4 C1).
+ */
+async function serverSearchGroups(term: string): Promise<SearchResponse> {
+  const body = await http.get<{ data: SearchResponse }>('/api/search', { params: { q: term } })
+  return tagged(body?.data ?? {}, 'server')
+}
+
+/**
+ * Merge the two halves, **local wins**.
+ *
+ * A record both indexes know about appears ONCE. The local copy is the one kept, and that
+ * direction is not arbitrary: the local row may carry the user's own edit that has not been
+ * pushed yet, so preferring the server's copy would show someone their record without the
+ * change they just made to it — the exact thing the pending badge exists to reassure them
+ * about.
+ *
+ * A group present in only one half survives untouched. Groups that end up empty are dropped,
+ * because an empty group HEADING in the palette still leaks "this module exists, you cannot
+ * see into it" (the same reason the local half never emits one).
+ */
+export function mergeSearchGroups(local: SearchResponse, server: SearchResponse): SearchResponse {
+  const merged: SearchResponse = {}
+  const groups = new Set<SearchGroupKey>([
+    ...(Object.keys(local) as SearchGroupKey[]),
+    ...(Object.keys(server) as SearchGroupKey[]),
+  ])
+  for (const group of groups) {
+    const localItems = local[group] ?? []
+    const seen = new Set(localItems.map(searchIdentity))
+    const serverItems = (server[group] ?? []).filter((item) => !seen.has(searchIdentity(item)))
+    const items = [...localItems, ...serverItems]
+    if (items.length > 0) merged[group] = items
+  }
+  return merged
+}
+
+/**
+ * The composition, with both halves injected.
+ *
+ * The halves are parameters rather than direct calls so that this — the part with the actual
+ * decisions in it (parallelism, the swallowed server failure, who wins a duplicate) — can be
+ * tested against fakes, with no Tauri host and no HTTP server. `comms.test.ts` does exactly
+ * that; `searchSource.query` below binds the real two.
+ *
+ * `server === null` means "offline, do not even ask": the engine already knows the API is
+ * unreachable, and a doomed request would only make every keystroke wait for a timeout.
+ */
+export async function unifiedSearch(
+  term: string,
+  local: (term: string) => Promise<SearchResponse>,
+  server: ((term: string) => Promise<SearchResponse>) | null,
+): Promise<SearchResponse> {
+  // Concurrent: the two indexes are independent, and serialising them would add the server's
+  // latency to every local result the user could already have been looking at.
+  const [localGroups, serverGroups] = await Promise.all([
+    local(term),
+    server === null
+      ? null
+      : server(term).catch((error: unknown) => {
+          // Logged, not swallowed: "the server half is down" is a real condition someone has
+          // to be able to diagnose. It is not raised to the palette as an error, because the
+          // local results beside it are valid, and an error screen over them would hide the
+          // answer the user may well already have.
+          console.warn('[search] server half failed; showing local results only', error)
+          return null
+        }),
+  ])
+  return serverGroups === null ? localGroups : mergeSearchGroups(localGroups, serverGroups)
+}
+
+/**
+ * Whether the engine considers the API reachable.
+ *
+ * This used to be `await import('../desktop')` — a DEFERRED import, because `desktop.ts` owned
+ * the status store and also imports `./data`, so a static import from here would have closed
+ * the cycle `desktop.ts -> data/index.ts -> comms.ts -> desktop.ts`; if anything ever evaluated
+ * `data/index.ts` first, `desktopPlatform = { data: desktopData, … }` would have read
+ * `desktopData` in its TDZ and the app would not boot. Rolldown reported
+ * `INEFFECTIVE_DYNAMIC_IMPORT` for it, which was accepted as the cost of breaking the cycle.
+ *
+ * O102 removed the cause: the store moved to `platform/status.ts`, which imports neither
+ * `desktop.ts` nor `./data`. A plain static import is now acyclic, so the deferral — and the
+ * warning it produced — are gone, and this reads the SAME predicate §8's `onlineOnly()` reads.
+ *
+ * `navigator.onLine` is NOT used, here or anywhere else in this tree
+ * (`docs/DESKTOP-ARCHITECTURE.md` §3.5): it reports "online" for a machine that has a LAN but
+ * cannot reach the API host, which is the common failure mode in the closed networks this
+ * product is deployed into. The engine is the authority.
+ */
+function engineIsOnline(): boolean {
+  return isEngineOnline()
+}
+
+export const searchSource: SearchSource = {
+  query: async (term): Promise<SearchResponse> =>
+    unifiedSearch(term, localSearchGroups, engineIsOnline() ? serverSearchGroups : null),
+}

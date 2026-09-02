@@ -20,6 +20,8 @@ class SessionLog extends Model
         'user_id',
         'email',
         'event',
+        // 'web' (SPA) | 'desktop' (POST /api/auth/device) — F1, SYNCDESKTOP §4.3.
+        'channel',
         'ip_address',
         'user_agent',
         'device',

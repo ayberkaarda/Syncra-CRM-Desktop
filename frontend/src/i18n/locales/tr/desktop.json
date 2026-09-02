@@ -1,0 +1,366 @@
+{
+  "errors": {
+    "AUTH_REQUIRED": "Oturum bulunamadı. Lütfen tekrar giriş yapın.",
+    "OFFLINE": "İnternet bağlantısı yok.",
+    "PROTOCOL_ERROR": "Senkron protokolünde bir hata oluştu. Uygulamayı güncellemeniz gerekebilir.",
+    "DB_ERROR": "Yerel veritabanında bir hata oluştu.",
+    "HTTP_ERROR": "Sunucuya bağlanırken bir hata oluştu.",
+    "SERVER_ERROR": "Sunucuda bir sorun oluştu. Bu, internet bağlantınızla ilgili değil; uygulama kısa süre içinde otomatik olarak yeniden deneyecek.",
+    "OS_ERROR": "İşletim sistemi bu isteği tamamlayamadı. Uygulamayı yeniden başlatmak genellikle çözer.",
+    "FILE_TYPE_REJECTED": "Bu dosya türü eklenemiyor.",
+    "FILE_TOO_LARGE": "Dosya çok büyük. Tek dosya en fazla 25 MB olabilir.",
+    "QUEUE_FULL": "Gönderilmeyi bekleyen dosyalar için ayrılan alan doldu. Bağlantı kurulduğunda kuyruk boşalacak.",
+    "WRITE_BLOCKED": "Yerel depolama tavanına ulaşıldı. Disk alanını boşaltın veya senkronize edin.",
+    "VALIDATION_ERROR": "Girdiğiniz veriler geçersiz.",
+    "httpStatus": "Sunucu hatası (HTTP {{status}}).",
+    "ONLINE_ONLY": "Bu işlem çevrimiçi bağlantı gerektirir.",
+    "UNRESOLVED_REFERENCE": "İlişkili bir kayıt bulunamadı. Önce senkronize edin.",
+    "FIELD_CONFLICT": "Bu kayıtta sunucuyla çakışan değişiklikler var.",
+    "RECORD_DELETED": "Bu kayıt sunucuda silinmiş.",
+    "INVALID_MUTATION": "Bu değişiklik sunucu tarafından reddedildi.",
+    "PROTOCOL_VERSION_MISMATCH": "Senkron protokolü sürümünüz sunucuyla uyumsuz. Lütfen uygulamayı güncelleyin.",
+    "ABILITY_REQUIRED": "Bu işlem için gerekli yetkiye sahip değilsiniz.",
+    "LOCKED_OUT": "Çok fazla başarısız deneme nedeniyle hesabınız geçici olarak kilitlendi.",
+    "USER_INACTIVE": "Hesabınız pasifleştirildi.",
+    "INVALID_CREDENTIALS": "E-posta veya şifre hatalı.",
+    "PENDING_MUTATIONS": "Senkronize edilmemiş değişiklikleriniz var. Önce senkronize edin veya zorla çıkış yapın.",
+    "ROW_NOT_LOCAL": "Bu kayıt cihazınızdaki yerel kopyada yok; saklama süresinin dışında kalmış olabilir. Çevrimiçi olduğunuzda görüntülenebilir.",
+    "unknown": "Bilinmeyen bir hata oluştu.",
+    "DATA_DIR_INVALID": "Seçilen klasör kullanılamıyor. Boş bir klasör seçin; verileriniz değişmedi.",
+    "DATA_DIR_UNSUPPORTED": "Bu sürücü desteklenmiyor. Yerel veritabanı yalnızca sabit diskte tutulabilir.",
+    "DATA_DIR_MOVE_FAILED": "Veriler taşınamadı. Veri konumunuz değişmedi."
+  },
+  "onlineOnly": {
+    "leads": {
+      "convert": "Müşteri adayını fırsata dönüştürmek çevrimiçi bağlantı gerektirir.",
+      "import": "Müşteri adayı içe aktarma işlemi çevrimiçi bağlantı gerektirir."
+    },
+    "quotes": {
+      "send": "Teklif gönderimi çevrimiçi bağlantı gerektirir.",
+      "revise": "Teklif revizyonu oluşturmak çevrimiçi bağlantı gerektirir.",
+      "pdf": "PDF önbellekte yoksa görüntülemek için çevrimiçi bağlantı gerekir.",
+      "calculate": "Teklif hesaplaması sunucuda yapılır ve çevrimiçi bağlantı gerektirir."
+    },
+    "settings": "Ayarlara erişmek çevrimiçi bağlantı gerektirir.",
+    "users": "Kullanıcı yönetimi çevrimiçi bağlantı gerektirir.",
+    "roles": "Rol yönetimi çevrimiçi bağlantı gerektirir.",
+    "reports": "Raporlara erişmek çevrimiçi bağlantı gerektirir.",
+    "dashboard": "Dashboard verilerini yenilemek çevrimiçi bağlantı gerektirir.",
+    "logs": "Loglara erişmek çevrimiçi bağlantı gerektirir.",
+    "exchangeRates": "Döviz kurlarını manuel güncellemek çevrimiçi bağlantı gerektirir.",
+    "attachments": {
+      "upload": "Bu dosya çevrimdışıyken kuyruğa alınacak ve bağlantı geri geldiğinde yüklenecek."
+    },
+    "savedViews": {
+      "create": "Kayıtlı görünüm oluşturmak çevrimiçi bağlantı gerektirir.",
+      "update": "Kayıtlı görünümü güncellemek çevrimiçi bağlantı gerektirir."
+    },
+    "password": {
+      "change": "Şifre değiştirmek çevrimiçi bağlantı gerektirir."
+    }
+  },
+  "sync": {
+    "status": {
+      "online": "Çevrimiçi",
+      "offline": "Çevrimdışı",
+      "syncing": "Senkronize ediliyor…",
+      "conflict": "Çakışma var"
+    },
+    "lastSynced": "Son senkron: {{time}} önce",
+    "lastSyncedNever": "Henüz senkronize edilmedi",
+    "pendingChanges_one": "{{count}} bekleyen değişiklik",
+    "pendingChanges_other": "{{count}} bekleyen değişiklik",
+    "syncNow": "Şimdi senkronize et",
+    "pauseSync": "Senkronu duraklat",
+    "resumeSync": "Senkronu devam ettir",
+    "paused": "Senkron duraklatıldı",
+    "syncError": "Senkron sırasında bir hata oluştu."
+  },
+  "logout": {
+    "title": "Çıkış Yap",
+    "description": "Bu cihazda henüz sunucuya gönderilmemiş değişiklikleriniz var. Çıkış yapmadan önce senkronize etmenizi öneririz.",
+    "discardWarning_one": "Çıkış yaparsanız {{count}} gönderilmemiş değişiklik kaybolacak.",
+    "discardWarning_other": "Çıkış yaparsanız {{count}} gönderilmemiş değişiklik kaybolacak.",
+    "force": "Yine de çıkış yap",
+    "wipedLocalOnly": "Bu cihazın oturumu yerel olarak kapatıldı, ancak sunucudaki cihaz kaydı kaldırılamadı. Cihazlar sayfasından yönetebilirsiniz."
+  },
+  "bootstrap": {
+    "title": "İlk kurulum",
+    "description": "Verileriniz bu cihaza indiriliyor. Bu işlem birkaç dakika sürebilir.",
+    "downloading": "Veriler indiriliyor…",
+    "preparing": "Hazırlanıyor…",
+    "tableProgress": "{{table}}: {{count}} kayıt",
+    "progressLabel": "%{{percent}} tamamlandı",
+    "completed": "Kurulum tamamlandı",
+    "completedDescription": "Artık çevrimdışı çalışmaya hazırsınız.",
+    "continue": "Devam et",
+    "error": "Kurulum sırasında bir hata oluştu.",
+    "retry": "Tekrar dene"
+  },
+  "conflicts": {
+    "title": "Çakışma Kutusu",
+    "subtitle": "Yerel değişiklikleriniz sunucudaki değişikliklerle çakışıyor. Nasıl çözüleceğini seçin.",
+    "empty": {
+      "title": "Çakışma yok",
+      "description": "Şu anda çözülmesi gereken bir çakışma bulunmuyor."
+    },
+    "keepMine": "Benimkini koru",
+    "takeServer": "Sunucudakini al",
+    "mergeFields": "Alan bazlı birleştir",
+    "fieldList": {
+      "title": "Çakışan alanlar",
+      "localValue": "Yerel değer",
+      "serverValue": "Sunucu değeri"
+    },
+    "rejected": {
+      "title": "Reddedildi",
+      "description": "Sunucu bu değişikliği kabul etmedi. Nedeni yukarıda yazıyor."
+    },
+    "retry": "Yeniden dene",
+    "discard": "Değişiklikten vazgeç",
+    "resolveAll": "Tümünü çöz",
+    "resolveSelected": "Seçilenleri çöz",
+    "resolvedToast": "Çakışma çözüldü.",
+    "resolveError": "Çakışma çözülürken bir hata oluştu."
+  },
+  "search": {
+    "sourceLocal": "Yerel",
+    "sourceServer": "Sunucu"
+  },
+  "storage": {
+    "title": "Depolama",
+    "retention": {
+      "label": "Saklama süresi (gün)",
+      "description": "Yerel veriler bu süre boyunca cihazda tutulur."
+    },
+    "cap": {
+      "label": "Depolama tavanı (MB)",
+      "description": "Yerel veritabanı bu boyutu aşamaz."
+    },
+    "usage": {
+      "label": "Kullanım",
+      "value": "{{used}} / {{total}} MB kullanılıyor"
+    },
+    "downloadArchive": {
+      "button": "Arşivi indir",
+      "description": "Seçili saklama süresi kapsamındaki geçmiş, bir arşiv dosyası olarak indirilir."
+    },
+    "clearLocal": {
+      "button": "Yerel veriyi temizle",
+      "title": "Yerel Veriyi Temizle",
+      "description": "Bu işlem GERİ ALINAMAZ. Bu cihazdaki tüm yerel veriler silinecek ve bir sonraki senkronda sunucudan yeniden indirilecek.",
+      "confirmSuffix": "yerel verileri temizlemek istediğinize emin misiniz?"
+    },
+    "dataLocation": {
+      "label": "Veri konumu",
+      "description": "Şifreli yerel veritabanı ve dosya önbelleği bu klasörde tutulur.",
+      "change": "Konumu değiştir…",
+      "title": "Veri Konumunu Taşı",
+      "confirm": "Bir klasör seçmeniz istenecek. Taşıma sırasında senkronizasyon durur ve uygulama kısa süre yanıt vermeyebilir. Veriler kopyalanıp doğrulandıktan sonra eski klasör silinir.",
+      "fixedDiskOnly": "Yalnızca sabit disk seçilebilir: çıkarılabilir ve ağ sürücülerinde SQLite WAL kipi güvenilir değildir.",
+      "success": "Veriler {{path}} konumuna taşındı.",
+      "leftover": "Veriler taşındı, ancak eski klasör silinemedi. Şifreli bir kopya hâlâ burada duruyor: {{path}}",
+      "unavailable": "Ayarlanan veri klasörüne ulaşılamadı ({{path}}). Uygulama varsayılan konumdan çalışıyor; gönderilmemiş değişiklikleriniz eski klasörde olabilir. Sürücüyü bağlayıp uygulamayı yeniden başlatın."
+    },
+    "saveSuccess": "Depolama ayarları kaydedildi.",
+    "saveError": "Depolama ayarları kaydedilirken bir hata oluştu."
+  },
+  "devices": {
+    "title": "Cihazlar",
+    "subtitle": "Bu hesaba bağlı cihazları yönetin.",
+    "columns": {
+      "name": "Cihaz",
+      "platform": "Platform",
+      "lastUsed": "Son Kullanım",
+      "actions": "İşlemler"
+    },
+    "thisDevice": "Bu cihaz",
+    "revoke": "Oturumu kapat",
+    "revokeConfirm": {
+      "title": "Cihaz Oturumunu Kapat",
+      "description": "Bu cihazın oturumu kapatılacak ve yeniden giriş yapılana kadar senkronize olamayacak.",
+      "confirmSuffix": "cihazının oturumunu kapatmak istediğinize emin misiniz?"
+    },
+    "empty": {
+      "title": "Cihaz bulunamadı",
+      "description": "Bu hesaba bağlı herhangi bir cihaz yok."
+    },
+    "loadError": "Cihazlar yüklenirken bir hata oluştu.",
+    "revokeSuccess": "Cihaz oturumu kapatıldı.",
+    "revokeError": "Cihaz oturumu kapatılırken bir hata oluştu."
+  },
+  "tray": {
+    "menu": {
+      "open": "Aç",
+      "syncNow": "Şimdi senkronize et",
+      "quickCapture": "Hızlı kayıt",
+      "pauseSync": "Senkronu duraklat",
+      "resumeSync": "Senkronu devam ettir",
+      "quit": "Çık"
+    },
+    "tooltip": {
+      "online": "Syncra — Çevrimiçi",
+      "offline": "Syncra — Çevrimdışı",
+      "syncing": "Syncra — Senkronize ediliyor",
+      "conflict": "Syncra — Çakışma var"
+    }
+  },
+  "clipboard": {
+    "addAsLeadTitle": "Syncra",
+    "addAsLeadBody": "Panodaki kişiyi müşteri adayı olarak ekleyelim mi?",
+    "optIn": {
+      "label": "Panoyu izle ve müşteri adayı önerisi göster",
+      "description": "Kapalıyken pano hiç okunmaz. Açıkken yalnızca tam bir e-posta adresi veya E.164 telefon numarası kopyalandığında bildirim çıkar; pano içeriği diske veya günlüğe hiçbir zaman yazılmaz."
+    }
+  },
+  "quickCapture": {
+    "title": "Hızlı kayıt",
+    "dismissHint": "Kapatmak için Esc",
+    "types": {
+      "lead": "Müşteri Adayı",
+      "note": "Not",
+      "task": "Görev",
+      "activity": "Aktivite"
+    },
+    "activityTypes": {
+      "call": "Telefon",
+      "meeting": "Toplantı",
+      "email": "E-posta",
+      "note": "Not"
+    }
+  },
+  "files": {
+    "attach": {
+      "uploaded": "{{name}} kayda eklendi.",
+      "queued": "{{name}} kuyruğa alındı, henüz gönderilmedi.",
+      "rejected": "{{name}} eklenemedi."
+    },
+    "drop": {
+      "started_one": "{{count}} dosya ekleniyor…",
+      "started_other": "{{count}} dosya ekleniyor…",
+      "noTarget": "Dosyaları eklemek için önce bir fırsat veya talep kaydını açın, sonra pencereye bırakın.",
+      "failed": "Bırakılan dosyalar işlenemedi."
+    },
+    "quotePdf": {
+      "action": "Teklif PDF'ini aç",
+      "opened": "PDF bu cihazdaki kopyadan açıldı.",
+      "downloaded": "PDF indirildi ve açıldı.",
+      "error": "PDF açılamadı."
+    },
+    "screenshot": {
+      "action": "Ekran görüntüsünü talebe ekle",
+      "error": "Ekran görüntüsü alınamadı."
+    }
+  },
+  "preferences": {
+    "title": "Tercihler",
+    "hotkey": {
+      "label": "Hızlı kayıt kısayolu",
+      "description": "Örnek: CmdOrCtrl+Shift+Space. En az bir değiştirici tuş zorunludur.",
+      "conflict": "Bu kısayol başka bir uygulama tarafından kullanılıyor. Önceki kısayol geçerli kalmaya devam ediyor.",
+      "saved": "Kısayol kaydedildi."
+    },
+    "autostart": {
+      "label": "Bilgisayar açılışında Syncra'yı başlat",
+      "description": "Açıkken uygulama siz oturum açtığınızda arka planda başlar ve senkron kaldığı yerden devam eder. Bu ayar hesabınıza değil, yalnızca bu bilgisayara aittir.",
+      "saved": "Açılışta başlatma ayarı kaydedildi.",
+      "saveError": "Açılışta başlatma ayarı değiştirilemedi."
+    }
+  },
+  "window": {
+    "closeToTray": {
+      "label": "Pencereyi kapatınca tray'de çalışmaya devam et",
+      "notificationTitle": "Syncra arka planda çalışıyor",
+      "notificationBody": "Uygulama tray'de çalışmaya devam ediyor. Tamamen çıkmak için tray menüsünden Çık'ı kullanın."
+    }
+  },
+  "jumpList": {
+    "category": "Son kayıtlar",
+    "fallbackTitle": "{{entity}} #{{id}}"
+  },
+  "recordBadge": {
+    "pending": "Bekliyor",
+    "conflict": "Çakışma"
+  },
+  "entities": {
+    "company": "Firma",
+    "contact": "Kişi",
+    "lead": "Müşteri Adayı",
+    "deal": "Fırsat",
+    "task": "Görev",
+    "activity": "Aktivite",
+    "ticket": "Talep",
+    "quote": "Teklif",
+    "conversation": "Sohbet",
+    "message": "Mesaj",
+    "conversation_user": "Sohbet Üyeliği",
+    "notification": "Bildirim",
+    "tag": "Etiket",
+    "pipeline_stage": "Aşama",
+    "custom_field": "Özel Alan",
+    "product": "Ürün",
+    "price_list": "Fiyat Listesi",
+    "price_list_item": "Fiyat Listesi Kalemi",
+    "exchange_rate": "Döviz Kuru",
+    "saved_view": "Kayıtlı Görünüm",
+    "setting": "Ayar",
+    "user": "Kullanıcı"
+  },
+  "fields": {
+    "title": "Başlık",
+    "description": "Açıklama",
+    "amount": "Tutar",
+    "currency": "Para Birimi",
+    "probability": "Olasılık",
+    "expected_close_date": "Tahmini Kapanış Tarihi",
+    "company_id": "Firma",
+    "contact_id": "Kişi",
+    "owner_id": "Sahip",
+    "tag_ids": "Etiketler",
+    "tags": "Etiketler",
+    "custom_fields": "Özel Alanlar",
+    "first_name": "Ad",
+    "last_name": "Soyad",
+    "email": "E-posta",
+    "phone": "Telefon",
+    "company_name": "Firma Adı",
+    "position": "Pozisyon",
+    "source": "Kaynak",
+    "status": "Durum",
+    "score": "Skor",
+    "notes": "Notlar",
+    "mobile": "Mobil",
+    "is_primary": "Birincil Kişi",
+    "address": "Adres",
+    "city": "Şehir",
+    "country": "Ülke",
+    "name": "Ad",
+    "website": "Website",
+    "industry": "Sektör",
+    "employee_count": "Çalışan Sayısı",
+    "annual_revenue": "Yıllık Ciro",
+    "due_at": "Vade",
+    "reminder_at": "Hatırlatıcı",
+    "priority": "Öncelik",
+    "assigned_to": "Atanan",
+    "taskable_type": "İlgili Kayıt Türü",
+    "taskable_id": "İlgili Kayıt",
+    "completed_at": "Tamamlanma Tarihi",
+    "type": "Tür",
+    "subject": "Konu",
+    "body": "Açıklama",
+    "occurred_at": "Gerçekleşme Tarihi",
+    "duration_minutes": "Süre (dakika)",
+    "outcome": "Sonuç",
+    "activityable_type": "İlgili Kayıt Türü",
+    "activityable_id": "İlgili Kayıt",
+    "category": "Kategori",
+    "sla_due_at": "SLA Hedefi",
+    "deal_id": "Fırsat",
+    "valid_until": "Geçerlilik Tarihi",
+    "discount_type": "İndirim Tipi",
+    "discount_value": "İndirim Değeri",
+    "terms": "Şartlar",
+    "is_muted": "Sessize Alındı"
+  }
+}

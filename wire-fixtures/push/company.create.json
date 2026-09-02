@@ -1,0 +1,76 @@
+{
+  "id": "push/company.create",
+  "why": "op=create. The only op that addresses its row by client_id and never by server_id, and the only one whose payload is the whole record rather than a subset.",
+  "op": "create",
+  "entity": "company",
+  "action": null,
+  "local_mutation": {
+    "entity": "company",
+    "op": "create",
+    "client_id": "c1000000-0000-4000-8000-000000000001",
+    "payload": {
+      "name": "Fixture Holding A.Ş.",
+      "email": "ops@fixture.example",
+      "phone": "+90 212 555 0100",
+      "city": "İstanbul",
+      "country": "Türkiye",
+      "custom_fields": {},
+      "tag_ids": [],
+      "tags": []
+    }
+  },
+  "outbox": {
+    "seq": 1,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000001",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": null,
+    "base_sync_version": null,
+    "scope": null
+  },
+  "wire": {
+    "seq": 1,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000001",
+    "op": "create",
+    "entity": "company",
+    "client_id": "c1000000-0000-4000-8000-000000000001",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "name": "Fixture Holding A.Ş.",
+      "email": "ops@fixture.example",
+      "phone": "+90 212 555 0100",
+      "city": "İstanbul",
+      "country": "Türkiye",
+      "custom_fields": {},
+      "tag_ids": [],
+      "tags": []
+    }
+  },
+  "composer": {
+    "domain": "companies",
+    "method": "create",
+    "args": [
+      {
+        "name": "Fixture Holding A.Ş.",
+        "email": "ops@fixture.example",
+        "phone": "+90 212 555 0100",
+        "city": "İstanbul",
+        "country": "Türkiye",
+        "custom_fields": {},
+        "tag_ids": []
+      }
+    ],
+    "note": "`tags` is NOT passed in: crm.ts::withTagColumn mirrors `tag_ids` onto it, and the fixture records that the mirrored key really does travel to the server.",
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000001",
+      "server_id": 4101,
+      "local_rowid": 1,
+      "name": "Fixture Holding A.Ş.",
+      "sync_version": 185001
+    }
+  },
+  "server": {
+    "scenario": "none",
+    "bind": {},
+    "expect": "applied"
+  }
+}

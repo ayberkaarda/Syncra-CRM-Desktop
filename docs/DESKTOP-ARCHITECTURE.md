@@ -37,6 +37,29 @@ doğrulanmış olanlar açık referans taşır.
 
 ---
 
+<a id="k-stale-map"></a>
+## 0.1 GÖVDE BAYATLIK HARİTASI (2026-08-31)
+
+> **Bu belge append-only büyüdü.** Gövde (§1–13) F0 keşfinde yazıldı; EK 1–5 sonraki fazların
+> kararlarını ekledi ve **gövdenin bazı iddialarını geçersiz kıldı** — ama gövde olduğu yerde
+> kaldı. Bir şerit §4.2'yi okuyup EK 2'yi okumazsa **yanlış değeri alır**. Bu tam olarak P20
+> vakasının doğuş biçimidir ve F5 sekiz ayrı mini-şerit demektir.
+>
+> Aşağıdaki tablo **bağlayıcıdır**: çakışma hâlinde sağdaki kazanır. Gövdedeki ilgili satırlar
+> bu turda yerinde düzeltildi; tablo, düzeltmenin nereden geldiğini gösterir.
+
+| Gövde yeri | Bayat iddia | Geçerli olan | Kaynak |
+|---|---|---|---|
+| §4.2 `server.watch.ignored` | tek glob: `['**/src-tauri/**']` | **üç glob** — `target` ve `.tauri` de gerekli; eksikliği **ölçülmüş bir HMR çökmesi** üretti | EK 2 "§4.2 DÜZELTMESİ"; kodda `vite.desktop.config.ts:84` |
+| §3.7 dokunuş listesi | "3 yeni + 5 mevcut = **8 dosya**" | A19 `DataSource` dikişi listeyi büyüttü; güncel sayım **6 + 26 + 3** | EK 5 / E.5.1 |
+| §11 "Açık Kararlar" (D-1…D-8) | sekizi de **açık** | **sekizinin sekizi de kapandı** — §11'in başındaki çözüm tablosuna bak | §11 (bu turda güncellendi) |
+
+> **Kural:** gövdeye yeni bir olgusal iddia eklenirken, onu geçersiz kılan bir EK varsa **gövde
+> düzeltilir**; EK'e "şunu da düzelttik" satırı eklemek yetmez. EK'ler *karar tutanağıdır*,
+> gövde *bugünkü gerçektir*.
+
+---
+
 ## 1. Amaç ve Kapsam
 
 ### 1.1 Bu doküman ne bağlar
@@ -334,7 +357,12 @@ invalidation'a gerek yoktur ve `TablesChanged` zaten tablo granülerliğindedir.
 | `AuthLost` | Mevcut 401 yoluyla aynı davranış: auth store temizlenir → `/login` (`router.tsx:317-320`) |
 | `ProtocolMismatch` | Tam ekran "güncelleme gerekli" kapısı; sync durur |
 
-### 3.7 Minimum dokunuş listesi — 3 yeni + 5 mevcut = **8 dosya**
+### 3.7 Minimum dokunuş listesi — F0'da 8 dosya, bugün **6 + 26 + 3**
+
+> **BAYATLIK DÜZELTMESİ (2026-08-31).** Aşağıdaki "8 dosya" sayımı F0 keşfinde, `DataSource`
+> dikişi (KARAR A19) verilmeden önce yapılmıştı. A19 veriyi `getPlatform().data.<domain>.<fiil>`
+> üzerinden geçirince liste büyüdü; güncel sayım **6 + 26 + 3** (EK 5 / E.5.1). Aşağıdaki metin
+> F0'ın gerekçesini gösterdiği için korunuyor — **sayıyı oradan alma.**
 
 `SYNCDESKTOP.md` §7.1 hedefi ≤15 dosyadır; liste bunun **çok altında** kaldı. Sebebi §3.1'de
 doğrulandı: `fetch()` kullanımı sıfır, tek axios instance, bileşenlerin API bypass'ı yok.
@@ -426,7 +454,7 @@ uyumluluk katmanı mevcut). `frontend/vite.config.ts` 8 satırdır ve `rollupOpt
 | `server.port` | `1420` | Tauri `devUrl`'i **yoklar**; sabit port zorunlu |
 | `server.strictPort` | `true` | ⚠️ Vite portu kaydırırsa Tauri **yanlış URL'e** bağlanır ve boş pencere açılır. Kaymak yerine hata vermek doğru davranıştır |
 | `server.fs.allow` | `['..']` | Kaynaklar config root'unun **dışında** (`../frontend/src`); Vite varsayılan olarak root dışına servis etmez |
-| `server.watch.ignored` | `['**/src-tauri/**']` | Rust derleme çıktıları HMR döngüsü tetiklemesin |
+| `server.watch.ignored` | `['**/src-tauri/**', '**/target/**', '**/.tauri/**']` | Rust derleme çıktıları HMR döngüsü tetiklemesin. **Üç glob da zorunlu** — tek glob yetmiyor, `target/` ve `.tauri/` ölçülmüş bir HMR çökmesi üretti (EK 2 §4.2 DÜZELTMESİ). Kodda: `vite.desktop.config.ts:84` |
 | `clearScreen` | `false` | `tauri dev` Rust derleyici çıktısını basar; Vite ekranı silerse hata mesajları kaybolur |
 | `envPrefix` | `['VITE_', 'TAURI_ENV_*']` | Tauri'nin hedef platform/arch değişkenleri istemciye geçebilsin |
 | `envDir` | §4.5 — **AÇIK (D-2)** | Varsayılanı config root'udur → `.env` `desktop/` içinde aranır |
@@ -543,7 +571,21 @@ motor API'si `docs/DESKTOP-SYNC-PROTOCOL.md` §5'tedir.
 | | `clear_local` | Lokal DB + dosya cache silme | motor + FS |
 | `files` | `cache_quote_pdf` | Teklif PDF'ini cache'e indirme | HTTP + FS |
 | | `open_cached` | Cache'lenmiş dosyayı OS ile açma | `shell:open` |
-| | `attach_from_paths` | Drag-drop dosyayı kuyruğa alma | `mutate` |
+| | `attach_from_paths` | Drag-drop dosyayı kuyruğa alma | **kabuk-sahipli dizin** (`mutate` DEĞİL) |
+
+> **DÜZELTME (2026-09-01, F5-5).** Yukarıdaki satır F0'da `mutate` diyordu; **mümkün değil.**
+> `syncra_sync::Entity` içinde `attachment` **yok** (grep 0) — §12/1 `Attachment``ı kasten
+> senkronlanmayan altı entity'den biri sayıyor, dolayısıyla outbox onu taşıyamaz.
+>
+> Gerçekleşen tasarım: kuyruk **kabuk sahipli bir dizindir** —
+> `$APPDATA/syncra/cache/attachments/{uuid}.{ext}` + `{uuid}.json` sidecar (özgün ad, hedef,
+> boyut, zaman). Kullanıcının dosya adı asla yol bileşeni olmaz; bu,
+> `AttachmentUploadService``in sunucuda uyguladığı kuralın aynısıdır.
+>
+> **İkinci düzeltme:** "ticket attach" diye bir uç **yok**. `AttachmentPolicy.php:54`
+> `Message` dışındaki her `attachable_type``ı fail-closed reddediyor. Ekran görüntüsü →
+> ticket üç adıma çözülür: `POST /api/attachments` → `POST /api/conversations/for-record` →
+> `POST /api/conversations/{id}/messages {attachment_id}`.
 | | `screenshot_to_ticket` | Bölge seçimi → PNG → ticket eki | F5-8 |
 | `os` | `set_badge` | Taskbar/dock rozeti | plugin |
 | | `register_hotkey` | Hotkey kaydı + çakışma tespiti | plugin |
@@ -925,13 +967,31 @@ koyar ama script'i tanımlamaz. **KARAR A18** — `desktop/package.json`:
 
 ---
 
-## 11. Açık Kararlar
+## 11. Açık Kararlar — **SEKİZİ DE KAPANDI** (2026-08-31)
+
+> Aşağıdaki tablo F0'da açılan sekiz kararın **bugünkü durumudur**. Altındaki özgün tablo
+> tarihçe olarak korunuyor; **karar arıyorsan buraya bak, oraya değil.**
+
+| # | Konu | Karar | Kanıt |
+|---|---|---|---|
+| **D-1** | `__PLATFORM__` define'ı | (a) — hiç kullanılmıyor, seçim entry'de | `vite.desktop.config.ts:99` define'ın **bilerek yok** olduğunu yazıyor; kodda başka geçiş yok |
+| **D-2** | `envDir` | (a) — tek `.env`, frontend'inki | `scripts/tauri.mjs` CSP ve `SYNCRA_API_URL`'i **aynı** dosyadan türetiyor (O27) |
+| **D-3** ~~rev.1~~ **rev.2** | API host ne zaman bağlanır | ~~(a) build-time sabit~~ → **(c) launch-time sabit** (2026-09-01, F8/3 karar turu) | Bugünkü kod hâlâ rev.1: `state.rs` `option_env!("SYNCRA_API_URL")`, `build.rs` `rerun-if-env-changed` (O27). rev.2 **karardır, kod değildir** — uygulaması F8/3'ün iş kalemlerinde |
+| **D-4** | `localStorage` kalıcılığı | Kalıcı — **Windows ve Linux'ta ölçüldü** | EK 2 (WebView2) + 2026-08-31 WSLg/WebKitGTK 2.52.3, süreç ağacı `SIGKILL`'i dahil |
+| **D-5** | `Entity` → query key eşlemesi | Tamamlandı | `check-data-wiring` → **22 / 22 entities mapped** |
+| **D-6** | `check-i18n-bootstrap` masaüstünü kapsıyor mu | (a) — genişletildi | Betikte `main.desktop` geçişleri; `npm run i18n:check-bootstrap` masaüstü alt kontrollerini koşuyor |
+| **D-7** | `desktop` namespace alt ağaçları | F4'te açıldı | `tr/desktop.json` **14 alt ağaç** |
+| **D-8** | Pencere kapatma varsayılanı | Tray'e küçült | `desktop.window.closeToTray.*` dört dilde; **davranışın kendisi F5-1** |
+
+---
+
+### 11.1 Özgün tablo (F0, tarihçe)
 
 | # | Konu | Seçenekler | Neden şimdi karar gerekiyor | Kim |
 |---|---|---|---|---|
 | **D-1** | `__PLATFORM__` define'ı | (a) Hiç kullanma — seçim entry'de (KARAR A3, **önerilen**) · (b) Her iki Vite config'ine de `define` ekle | `SYNCDESKTOP.md` §7.1 `define: { __PLATFORM__: 'desktop' }` diyor; `frontend/vite.config.ts`'te karşılığı **yok** → paylaşılan kodda kullanılırsa **web build'i kırılır**. (b) seçilirse `frontend/vite.config.ts` dokunuş listesine 9. dosya olarak girer ve KARAR A1 gözden geçirilir | Kullanıcı |
 | **D-2** | `envDir` | (a) `envDir: '../frontend'` — tek `.env` · (b) ayrı `desktop/.env*` | §4.5; sessiz ayrışma riski | Kullanıcı |
-| **D-3** | API host'un build-time sabitliği | (a) Build-time sabit (CSP ile tutarlı; kurulum başına yeniden derleme) · (b) Runtime yapılandırılabilir (CSP'de host joker olur → politika gevşer) | §4.5 + §5.5; kapalı devre tek makine dağıtımında API host kurulum başına değişebilir. Güvenlik etkisi var → F6 ile kesişir | Kullanıcı |
+| **D-3** | API host'un ne zaman bağlanacağı | (a) Build-time sabit · (b) Runtime yapılandırılabilir, **CSP'de host joker** · **(c) Launch-time sabit — CSP başlatmada jokersiz sentezlenir** | **(a)/(b) ikilemi YANLIŞTI ve 2026-09-01'de çürütüldü.** "Runtime yapılandırılabilirlik CSP jokerini zorunlu kılar" öncülü `tauri 2.11.5` kaynağıyla yanlışlandı: politika her sayfa servisinde `Config`'ten okunuyor (`manager/mod.rs:371`), header olarak basılıyor (`protocol/tauri.rs:183`) ve `Builder::build`'den önce `config_mut()` ile belirlenebiliyor (`lib.rs:411`). Üçüncü şık **(c)** bu yüzden var ve seçildi | Karar: **(c)**, 2026-09-01 |
 | **D-4** | `localStorage` kalıcılığı | Ölçüm sonucuna bağlı (§9.2) | Dokunuş listesini 8 → 5 dosyaya indirebilir; aksi hâlde `Platform`'a depolama üyesi eklemek **şartname sapmasıdır** | F3 ölçümü → kullanıcı |
 | **D-5** | `Entity` → query key eşlemesinin tamamlanması | — | §3.6; 10 satır doğrulandı, RO tablolar ve `presence`/`search` istisnaları F3'te tamamlanacak. Otomatik eşleme YASAK (doğrulanmış karşı örnekler var) | F3 |
 | **D-6** | `check-i18n-bootstrap.mjs`'in `main.desktop.tsx`'i de kapsaması | (a) Betiği ikinci giriş dosyasına genişlet (**önerilen**) · (b) Kapsam dışı bırak, elle kontrol | KARAR A7; kapsanmazsa desktop'ta "dil seçici İngilizce diyor, arayüz Türkçe" hatası **hiçbir kapıya takılmaz** | Kullanıcı |
@@ -1001,7 +1061,7 @@ doğrudan çağırmıyor; dokunuş listesi 15 hedefine karşı **8** (muhtemelen
 |---|---|---|
 | **D-1** | **`__PLATFORM__` define'ı HİÇ kullanılmaz**; seçim entry'de yapılır (KARAR A3) | `src` altında `@` import'u ve `__PLATFORM__` tüketicisi sıfır. Yalnız bir build'de tanımlı bir global, paylaşılan koda ilk sızdığı gün web build'ini kırar. |
 | **D-2** | **`envDir: '../frontend'`, tek `.env`** | Sessiz ayrışma en pahalı arıza sınıfıdır; web build'i tanımadığı `VITE_` değişkenini görmezden geldiği için desktop'a özgü değişkenin aynı dosyada durması zararsızdır. |
-| **D-3** | **API host build-time sabit** (v1) | CSP ve updater manifest'i zaten build-time. Runtime host CSP'yi joker'e gevşetir ve F6 kabulüyle çelişir. Kurulum başına host `VITE_API_URL` build parametresiyle çözülür; F7 CI bunu parametrize edebilir. |
+| **D-3** | ~~**API host build-time sabit** (v1)~~ → **launch-time sabit (v2, 2026-09-01)** | v1'in gerekçesi *"Runtime host CSP'yi joker'e gevşetir"*ti; bu cümle **yanlıştı** (kaynak kanıtı için §11 D-3 satırına bak) ve silindi. v2: origin başlatmada bağlanır, CSP ondan **jokersiz** sentezlenir, tehdit duruşu v1'inkiyle aynı kalır. v1'i asıl bitiren şey teorik değil pratikti: per-backend build modeli tek-endpoint updater'la **yapısal olarak çelişiyor** — self-hoster'ın kendi build'i bizim endpoint'imizi ve pubkey'imizi taşıdığı için ilk resmî sürümde `installMode: passive` ile eziliyor (defter O111). |
 | **D-4** | **Ölçüm F3'ün 1 NUMARALI maddesi** — Windows WebView2 ve WSL2 WebKitGTK ayrı ayrı, gerçek çıktıyla. Varsayım YASAK. **Fallback şimdiden onaylı:** kalıcı değilse `syncra-theme`/`syncra-locale`/`syncra-sidebar` `desktop_settings`'e taşınır ve `Platform`'a minimal `storage {get,set}` üyesi eklenir. | Ölçülmemiş şeye karar yazılmaz; ama iki dalın kararı da önceden verilirse ölçüm F3'ü bloklamaz ve F3 ortasında durulmaz. |
 | **D-5** | **ONAYLANDI** — `Entity`→queryKey tablosu F3'te tamamlanır, otomatik türetme kalıcı olarak yasak | Doğrulanmış karşı örnekler (`searchKeys.all = ['global-search']`, `boardKeys.all = ['deals','board']`, `exchangeRatesKeys`'te `all` alanı yok) tahmini eşlemeyi diskalifiye ediyor. Sözleşme dondurmayı bloklamaz. |
 | **D-6** | **`check-i18n-bootstrap.mjs` genişletilir** — `main.desktop.tsx`'i de kapsar, desktop girişiyle **aynı commit'te** | Aksi hâlde "arayüz sessizce Türkçe" hatasını hiçbir kapı yakalamaz. Betik ve desen zaten var; genişletme ucuz. |
@@ -1058,3 +1118,332 @@ Hepsi ya "uygulama çalışmaz" sınıfı teknik zorunluluk ya da şartnamedeki 
 **KARAR A19 — F3b'nin 1. maddesi.** `DataSource` fiil-bazlı yeniden tanımlanır (`list/get/create/update/delete` + alana özgü `assign`, `move`, `convert`, `timeline`, `status`…) ve ~15 feature modülünde düz fonksiyonlar export edilir. **Bu bir kapsam genişletmesi DEĞİLDİR** — A4'ün zaten gerektirdiği iştir, yalnızca tahmin yanlıştı. §3.7'nin dokunuş listesi bu sayıyla güncellenir.
 
 **Bugün kırılan bir şey yok:** `platform/*` hiçbir entry noktasından import edilmediği için çıktı inert; JS bundle'a girmediği doğrulandı (hash karşılaştırmasıyla). Risk, `desktop.ts` bu temelin üstüne kurulursa yeniden yazılmasıdır.
+
+### E.5.1 A19 SONUCU — dokunuş listesi ikiye ayrılıyor
+
+A19 uygulandı ve doğrulandı (W2-a). Sonuçlar:
+
+- **`DataSource` artık fiil-bazlı:** 16 domain, **124 metot**, hepsi mevcut bir düz fonksiyonun 1:1 karşılığı. `typeof import(...)` tiplemesi tamamen kalktı; hook / `Keys` factory'si / `queryClient` sözleşmeye girmiyor. Uydurma metot yok — uç nokta casusu ile 124/124 metodun beklenen fiil+URL'e istek attığı kanıtlandı.
+- **KARAR A4 fiilen uygulandı:** hook'ların `queryFn`/`mutationFn`'i `getPlatform().data.<domain>.<metot>()` çağırıyor. Query key, hook adı, imza, dönüş tipi ve `enabled`/`staleTime`/`retry` opsiyonları değişmedi.
+
+**§3.7'nin "8 dosyalık dokunuş listesi" güncelleniyor.** Gerçek yüzey ikiye ayrılır:
+
+| Katman | Dosya | İçerik |
+|---|---|---|
+| **Adaptör çekirdeği** | **6** | `platform/{types,web,index}.ts` + `lib/axios.ts` + `lib/echo.ts` + `index.css` |
+| **A19 delegasyon geçişi** | **26** | 14 feature `api/*.ts` + 12 feature `hooks/*.ts` |
+| **W1'de ertelenen (D-4'e bağlı)** | **3** | `stores/themeStore.ts`, `i18n/index.ts`, `components/layout/AppLayout.tsx` |
+
+F0'ın "≤15 dosya" hedefi **adaptör çekirdeği için** tutmuştur (6). A4'ün gerektirdiği delegasyon geçişi ayrı bir kalemdir ve F0 tahmininde yoktu (bkz. §E.5 kök neden). Bileşen ve sayfa dosyaları **hiç değişmedi** — K1 korundu.
+
+**Yeni bulgu — ESM döngüsü (ölçüldü, zararsız).** Hook'lar `platform`'u, `platform/web.ts` de api modüllerini import ettiği için gerçek bir modül döngüsü doğdu. Üç farklı değerlendirme sırasıyla (platform önce / api modülü önce / hook önce) gerçek kaynak modüller çalıştırıldı, üçünde de 16 domain / 124 metot çağrılabilir geldi. Döngüyü zararsız kılan iki şey **korunmalıdır**:
+1. `web.ts`'in üyeleri çıplak fonksiyon referansı değil **ok sarmalayıcıdır** (çözüm çağrı anında olur).
+2. `index.ts`'teki `getPlatform` **hoist edilen bir `function` bildirimidir** (arrow const değil).
+
+**AÇIK — F3'te kapatılacak:** `platform/web.ts` artık web bundle'ında çalışıyor (bundle 1741.74 → 1749.45 kB). `configureHttp()` ve `configureRealtimeAuth()` ilk kez gerçekten yürütülüyor. Kod incelemesi davranış-nötr diyor (aynı `baseURL`, aynı `withCredentials/withXSRFToken`, `defaultReverbAuthorizer` eski gövdenin kopyası) ama **tarayıcıda duman testi yapılmadı** — `frontend`'de test koşucusu yok. F3'ün ilk maddelerinden biri olmalı.
+
+**AÇIK — kapsam dışı kalan api modülleri:** `boardApi`, `importApi`, `catalogApi`, `productsShared`, `logsApi`, `presenceApi`, `authApi`, `settings/api`, `dashboard/api`, `reports/api` `DataSource`'a girmedi. Bunların desktop'ta online-only HTTP olarak mı kalacağı F3'te açıkça karara bağlanmalı (§8 online-only listesi çoğunu zaten kapsıyor, ama `boardApi` — Kanban — kapsamıyor ve F4'te offline move isteniyor).
+
+### E.5.2 W2-b SONUCU — açık kalan üç madde
+
+`desktop/src-tauri` iskeleti kuruldu ve doğrulandı (workspace clippy `-D warnings` temiz, crate 83/83). CSP'nin S1/S2 düzeltmeleri **uygulandı** ve fazlası yapıldı:
+
+```
+default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://localhost:8000 ws://localhost:8080;
+img-src 'self' data: http://localhost:8000; style-src 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline';
+font-src 'self' data:; object-src 'none'; frame-ancestors 'none'
+```
+
+**AÇIK 1 — CSP host'ları sabit kodlanmış (F3/F7 engeli).** `http://localhost:8000` ve `ws://localhost:8080` geliştirme host'larıdır ve şu an **üretim CSP'sinde** duruyor. KARAR D-3 API host'unu build-time sabit yapıyor; dolayısıyla CSP de build parametresinden (`VITE_API_URL` ile aynı kaynaktan) üretilmelidir. Bugünkü hâliyle üretim paketi yalnızca `localhost`'a bağlanabilir. F7'nin release job'ı bunu parametrize etmeden imzalı paket üretmemeli.
+
+**AÇIK 2 — `desktop/.cargo/config.toml` yerel önbelleğe bağlı.** Dosya `build.target-dir`'ı `crates/syncra-sync/target`'a yönlendiriyor. Gerekçesi, o dizindeki sıcak OpenSSL derlemesini yeniden kullanmaktı — ama **çift derleme sorununu asıl çözen workspace'in kendisidir**; temiz bir checkout'ta o dizin zaten boştur ve yönlendirme hiçbir şey kazandırmaz. Yan etkisi: workspace çıktısı bir üye crate'in dizinine yazılıyor, bu da CI'da ve yeni katkıcılar için kafa karıştırıcı. **Öneri: dosya kaldırılsın, varsayılan `desktop/target` kullanılsın.** MAX_PATH ihtiyacı varsa `CARGO_TARGET_DIR` ortam değişkeniyle (CI'da olduğu gibi) çözülmeli, commit'li config ile değil.
+
+**AÇIK 3 — `desktop/package.json` henüz yok.** W2-c'nin `desktop-ci.yml`'i `npm run tauri -- build --debug` varsayıyor. Vite/desktop entry işi (F3) bu dosyayı oluşturunca script adı CI ile hizalanmalı.
+
+Ayrıca: `desktop/src-tauri/target` (996 MB) workspace öncesinden kalma ölü dizin — gitignore'lu, zararsız, ama diskte duruyor.
+
+### E.5.3 W2-b — DÜZELTMELER ve BİR MAYIN
+
+**⚠️ MAYIN — `tauri dev` / `tauri build` şu an PANİKLER.** `desktop/src-tauri/tauri.conf.json`'da `plugins` bloğu **hiç yok** (`plugins: null`, doğrulandı), dolayısıyla `plugins.updater.{endpoints, pubkey}` tanımsız. Tauri'nin updater Config'inde `pubkey: String` **zorunlu ve default'suz** → plugin `.setup()`'ta panikler. F7 gerçek pubkey/manifest'i getirene kadar **kimse `tauri dev` çalıştırmamalı**; F7'nin ilk maddesi bu olmalı. (Şerit sahte değer yazmamayı bilinçli tercih etti — doğru karar, ama mayın kayıt altına alınmalı.)
+
+**Düzeltme 1 — clipboard capability'si zaten doğru.** `capabilities/default.json` `clipboard-manager:allow-read-text` iznini **vermiyor**; kelime yalnız `description` alanında "deliberately ABSENT… K10, default off" gerekçesiyle geçiyor. Verilen izinler dar: blanket `fs:allow-*` yok (yalnız `fs:scope`), `shell` yalnız `allow-open`.
+
+**Düzeltme 2 — makinede çalışan bir Perl VAR.** Strawberry Perl kurulu değil, ama `C:\xampp\perl\bin\perl.exe` (5.32) hem `ExtUtils::MakeMaker` hem `Locale::Maketext::Simple` taşıyor. Sorun kurulum eksikliği değil, **PATH sırası**: Git-Bash'in `/usr/bin/perl`'i önce geliyor. `desktop-ci.yml`'deki "Strawberry Perl" adımı yerel geliştirme için de `PATH`'e XAMPP perl'ini önceleyerek çözülebilir.
+
+**Düzeltme 3 — `custom-protocol` feature'ı bilinçli olarak default değil.** Bu sayede `desktop/dist` yokken bile `cargo check` panic'lemeden geçiyor (Tauri kod üretimi o durumda `frontendDist`'i gömmeyi atlıyor). F3 `vite.desktop.config.ts`'i yazıp `dist` üretmeye başlayınca `tauri build --features custom-protocol` yolu devreye girecek.
+
+**Kayda geçen üç implementasyon kararı (şartnamede adı geçmiyordu):** bundle identifier `com.syncra.desktop`, productName `Syncra`, veri yerleşimi `$APPDATA/syncra/{syncra.db,cache}` (capability scope'uyla tutarlı). Ayrıca Rust tarafı API host'u için `SYNCRA_API_URL` env adı seçildi — D-3 yalnız frontend'in `VITE_API_URL`'ini adlandırıyordu, bu isim F7'de build parametrizasyonuyla birlikte gözden geçirilmeli.
+
+**Küçük açık:** `storage::clear_local` motorun önbelleğe alınmış `SyncStatus`'unu yenilemiyor (`refresh_status()` dondurulmuş API'de private). Sonraki `mutate`/`sync_now` kendiliğinden düzeltiyor; `storage.rs`'te belgeli.
+
+---
+
+# EK 2 — F3-A SONUÇLARI
+
+## D-4 ÇÖZÜLDÜ — `localStorage` Windows/WebView2'de KALICI
+
+Ölçüm yapıldı (varsayım değil). İki oturum, arada süreç `Stop-Process -Force` ile tamamen öldürüldü:
+
+```
+Oturum A:  prev=NULL                       now=2026-08-31T07:44:20.634Z  keys=["syncra-theme","__d4_probe"]
+Oturum B:  prev=2026-08-31T07:44:20.634Z   now=2026-08-31T07:44:50.633Z  keys=["syncra-theme","__d4_probe"]
+```
+
+**Sonuçları (bağlayıcı):**
+- `syncra-theme`, `syncra-locale`, `syncra-sidebar` **olduğu yerde kalır**.
+- §3.7 dokunuş listesinin **6-7-8. satırları düşer** — `stores/themeStore.ts`, `i18n/index.ts`, `components/layout/AppLayout.tsx` değiştirilmeyecek. W1'den beri süren yasak artık kalıcı bir karardır, geçici kısıt değil.
+- `Platform`'a `storage {get,set}` üyesi **eklenmez** (E.1 D-4'ün fallback dalı iptal).
+- Yan fayda: `check-i18n-bootstrap.mjs`'in kaynak-metin assert'leri hiç riske girmedi.
+
+**Linux/WebKitGTK ÖLÇÜLMEDİ.** Gerekçe gerçek çıktı: WSL2 Ubuntu'da `cargo`/`rustc` yok, `pkg-config --modversion webkit2gtk-4.1` → NOT INSTALLED. K11 Linux'u birinci sınıf hedef sayıyor; **bu ölçüm F7 Linux paketlemesinden önce yapılmalıdır.** Sonuç farklı çıkarsa yukarıdaki üç karar Linux için yeniden değerlendirilir.
+
+## §4.2 DÜZELTMESİ — `watch.ignored` yetersizdi (ölçülmüş çökme)
+
+`.cargo/config.toml` kaldırılıp varsayılan `desktop/target` kullanılmaya başlanınca `target/` Vite root'unun **içine** girdi. Chokidar, çalışan uygulamanın açık tuttuğu `target/debug/deps/syncra_desktop_lib.dll`'i izlemeye kalkıp `EBUSY` fırlattı; dev server öldü, `tauri dev` "beforeDevCommand terminated with a non-zero status code" ile durdu.
+
+**Doğru değer:**
+```ts
+watch: { ignored: ['**/src-tauri/**', '**/target/**', '**/.tauri/**'] }
+```
+§4.2'deki tek elemanlı liste artık **yanlıştır** ve dev server'ı çökertir.
+
+## §4.2 EKLEMESİ — `resolve.dedupe` ZORUNLU
+
+```ts
+resolve: { dedupe: ['react', 'react-dom'] }
+```
+Kabuğun kendi `node_modules`'ı olduğu için React diskte iki kopya. Dedupe olmadan `desktop/src` ile `frontend/src` **ayrı React örneklerine** bağlanır ve tüm hook'lar "invalid hook call" ile ölür. Belirti sebepten uzak olduğu için bu satır kaldırılmamalıdır.
+
+## E.5.2 / E.5.3 AÇIKLARI — durum
+
+| Açık | Durum |
+|---|---|
+| E.5.2/1 CSP host'ları sabit | **KAPANDI** — `desktop/scripts/tauri.mjs` `frontend/.env`'den okuyup CSP'yi build-time üretiyor, `--config` ile birleştiriyor. `https://crm.example.com` + `wss://ws.example.com:443` ile de doğrulandı. |
+| E.5.2/2 `.cargo/config.toml` | **KAPANDI** — kaldırıldı, soğuk derleme yeniden doğrulandı (7dk53sn). Yan etkisi yukarıdaki `watch.ignored` düzeltmesiydi. |
+| E.5.2/3 `desktop/package.json` yok | **KAPANDI** — `dev:desktop`, `build:desktop`, `tauri` script'leri var; CI'ın `npm run tauri` sözleşmesi korundu. |
+| E.5.3 updater mayını | **DEVREDİLDİ** — `#[cfg(not(debug_assertions))]` ile dev ve `--debug`'tan kaldırıldı. Sahte pubkey commit edilmedi (doğru karar). **Release binary hâlâ `plugins.updater` bloğu olmadan çalışmaz → F7'nin 1. maddesi.** |
+
+## F3'ün DEVAMI İÇİN AÇIK KALANLAR
+
+1. **`data`: 124 metottan 0'ı bağlı.** `IMPLEMENTED` map'i bilerek boş; her çağrı `NOT_IMPLEMENTED` fırlatıyor (sessiz `undefined` yok). Login ekranı auth'u `authApi`/axios üzerinden yaptığı için açılıyor, ama **login sonrası her ekran patlar**. Sıradaki turun 1. maddesi: `NamedQuery` beyaz listesi + row→DTO eşlemesi.
+2. **Event bridge yok.** `desktop/src/bridge/{events,realtime}.ts` yazılmadı; `handle_realtime` komutu Rust tarafında da kayıtlı değil. Desktop şu an web gibi doğrudan Echo'ya abone — KARAR A11 (realtime → motor → mini-pull) henüz uygulanmadı.
+3. **D-6 yapılmadı.** `check-i18n-bootstrap.mjs`'in `main.desktop.tsx`'i kapsaması `frontend/scripts/**` yazmayı gerektiriyordu. Desktop girişindeki açılış kapısı bugün elle doğru ama **hiçbir otomatik kapı korumuyor**.
+4. **Gerçek login akışı denenmedi** — `:8000`'de başka bir servis var (`/api/me` → 404). Backend ayağa kalkınca device token akışı uçtan uca denenmeli.
+5. `desktop/src-tauri/target` (996 MB, workspace öncesinden ölü) diskte duruyor — silme onayı bekliyor.
+
+---
+
+# EK 3 — F3-C KARARLARI (veri katmanı bağlandı)
+
+124/124 metot bağlı, `NOT_IMPLEMENTED` sıfır. Sınıflandırma: **50 yerel okuma** (`query`), **44 yerel yazma** (`mutate`), **30 online-only** (`http`). `NamedQuery` 16 → 30 varyant; 27 kullanılıyor, 3'ü gerekçeli rezerve. Crate 83 → **103 test**.
+
+Bütünlük `desktop/scripts/check-data-wiring.mjs` ile kilitli. Kontrolün gerçek olduğu bağımsız negatif testle doğrulandı: `users.list` `http` → `query` yapıldığında üç ayrı hata verdi (gövde yerel okuma yapmıyor · gövde `platform.http` çağırıyor · §8 ihlali) ve geri yüklenince OK döndü. Manifest beyanını **fonksiyon gövdesiyle** karşılaştırıyor, yalnız etiket okumuyor.
+
+## Onaylanan kararlar
+
+| # | Karar | Gerekçe |
+|---|---|---|
+| **A20** | `is_overdue` (deal/task) **yerelde hesaplanır** | Tip dosyası "sunucu hesaplar" diyor ama offline'da sunucu değeri yok; `false` dönmek **her gecikmiş kaydı gizlerdi**. Kural belirsiz değil: geçmiş tarih + bitmemiş. Sessizce yanlış veri, açıkça türetilmiş veriden kötüdür. |
+| **A21** | §8 dışı `http` yönlendirmeleri onaylandı | Üçü de sözleşmeden türetilmiş, icat değil: `leads.checkDuplicates` (sunucu algoritması, yerelde çalıştırılamaz) · `chat.{recordConversation,addMembers,removeMember,leaveConversation}` (crate'in `ACTION_WHITELIST`'i dışında ⇒ sözleşme gereği zaten `ONLINE_ONLY`) · `products`/`priceLists`/`savedViews` yazmaları (RO entity, `mutate()` zaten reddediyor). |
+| **A22** | `can.*` izinleri permissive (`true`) | Satır bazlı izinler senkron kapsamında değil; `false` masaüstünü offline salt-okunur yapardı. KARAR A14'ün üçüncü katmanı (push reddi) veri bütünlüğünü koruyor. **Bedeli F4'e taşınıyor:** kullanıcı yetkisi olmayan bir aksiyonu deneyebilir ve hata **push anında** görünür — Conflict Inbox bunu "reddedildi" olarak anlaşılır biçimde göstermek zorunda. |
+| **A23** | SLA türetilmiş alanları `null`/`0` döner | `sla_remaining_seconds`/`sla_total_seconds`/`sla_target_hours` aynada yok ve `docs/SLA-DESIGN.md` sunucuyu tek otorite yapıyor. **Yanlış sayan bir sayaç yerine hiç sayaç** doğru tercih. |
+| **A24** | `uploadAttachment` şimdilik doğrudan ağa gider | §8 onu "kuyruğa alma" sınıfında sayıyor ama kuyruk `files::attach_from_paths` (F5-5) henüz yok ve webview'daki `File` handle'ının Rust'a verilecek yolu yok. Offline'da **gürültülü hata veriyor**, sessizce kuyruğa girmiş gibi görünmüyor — sahte başarıdan iyidir. F5-5'te kuyruğa bağlanacak. |
+
+## BACKEND'E DEVREDİLEN İKİ GERÇEK BOŞLUK (F1 takibi)
+
+1. **Bildirim metni.** `NotificationResource` `title`/`body`'yi `data.title_key` + **Laravel PHP çeviri kataloğundan** üretiyor; masaüstünde o katalog yok (frontend i18n namespace'leri ayrı). Eski satırlar düz `title` taşıdığı için doğru basılıyor, **yeni satırlarda ham anahtar görünecek**. Çözüm sunucu tarafında: pull payload'ına render edilmiş `title`/`body` eklenmeli. İstemcide uydurulmadı.
+2. **SLA türetilmiş alanları** (A23) pull satırına eklensin ya da formül `docs/SLA-DESIGN.md`'de istemciye açılsın.
+
+## DOĞRULANMASI GEREKEN VARSAYIM
+
+`tag_ids` + `tags` **çift anahtar**: payload hem REST alanını hem ayna kolonunu taşıyor. Laravel'in FormRequest'i fazladan `tags` anahtarını varsayılan olarak yok sayar — **ama bu test edilmemiş bir varsayım**; yanlışsa push 422 döner. F1 takibinde bir test ile kilitlenmeli.
+
+## YOL BOYUNDA YAKALANAN LATENT HATA
+
+`EngineEvent::TablesChanged(Vec<Entity>)` ve `ConflictAdded(Uuid)` internally-tagged **newtype** varyantlardı; serde bunları **çalışma anında** serileştiremez. Olay emisyonu bu turda eklendiği için hata ilk `TablesChanged`'de patlayacaktı. Tüm varyantlar struct varyanta çevrildi + JSON round-trip testi yazıldı. F2'nin 83 testi bunu yakalayamamıştı çünkü hiçbir test olayı serileştirmiyordu.
+
+## KÜÇÜK BOŞLUKLAR (kayda geçti, F4'te kapanacak)
+
+`Conversation.last_message_preview` = `null` · `Message.tick` daima `'sent'` (ayna `delivered` imleci taşımıyor; `TickState` monoton olduğu için en düşük değer güvenli) · `Company.primary_contact` liste sayfasında `null`, detayda gerçek · `tickets.stats.at_risk_count` ve `notes_count` = `0` · `mapUser`'da `role`/`last_login_at`/`must_change_password` §4.1 projeksiyonu dışında olduğu için yok.
+
+## HÂLÂ AÇIK
+
+- **KARAR A11 uygulanmadı:** `bridge/realtime.ts` + Rust `handle_realtime` yok. Desktop şu an web gibi doğrudan Echo'ya abone; realtime olayı motoru tetiklemiyor, mini-pull yapılmıyor.
+- **Gerçek login/uçtan uca akış denenmedi** — backend `:8000`'de ayakta değil.
+- `boardApi` `DataSource` dışında; `deals_board`/`pipeline_stages` varyantları rezerve bekliyor. Board'un adaptöre alınması `frontend/**` dokunuşu gerektiriyor — F4 kararı.
+
+---
+
+# EK 4 — A11, BACKEND TAKİBİ VE THREAT MODEL
+
+## KARAR A11 UYGULANDI — realtime artık motoru tetikliyor
+
+Masaüstünde Echo olayı **doğrudan `invalidateQueries` çağırmıyor**; `invoke('handle_realtime')` ile motora gidiyor, motor mini-pull yapıyor, `TablesChanged` de EK 3'ün `bridge/events.ts` köprüsünden cache'e dönüyor. `desktop/src` genelinde `invalidateQueries` **tek çağrı yerinde** (`bridge/events.ts`) — yapısal kontrol bunu kilitliyor.
+
+`handle_realtime` üç yerde birden kayıtlı ve isim uyuşması statik olarak doğrulanıyor: TS `invoke` adı · Rust `#[tauri::command] fn` · `lib.rs` `generate_handler!`. Bu üçlünün sessizce ayrışması en olası kırılma noktasıydı.
+
+**Kapsanan:** 7 web kanalı → 4'ü motora yönlendirildi, 3'ü gerekçeli UNMAPPED. 15 olay → 12 binding + 3 UNROUTED.
+- `presence-online` — **A11'in tek istisnası**: kalıcı veri değil, ayna tablosu yok.
+- `private-dashboard`, `private-logs` — §8 online-only yüzeyler, çekilecek ayna satırı yok. (`logs` = Spatie audit log; aynalanan `activities` entity'siyle **aynı şey değil** — bu ayrım kodda yorumlu.)
+- `.user.deactivated` UNROUTED — oturum yıkımı, veri değişimi değil; motor 401 → `AuthLost` yolundan öğreniyor.
+
+### AÇIK RİSK — `Echo.leave()` savaşı (mimari, çözümü `frontend/**`'de)
+
+Web hook'ları unmount'ta `echo.leave()` çağırıyor (`useDealRealtime.ts:153`, `useTicketRealtime.ts:131`, `useTaskReminders.ts:72`, `useRealtimeSession.ts:51`, `useNotificationSocket.ts:96`) ve **`leave` referans saymaz** — kanalı ve üzerindeki *tüm* dinleyicileri, köprününki dahil kapatır.
+
+Bugünkü savunma bir **workaround**: köprü 5 sn'de bir kanal nesnesi kimliğini karşılaştırıp yeniden abone oluyor. Boşluk sınırlı — motorun 60 sn'lik döngüsü satırı zaten çekiyor, yani kaçan bir ipucu **geciktirir, kaybettirmez**.
+
+**Kalıcı çözüm bir `frontend/**` kararıdır:** `useDealRealtime`/`useTicketRealtime`/`useTaskReminders`/`useRealtimeSession` `frontend/src/features/chat/hooks/conversationChannel.ts`'in **zaten uyguladığı** referans sayan registry desenine geçirilirse watchdog tamamen gereksizleşir. Ayrı bir tur olarak açık.
+
+### Bilinçli sınır
+`private-conversation.{id}` yalnız **açık odalarda** motora akıyor (attach modu — kanal id'leri chat registry'sinin malı, köprü kapatılmış bir odayı diriltmemeli). Kapalı odaların mesajları `.chat.unread`'den geliyor, ama `.message.read/.delivered` imleç olayları ulaşmıyor → `conversation_user` imleçleri bir sonraki tam pull'a kadar bayat kalabilir.
+
+### ŞARTNAME DÜZELTMESİ
+`SYNCDESKTOP.md` §6.2 komut listesinde **`handle_realtime` yok** — oysa aynı belgenin §5.2'si ve mimari §6.3 bu akışı zorunlu kılıyor. §6.2'ye eklenmeli.
+
+---
+
+## KARAR A25 — 401 ile deaktivasyon aynı olay DEĞİLDİR
+
+`SYNCDESKTOP.md` kendi içinde çelişiyordu (F6-A buldu, teknik lider doğruladı):
+- §5.5 ve §5.7 → *"401 → AuthLost (**outbox korunur**, aynı user login → devam; farklı user → wipe)"*
+- §9 madde 2 → *"Deaktive/silinen kullanıcı → 401 → lokal DB + keychain **tamamen wipe**"*
+
+> **Atıf notu (2026-08-31):** bu üç alıntı özgün olarak `SYNCDESKTOP.md:342/:350/:414` satır numaralarıyla verilmişti. Şartname SPEC-1 turunda revize edildiği için satır numaraları kaydı; atıflar bölüm çapalarına taşındı ve **karar bu revizyonla şartnameye işlendi** (`SYNCDESKTOP.md` §13.1, A25 satırı). Karar belgelerinde satır numarasıyla atıf verilmez.
+
+Crate `sync/mod.rs:1001` §5.5'i uygulamış: token silinir, şifreli DB kalır.
+
+**Karar — ikisi ayrı sinyale bağlanır:**
+
+| Sinyal | Davranış | Gerekçe |
+|---|---|---|
+| **403 `USER_DEACTIVATED`** | **Wipe** — lokal DB + keychain | `EnsureUserIsActive` bunu açıkça döndürüyor: sunucu-bilgili, kesin sinyal. §9/2'nin kastı budur. |
+| **Genel 401** | **Outbox korunur**, `AuthLost`. Aynı kullanıcı geri girerse devam; **farklı kullanıcı → wipe** | Sebebi belirsiz (süresi dolmuş token, sunucu hıçkırığı). Naif "her 401'de wipe" masum kullanıcının bekleyen işini yok eder. |
+
+Şartname bu iki olayı karıştırmıştı; ayrım sinyale bağlanınca §9/2 de §5.5 de sağlanıyor.
+
+**Artık risk (kabul edildi):** silinmiş bir kullanıcının şifreli DB'si diskte kalır — o kullanıcı bir daha giriş yapamaz, veri retention penceresiyle veya farklı kullanıcı girişindeki wipe ile temizlenir. Anahtar o OS hesabının keychain'inde olduğu için erişim aynı OS hesabıyla sınırlıdır (SINIR 3'ün zaten iddia etmediği alan).
+
+---
+
+## KARAR A26 — SLA alanları sunucuda hesaplanıp pull satırına konur
+
+A23 (`null`/`0` dön) geçici bir çözümdü; kalıcı çözüm netleşti.
+
+**Bulgular (F1-B araştırması):** `sla_remaining_seconds`/`sla_total_seconds`/`sla_target_hours` web'de de **fiziksel kolon değil** — `TicketResource` bunları yanıt üretirken `SlaService::totalSeconds/remainingSeconds/targetHoursForTicket` (`app/Services/Tickets/SlaService.php:311-371`) ile hesaplıyor. Gerekli ham kolonlar (`sla_due_at`, `sla_paused_at`, `sla_paused_seconds`, `resolved_at`, `priority`, `status`) `tickets` tablosunda ve pull `SELECT *` çektiği için **zaten satırda**.
+
+**Karar:** sunucu hesaplayıp pull satırına koyar. **Formül istemciye AÇILMAZ.**
+
+`docs/SLA-DESIGN.md` §1 *"geri sayımı her zaman sunucu hesaplar, istemci yalnızca sunucudan aldığı kalan saniyeyi monoton saatle eritir"* diyor. Ham alanlardan istemcide yeniden hesaplamak bunu **ihlal eder**; sunucunun hesapladığı sayıyı pull satırına koymak **etmez** — pull da bir "sunucudan alma" anıdır, istemci sonra §6'daki mevcut "dondur + monoton saatle erit" davranışını uygular.
+
+Yeni migration gerekmiyor. Uygulama sonraki backend turunda; `Ticket::newFromBuilder()` ile hydrate edilen modelin `SlaService`'in beklediği Carbon cast'lerini doğru taşıdığı **uygulama anında doğrulanmalı** (araştırmada kontrol edilmedi).
+
+---
+
+## BACKEND TAKİBİ KAPANDI (F1-B)
+
+- **Bildirim metni:** `SyncPullService::renderNotificationText()` — `NotificationResource`'un kullandığı **aynı** render yolu (`NotificationText::resolve`) yeniden kullanıldı, kopyalanmadı (K7). Locale kaynağı: `SyncScope::applyRowScope()` `notifications`'ı zaten `notifiable_id = $user` ile kısıtlıyor, yani pull eden her zaman satırın sahibi — ikinci sorgu gerekmedi. `title_key`/`params` yerinde kaldı.
+- **`tag_ids` + `tags` varsayımı DOĞRULANDI:** `StoreCompanyRequest`/`UpdateCompanyRequest` `rules()`'ında `tags` yok, Laravel kuralsız fazladan anahtarı `validated()`'dan sessizce düşürüyor — 422 yok, ek tolerans kodu gerekmedi. İki test kilitledi (update testi `tags`'ı `changed_fields`'a da koyup intersect adımını sınadı).
+- Backend testleri: **1402 → 1407**.
+
+---
+
+## THREAT MODEL — `docs/DESKTOP-THREAT-MODEL.md` (F6-A)
+
+19 satırlık STRIDE tablosu, §9'un 10 maddesi tek tek, 8 bulgu (1 ORTA, 3 DÜŞÜK, 4 BİLGİ). Doküman okumakla yetinilmemiş, **canlı kanıt** toplanmış: `$APPDATA` listelenip token/anahtar dosyası olmadığı, `head -c 16 syncra.db | od -c` ile başlığın `SQLite format 3` **olmadığı** gösterilmiş.
+
+**§9 durumu:** madde 1, 3, 4, 7 KAPALI · **madde 2 AÇIK** · madde 5, 6 DEĞERLENDİRİLEMEZ-F5 · madde 8 DEĞERLENDİRİLEMEZ-F7 (bugün fail-closed) · madde 9 KAPALI (§9/9 log filtresi, EK 5) · madde 10 bu teslimat.
+
+> ⚠️ **DÜZELTME (RISK-1 denetimi, 2026-08-31).** Bu satır önce "madde 2 A25 ile kapandı" diyordu. **Yanlıştı.** A25 bir *karardır*, uygulama değil — ve kodda hiçbir karşılığı yok: `transport.rs:137` 403'ü ayrıştırmadan `SyncError::Protocol`'e katlıyor, `USER_DEACTIVATED` masaüstü kodunda hiç geçmiyor (grep 0), `handle_auth_lost` yalnız 401'de çalışıyor. **Bugünkü davranış karardan da kötü:** deaktive edilmiş kullanıcı oturumu düşmeden "protocol error" görüyor ve wipe hiç olmuyor.
+>
+> Bu hata, kararı tutanağa geçirmenin işi bitirmekle karıştırılmasından doğdu. Yapısal önlemi `docs/DESKTOP-OPEN-ITEMS.md`: her madde **Karar / Kod / Test** sütunlarıyla izleniyor ve ancak üçü de ✅ olduğunda kapanıyor. Bu madde orada **O1**.
+
+**§9/9 (tracing PII filtresi) F5'i bekleyemez.** Log plugin'i F3'ten beri **filtresiz DEBUG seviyesinde** diske yazıyor (`lib.rs:78`; canlı `Syncra.log`'da keyring DEBUG satırları var — girdi *adları* görünüyor, sır *değerleri* görünmüyor). Bugün sır sızmıyor ama bunu garanti eden bir katman yok. Bir sonraki turun adayı.
+
+---
+
+# EK 5 — F4 EKRANLARI, REFCOUNT REFACTORU, A26, LOG FİLTRESİ
+
+## KARAR A27 — Masaüstü yüzeyi ROUTE değil, KABUK KROMASIDIR
+
+F4-A routing sorusunu `frontend/**` içine hiç dokunmadan çözdü; DUR gerekmedi.
+
+**Neden route eklenemiyor (araştırıldı):** `frontend/src/router.tsx` modül seviyesinde `createBrowserRouter([...])` kurup bitmiş router'ı export ediyor. React Router **7.18.2**'de kurulmuş bir data router'a route eklemenin desteklenen yolu yok — `patchRoutesOnNavigation` yalnızca *oluşturma* seçeneği (router nesnesinin yüzeyinde değil, typings ile doğrulandı), tek runtime kancası `router._internalSetRoutes` alt çizgili ve yayınlanan typings'te yok. Route eklense bile **gezinme** `Sidebar.tsx` içinde, o da yasak.
+
+**Karar:** `main.desktop.tsx` artık `<PlatformProvider><DesktopShell><App/></DesktopShell></PlatformProvider>` render ediyor. Masaüstü ekranları bir panel olarak `App`'i sarıyor, route ağacına girmiyor.
+
+Kazanç: sıfır `frontend/**` düzenlemesi · `/login` dahil **her route'ta** çalışıyor · `router.tsx` web'in byte-byte aynısı (K1 korundu).
+
+## KARAR A28 — `desktop/src` üçüncü parti React kütüphanelerini çözemez
+
+KARAR A1/A2 iki bağımlılık ağacını ayırdığı için `desktop/src` `@tanstack/react-query`, `react-i18next` ve `lucide-react`'i çözemiyor.
+
+**Kalıcı sonuçları (F5 ve sonrası için de geçerli):**
+- Masaüstü ekranları react-query değil düz `useState` + `invoke` kullanır.
+- Çeviri, `@/i18n` **singleton'ına** bağlanan yerel bir `useT()` hook'undan gelir. İkinci bir i18next kurmak sözlüğü boş bırakırdı.
+- İkonlar inline SVG.
+- `desktop/package.json` içine bu iş için **hiç bağımlılık eklenmedi**.
+
+## F4 durumu — §7.2'nin 5 maddesinden 4'ü tam
+
+| # | Madde | Durum |
+|---|---|---|
+| 1 | Connectivity bar | TAM. Sabit sol-alt (akışa giremez: `AppLayout` `h-screen overflow-hidden` ve ona yazma izni yok). Durum önceliği `offline > syncing > conflict > online`. **İkinci poll açılmadı** — `subscribeToEngineStatus` store'u tek otorite olarak `EngineEvent::StatusChanged` dinliyor. |
+| 2 | Kayıt rozetleri | **KISMİ.** `SyncStateBadge` bileşeni ve `PendingRecords` paneli (11 yazılabilir entity, outbox topolojik sırasında) hazır. Rozetin **kayıt satırlarına inmesi** `frontend/src/features/*/pages/*` düzenlemesi gerektiriyor — ayrı bir şerit. |
+| 3 | Conflict Inbox | TAM. Diff tablosu, KeepMine/TakeServer/alan bazlı Merge, toplu çözüm. |
+| 4 | Storage | TAM. Kullanım çubuğu (%80 warning / %100 danger), retention + MB tavanı (K8 alt sınırları UI'da da), Arşivi indir (offline disabled), Yerel veriyi temizle (geri alınamaz uyarısı + onay). |
+| 5 | Devices | TAM. `list_devices`/`revoke_device`, `is_current` → "Bu cihaz". |
+
+**A22'nin bedeli ele alındı:** `sync::conflicts` iki farklı şeyi tek listede döndürüyor — gerçek `FIELD_CONFLICT` (merge anlamlı) ve **reddedilenler** (`ONLINE_ONLY`, `UNRESOLVED_REFERENCE`, `ABILITY_REQUIRED`, `HTTP_403`, `RECORD_DELETED` — tek taraflı, merge edilecek şey yok). Liste **`code` alanına göre gruplanıyor**, her grubun başlığı o kodun `desktop.errors.*` cümlesi: kullanıcı "neden olmadı" sorusunun cevabını kendi dilinde başlıkta okuyor. Ayrım hem görsel (warning/danger) hem fonksiyonel (merge yalnız `conflicting_fields` doluyken). Yeni anahtar gerekmedi.
+
+### F4 devamı için açık kalanlar
+
+1. **Motorun settings getter'ı yok.** `update_settings` var, okuyanı yok; `StorageStats` iki tavanı taşıyor ama **`retention_days` taşımıyor**. UI şimdilik cihaz-lokal `localStorage` aynası + K8 varsayılanı (30) kullanıyor — yeniden kurulum sonrası bayat olabilir. **Kalıcı çözüm crate içinde bir `storage::settings` getter komutu.**
+2. **Komut adı sözleşmeden farklı:** `generate_handler!` komutları **fonksiyon adıyla** kaydediyor, yani `storage_stats` değil `stats` (`src-tauri/src/lib.rs:95`). `src-tauri` şeridi adı değiştirirse `ui/commands.ts` sessizce kırılır.
+3. **Dolu Conflict Inbox görsel olarak doğrulanmadı** — backend yok, çakışma üretilemedi, **sahte veri uydurulmadı**. Boş durum gerçek `conflicts` çağrısıyla doğrulandı; gruplama/diff/merge yolları yalnız `tsc` + kod incelemesi seviyesinde.
+4. **`confirmSuffix` çevirileri kendi içinde tutarsız** (F3-B çıktısı): `tr` "kalın-isim + suffix" desenine göre yazılmış (repo emsali `AutomationRulesTab.tsx:179`), `en/de/fr` ise "Are you sure you want to..." gibi bir **giriş cümlesi** varsayıyor — o cümlenin anahtarı yok. Ya `desktop.confirm.lead` eklenmeli ya da üç dilin suffix metni yeniden yazılmalı.
+5. **Eksik i18n anahtarları** (yazılmadı, `frontend/**` sahipliğinde): `desktop.entities.<entity>` (22 — şu an ham tablo adı basılıyor: `deal`, `company`...), `desktop.fields.<column>` (merge diff'inde ham kolon adı), `desktop.recordBadge.{pending,conflict}`, `desktop.conflicts.{rejected.title,rejected.description,retry,discard}`, `desktop.storage.{outbox.label,downloadArchive.description}`, `desktop.confirm.lead`.
+6. **Arşivi indir ne kadar geçmiş indiriyor belirsiz** — `extra_days` olarak mevcut retention penceresi gönderiliyor. Sözleşmede adım tanımı yok.
+
+## Echo.leave() REFCOUNT REFACTORU (FE-A)
+
+`frontend/src/lib/channelRegistry.ts` eklendi (`acquireChannel`/`releaseChannel`, sayaç sıfırlanınca `leave`); `conversationChannel.ts` onun üstüne taşındı (dışa açık imzalar değişmedi, `useChatSocket`/`useTyping` dokunulmadı); **altı hook** geçirildi. Hiçbir `.tsx` değişmedi.
+
+**Kanıt yöntemi örnek alınmalı:** prod mantığının `diff` ile doğrulanmış birebir kopyası sahte bir Echo'ya karşı koşuldu — `hookA` unmount olurken `hookB` dinleyicisi **yaşadı** (`hookBEvents=2`), `leave` yalnız **son** bırakışta tetiklendi. Üstüne **negatif kontrol**: eski referans-saymayan desen aynı mock'a karşı `hookBEvents=0` ile orijinal hatayı yeniden üretti.
+
+Şerit kendi işinde bir hata yakalayıp düzeltti: `useNotificationSocket`/`useChatUnread` içinde `releaseChannel` yalnız kendi dedup sayacı sıfırlanınca çağrılıyordu — bu, registry sayacının **hiç sıfıra inmemesine** yol açıp bir sızıntıyı başkasıyla değiştirecekti.
+
+**LATENT TUZAK (kayda geçti):** üç hook içinde ham `echo.leave()` duruyor — `useDashboardSocket.ts:61`, `useActivityStream.ts:61`, `usePresence.ts:59`. **Bugün zararsız**: köprü bu üç kanala abone değil, `bridge/realtime.ts` UNMAPPED tablosunda kayıtlı (doğrulandı). Ama köprü ileride bunlardan birine abone olursa hata geri döner.
+
+## PLANLAMA HATASI — dosya sahipliği kesişimi yetmedi
+
+Dört şeridi ayrık dosya kümelerine böldüm, ama **bir şeritteki doğrulama script'inin başka şeridin kaynağını taradığını** hesaba katmadım. FE-A hook'ları `acquireChannel`'a taşıyınca `desktop/scripts/check-realtime-wiring.mjs` (F3-F'in yazdığı, literal `echo.private('deals')` arayan) haksız yere 5 hata verdi — eşleme doğruydu, tarayıcının sezgisi kırıktı.
+
+**Ders:** paralel şerit sınırı çizerken yalnız "kim hangi dosyaya yazıyor" değil, **"kimin kontrolü hangi dosyayı okuyor"** da sorulmalı.
+
+## A26 UYGULANDI (F1-C)
+
+`SyncPullService::attachTicketSla()` — dört alan (`sla_remaining_seconds`, `sla_total_seconds`, `sla_target_hours`, `sla_breached`) pull satırında; `SlaService` metotları çağrıldı, aritmetik kopyalanmadı. Migration gerekmedi.
+
+**F1-B'nin işaretlediği doğrulanmamış nokta gerçek bir hata çıktı:** `Ticket::newFromBuilder()` **static değil**, instance metodu; ilk deneme `Non-static method cannot be called statically` ile patladı, `(new Ticket)->newFromBuilder($row)` ile düzeltildi. Varsayılıp geçilseydi sessizce yanlış tip geçirilecekti.
+
+Testler dört senaryoyu (açık / duraklamış / çözülmüş / SLA'sız) **gerçek `GET /api/tickets/{id}` çağrısının `TicketResource` çıktısıyla** karşılaştırıyor, saat `travelTo()` ile dondurulmuş — "iki yol ayrışmıyor" iddiası kanıta bağlı. Backend testleri **1407 → 1411**.
+
+## §9/9 LOG PII FİLTRESİ (F6-B) — kök neden tahminden farklı çıktı
+
+Görev tarifim "`tracing` filtresiz DEBUG yazıyor" diyordu. **Gerçek mekanizma başkaydı:**
+
+1. Uygulamada hiçbir yerde **`tracing::Subscriber` kurulmuyor** (`Cargo.lock` içinde `tracing-subscriber` yok). Subscriber olmadan `tracing::warn!` çağrıları **tamamen no-op** — `events.rs:36,40` fiilen sessizdi.
+2. Diskteki gerçek DEBUG satırları `tracing`'den değil, **`log` fasadından** geliyordu: üçüncü parti crate'ler (`keyring`, `reqwest`, `hyper`, tauri dahili) → `tauri_plugin_log::Builder::new().build()` filtresiz varsayılanı (`LevelFilter::Trace`).
+3. `syncra-sync/Cargo.toml` `tracing` bağımlılığını bildiriyor ama **hiç kullanmıyordu** — ölü bağımlılık, üstelik ileride eklenecek her `tracing::*!` çağrısı sessizce yutulacaktı.
+
+**Çözüm üç katmanlı:**
+- `tracing = { features = ["log"] }` — her `tracing` olayı `log::Record` olarak da yayılıyor; artık mevcut ve gelecekteki `tracing` çağrıları tek maskeleme hattından geçiyor. **Sessiz no-op riski kapandı.**
+- `logging::level_for_build()` — debug build `Debug`, release `Info`. Plugin varsayılanı `Trace` idi.
+- `logging::masking_format` — `Builder::format(...)` ile **tüm** fern hedeflerinden (stdout, dosya, webview relay) önce tek noktada e-posta ve E.164 telefon maskeleme. **Çağrı yerinde değil, yazım katmanında** — biri unutsa da tutuyor.
+
+E.164 deseninde `+` zorunlu tutulmuş; gerekçesi sahte pozitif: `+`'sız rakam dizileri bu uygulamanın kendi loglarında zararsız ve sık (outbox sayaçları, byte toplamları, cursor'lar).
+
+**Negatif test gerçek:** maskeleme bypass edilince test `email reached disk: ... jane@example.com, +14155552671` ile patladı, geri alınınca 4/4 yeşil. Release cfg doğrulaması `cargo test --release` ile yapıldı (`level_for_build() == Info`); **gerçek `.exe`'nin ürettiği log dosyası incelenemedi** — updater pubkey engeli `tauri build --release`'i bloklamaya devam ediyor (F7).
+
+**Kalan kapsam sınırı:** regex yalnız e-posta ve E.164 telefon yakalıyor. Serbest metin mesaj gövdesi veya tam ad taşıyan bir `Debug` değeri maskelenmez — görev kapsamı bu ikisiydi, genişletme F6 birleştirmesinde değerlendirilmeli.

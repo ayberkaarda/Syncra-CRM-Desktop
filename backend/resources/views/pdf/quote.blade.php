@@ -120,17 +120,14 @@
         margin-top: 2px;
     }
 
-    #page-header .logo-slot {
-        /* Logo dosyası yok (Faz 10 Ayarlar ekranında yüklenebilir hale
-           gelecek). Şimdilik yer tutucu bırakıldı, gerçek bir logo
-           <img> değil — kutu yalnızca marka alanını göstermek içindir. */
+    #page-header .logo-mark {
+        /* Kaynak varlık 320x165 (oran 1.939). Genişlik sabitlenir, yükseklik
+           orana göre otomatik hesaplanır (≈36px); `max-height` başlık alanı
+           büyürse logonun taşmasını önleyen bir üst sınırdır, birincil
+           boyutlandırma değil. */
         width: 70px;
-        height: 40px;
-        border: 1px solid #999;
-        color: #999;
-        font-size: 7px;
-        text-align: center;
-        vertical-align: middle;
+        height: auto;
+        max-height: 40px;
     }
 
     #page-footer {
@@ -337,8 +334,13 @@
                 </div>
             </td>
             <td style="width: 22%; text-align: right;">
-                {{-- Logo alanı: Faz 10'da Ayarlar ekranından yüklenebilir hale gelecek. --}}
-                <div class="logo-slot">LOGO</div>
+                {{-- Varlık yoksa QuotePdfService::logoDataUri() null döner ve
+                     hücre boş kalır — asla eski "LOGO" yer tutucusuna
+                     GERİ DÜŞÜLMEZ (müşteriye giden belgede hata ayıklama
+                     metni görünmemeli, bkz. QuotePdfService docblock'u). --}}
+                @if($logoDataUri)
+                    <img class="logo-mark" src="{{ $logoDataUri }}" alt="">
+                @endif
             </td>
         </tr>
     </table>

@@ -1,0 +1,52 @@
+[package]
+name = "syncra-sync"
+version = "0.1.0"
+edition = "2021"
+# Kept identical to `desktop/src-tauri/Cargo.toml` on purpose: the two crates share one
+# `Cargo.lock` and one `target/`, so the effective floor is the workspace-wide maximum
+# (1.89.0, from `notify-rust 4.18.0`) no matter which member is built. Declaring a lower
+# number here would only advertise a configuration that cannot be built from this lock.
+# See the full measurement note in `desktop/src-tauri/Cargo.toml`.
+rust-version = "1.89"
+description = "Offline-first sync engine for the Syncra CRM desktop client"
+license = "MIT"
+publish = false
+
+[lib]
+name = "syncra_sync"
+path = "src/lib.rs"
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl", "functions", "backup"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
+thiserror = "1"
+# `features = ["log"]`: same reasoning as `desktop/src-tauri/Cargo.toml` — this crate declares
+# `tracing` but does not call it anywhere yet (SYNCDESKTOP §9/9 inventory, 2026-08-31: zero call
+# sites in `src/`). Without the "log" feature, a `tracing::debug!` added here later would be a
+# silent no-op unless a `tracing::Subscriber` is also wired up — which would make the PII mask
+# on the `log`-facade pipe (`desktop/src-tauri/src/logging.rs`) blind to it. Setting the feature
+# now means any future call is masked-by-default from the moment it's written, not from the
+# moment someone remembers to also fix the Cargo.toml.
+tracing = { version = "0.1", features = ["log"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+wiremock = "0.6"
+tempfile = "3"
+tokio-test = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+
+[features]
+default = []
+
+# The vendored OpenSSL that `bundled-sqlcipher-vendored-openssl` builds ships object files
+# without PDBs, so every MSVC link emits hundreds of LNK4099 notes. They say nothing about
+# this crate's own code and drown out real output.
+[lints.rust]
+linker_messages = "allow"

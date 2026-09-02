@@ -1,0 +1,64 @@
+-- Migration 0004 — flattened attachment metadata on `messages` (KARAR A29, defter O90).
+--
+-- THE BUG
+-- -------
+-- `attachments` is out of sync scope (protocol §1.3): file bytes are never mirrored locally.
+-- Before this migration `messages` mirrored only `attachment_id` (a server-side foreign key
+-- to a table this crate never pulls), so an attached-message bubble on desktop rendered with
+-- no thumbnail and no filename — `mapMessage()` (desktop/src/platform/data/mappers.ts) had
+-- nothing to read but the id.
+--
+-- THE FIX
+-- -------
+-- `SyncPullService::attachMessageAttachments()` now flattens the attachment's metadata onto
+-- every `messages` pull row that has one, as four scalar fields — the same shape
+-- `ChatAttachmentResource::payload()` already builds for the web client (K7: one definition).
+-- `wire-fixtures/pull/message.row.json` is the canonical wire row; before this migration these
+-- four keys had no matching column and `upsert_row`'s per-key loop silently dropped them —
+-- exactly the ticket-SLA / pipeline-stage failure shape `0002_ticket_sla_fields.sql` already
+-- fixed once, caught again here by the wire-fixtures mechanism itself
+-- (`tests/wire_fixtures.rs::every_pulled_key_has_a_mirror_column`).
+--
+-- COLUMN TYPES — verified against the real values in `wire-fixtures/pull/message.row.json`,
+-- not assumed:
+--   attachment_name     : "ekran-goruntusu.png" (string)  -> TEXT, nullable (messages
+--                                                            without an attachment carry no
+--                                                            metadata at all).
+--   attachment_mime     : "image/png" (string)            -> TEXT, nullable.
+--   attachment_size     : 7079718 (JSON number, integral) -> INTEGER, nullable. Bytes; fits
+--                                                            comfortably in SQLite's 64-bit
+--                                                            INTEGER, and `db::json_to_sql`
+--                                                            maps an integral JSON number to
+--                                                            `Value::Integer` via `as_i64()`.
+--   attachment_is_image : true (JSON bool)                 -> INTEGER, nullable. SQLite has no
+--                                                            boolean type; `db::json_to_sql`
+--                                                            maps `Json::Bool` to
+--                                                            `Value::Integer(0|1)` — the same
+--                                                            convention every other boolean
+--                                                            column in this schema already uses
+--                                                            (`contacts.is_primary`,
+--                                                            `tickets.sla_breached` in
+--                                                            0002). The fixture's `mapped` note
+--                                                            is explicit that `is_image` is
+--                                                            never re-derived client-side from
+--                                                            `attachment_mime` — it is read
+--                                                            straight off this column.
+--
+-- None of the four is a timestamp (`db::is_timestamp_column` keys off a `_at` suffix that
+-- none of these carry), so `json_to_sql_for_column` passes them through `json_to_sql`
+-- unchanged — no interaction with migration 0003's normalisation.
+--
+-- EXISTING MIRRORS
+-- ----------------
+-- `ALTER TABLE ... ADD COLUMN` is additive and safe on a populated `messages` table: every
+-- row already on disk gets NULL in all four new columns, including attached messages that
+-- were pulled before this migration existed. That is correct and deliberate, not a gap to
+-- backfill here — the server side re-versions those `messages` rows (K5) so the next delta
+-- pull re-attaches them with real metadata via the normal `upsert_row` path. A local
+-- backfill migration would have nothing to backfill FROM: the metadata was never mirrored,
+-- only `attachment_id` was, and the mirror does not resolve that id to an `attachments` row
+-- (out of scope, per above).
+ALTER TABLE messages ADD COLUMN attachment_name     TEXT;
+ALTER TABLE messages ADD COLUMN attachment_mime     TEXT;
+ALTER TABLE messages ADD COLUMN attachment_size     INTEGER;
+ALTER TABLE messages ADD COLUMN attachment_is_image INTEGER;

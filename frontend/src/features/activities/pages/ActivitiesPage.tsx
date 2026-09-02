@@ -25,6 +25,8 @@ import {
   Tr,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
 import { formatDateTime } from '../../../lib/datetime'
 import { usePermission } from '../../auth/hooks/usePermission'
 import { useTaskUserOptions } from '../../tasks/api/tasksApi'
@@ -260,7 +262,12 @@ export function ActivitiesPage() {
                           <Td>
                             <ActivityTypeBadge type={activity.type} />
                           </Td>
-                          <Td className="font-medium text-fg">{activity.subject}</Td>
+                          <Td className="font-medium text-fg">
+                            <span className="inline-flex items-center gap-2">
+                              {activity.subject}
+                              <SyncStateBadge state={recordSyncState(activity)} compact />
+                            </span>
+                          </Td>
                           <Td>
                             {activity.activityable && meta && Icon ? (
                               <Link

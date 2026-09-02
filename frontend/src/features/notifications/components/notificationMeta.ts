@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import i18n, { getIntlLocale } from '../../../i18n'
+import { parseMirrorTimestamp } from '../../../lib/mirrorTime'
 import type { NotificationType } from '../types'
 
 export const NOTIFICATION_TYPE_ICON: Record<NotificationType, LucideIcon> = {
@@ -66,9 +67,19 @@ function getRelativeFormatter(intlLocale: string): Intl.RelativeTimeFormat {
  * (bkz. `package.json`) — yalnızca yerleşik `Intl.RelativeTimeFormat` kullanılır, ek bağımlılık
  * eklemez. Faz 14/İz D: aktif arayüz diline göre biçimlenir (bkz. `lib/datetime.ts`), "az önce"
  * eşiği `notifications` namespace'inden çözülür.
+ *
+ * TIMEZONE NOTE (English, per SYNCDESKTOP §0.6). Parsing goes through `parseMirrorTimestamp`
+ * rather than `new Date(iso)`. On the WEB this changes nothing: `NotificationResource` emits
+ * `toIso8601String()`, always offset-carrying, which the parser passes to `Date.parse`
+ * untouched. On the DESKTOP the same list is fed from the SQLite mirror, where `created_at` is
+ * MySQL `DATETIME` text — space-separated and zone-less (`2026-09-01 08:53:28`) — a UTC instant
+ * that ECMA-262 reads as LOCAL time, so on UTC+3 a row written three minutes ago rendered as
+ * "3 hours ago". Measured in the running shell, not theorised. See `lib/mirrorTime.ts`.
+ *
+ * The unparseable-value contract is unchanged: the raw `iso` string is returned, not `'—'`.
  */
 export function formatRelativeTime(iso: string): string {
-  const date = new Date(iso)
+  const date = new Date(parseMirrorTimestamp(iso))
   if (Number.isNaN(date.getTime())) return iso
 
   const diffSeconds = (date.getTime() - Date.now()) / 1000

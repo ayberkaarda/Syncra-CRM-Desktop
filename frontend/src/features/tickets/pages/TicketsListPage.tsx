@@ -35,6 +35,8 @@ import {
   Tr,
 } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
+import { recordSyncState } from '../../../components/shared/recordSyncState'
+import { SyncStateBadge } from '../../../components/shared/SyncStateBadge'
 import { formatDate } from '../../../lib/datetime'
 import { usePermission } from '../../auth/hooks/usePermission'
 import { SavedViewsBar } from '../../saved-views/components/SavedViewsBar'
@@ -378,12 +380,15 @@ export function TicketsListPage() {
                       return (
                         <Tr key={ticket.id}>
                           <Td>
-                            <Link
-                              to={`/tickets/${ticket.id}`}
-                              className="font-mono text-sm font-medium text-fg hover:text-primary hover:underline"
-                            >
-                              {ticket.ticket_number}
-                            </Link>
+                            <span className="inline-flex items-center gap-2">
+                              <Link
+                                to={`/tickets/${ticket.id}`}
+                                className="font-mono text-sm font-medium text-fg hover:text-primary hover:underline"
+                              >
+                                {ticket.ticket_number}
+                              </Link>
+                              <SyncStateBadge state={recordSyncState(ticket)} compact />
+                            </span>
                           </Td>
                           <Td className="max-w-64 truncate">
                             <Link to={`/tickets/${ticket.id}`} className="text-fg hover:text-primary hover:underline">

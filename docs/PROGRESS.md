@@ -1,6 +1,45 @@
 # Syncra — İlerleme Durumu (PROGRESS)
 
-**Son güncelleme:** 2026-08-25
+> ## ⚠️ BU DEPO ARTIK MASAÜSTÜ PROJESİDİR — ÖNCE BURAYI OKU
+>
+> **Son güncelleme: 2026-09-01 · branch `feat/desktop`**
+>
+> Aşağıdaki "Faz 0-15 tamamlandı, proje teslim edildi" metni **tamamlanmış web projesinin** tarihçesidir ve hâlâ doğrudur — ama **bu deponun bugünkü işi o değil.** Bu kopya, `SYNCDESKTOP.md`'ye göre Tauri 2 tabanlı offline-first bir masaüstü istemcisi ekliyor.
+>
+> **Yol haritası `SYNCDESKTOP.md`'dir.** `docs/ROADMAP.md` (aşağıda atıf verilen) web projesinin tarihçesidir, desktop için plan kaynağı **değildir**.
+>
+> ### Masaüstü faz durumu
+>
+> | Faz | Durum |
+> |---|---|
+> | F0 Keşif + sözleşme | ✅ `docs/DESKTOP-SYNC-PROTOCOL.md`, `docs/DESKTOP-ARCHITECTURE.md` |
+> | F1 Backend | ✅ migration'lar, observer + trigger, device auth, 3 sync endpoint — **1450 test / 10351 assertion** (2026-09-01) |
+> | F2 `syncra-sync` crate | ✅ SQLCipher + outbox + sync döngüsü |
+> | F3 Tauri kabuğu + adaptör | ✅ 128/128 metot bağlı (A19), A11 realtime köprüsü, 30/30 Tauri komutu — crate **160** + kabuk **113** + vitest **278** |
+> | F4 Offline UX | ✅ 5 ekran + gerçek senaryo koşumu (16,3 sn, yeniden başlatma yok, 0 reddedilen) |
+> | F5 OS özellikleri | ✅ 8 maddenin 8'i Windows'ta **elle ölçüldü** — tray · native bildirim · hotkey quick-capture · deep link (soğuk başlangıç dahil) · drag-drop + PDF cache · pano opt-in · autostart/window-state/badge · screenshot→ticket. **JumpList "son 5 kayıt" F7'ye devredildi** (defter O85, SYNCDESKTOP §6.4/§10 güncellendi): paketlenmiş kurulum olmadan doğrulanamaz. Ölçüm 4 üretim hatası buldu, 4'ü de kapandı (O80/O81/O86/O88). |
+> | F6 Güvenlik | ✅ **KAPANDI 2026-09-01** — §9 listesinin **10/10'u değerlendirildi**. Son iki madde bu turda açıldı: **§9/6 (pano)** bağımlılık katmanı dahil ölçüldü, sızıntı yolu yok, 5 test + 4 negatif kontrolle çivilendi (tarayıcının kendi iki deliği de bulunup kapatıldı); **§9/8 (updater imzası)** nitelemeli kapandı — red yolları `dosya:satır` ile, anahtarsız konfigürasyonun reddi plugin'in kendi deserializer'ıyla ölçüldü, ama *"doğru imzalı güncelleme kurulur"* **doğrulanmadı** ve öyle yazıldı. Tehdit modeli 934 satır, TM-F16 kapandı, TM-F17 (F8/3 kararına bağlı) açıldı |
+> | F7 Paketleme + CI | ✅ **KAPANDI 2026-09-01 — CI ilk kez uçtan uca YEŞİL** (run 33550538821, **10/10 iş**): `rust workspace` ×3 OS · `tauri build --debug` ×3 OS · **`release smoke (windows)`** · backend · frontend · cargo audit. Smoke'un kendi çıktısı: *"Still running after 10s - release binary starts cleanly."* Kurulu NSIS paketinde ölçülenler: MSI **12,92 MB** < 25 MB · boşta RAM 3 dk'da **214→211→212 MB** Private Bytes < 400 MB · soğuk başlangıç `syncra://deal/29` kaydın detayına gitti · `HKCU` şema kaydı NSIS'ten · **JumpList** (O85) 5 giriş + gizlilik kancası uçtan uca kanıtlı. Yol boyunda kapananlar: O12 updater, **O108** `createUpdaterArtifacts` (updater var olmayan bir manifest'i işaret ediyordu), O4/O27 fail-closed build guard'ları |
+> | F8 Veri konumu + self-host | 🟨 **üçü de teslim** — **F8/1** `storage::{data_location, move_data_dir}` + Storage sekmesi alanı + 4 dil; taşımadan önce `SyncEngine::shutdown()` **zorunlu** (O104 ölçümü). Otomatik testler gerçek motor + gerçek dosya sistemiyle uçtan uca; *uygulama içinden* taşıma **ölçülemedi** (klasör seçici yerel diyalog). **F8/2** self-host rehberi iki README'de. **F8/3** karar turu **yapıldı**: launch-time CSP sentezi (D-3 rev.2) |
+> | **İlk release** | ✅ **2026-09-02 — `desktop-v0.1.0` taslak, üç OS yeşil** (run 33571076974). 14 varlık: msi · nsis · dmg · app.tar.gz · deb · rpm · AppImage · **6 `.sig`** · **`latest.json`** (9 platform, hepsinde imza). Manifest'in imzası `.sig` dosyasıyla birebir ve anahtar kimliği **`4CE97F70B4BEFE48`** — `tauri.conf.json`'daki pubkey'in tam karşılığı. Üç madde birden kapandı: **O108** (`.sig` gerçekten üretiliyor), **O116** (`uploadUpdaterJson` doğru isim), **O34** (24.04 derliyor). **Ölçülmeyen:** bir güncellemenin gerçekten kurulduğu — ikinci sürüm gerektirir. Anahtar **parolasız**, sapma tehdit modeli §2/S4'te kayıtlı (defter O117) |
+>
+> ### En kritik bilgi
+>
+> **Artık uçtan uca doğrulandı — ve doğrulama pahalıya mal oldu.** Gerçek backend'e karşı ilk koşum 16 uyuşmazlık çıkardı (§5, AUTH-1); F4 senaryosu ve F5 ölçüm turları dört üretim hatası daha buldu. **Hiçbiri birim testleriyle görünmüyordu.**
+
+Karşı önlem: `wire-fixtures/` — kanonik JSON'u **üç tüketici** okuyor (crate `to_wire()`, PHPUnit endpoint, TS composer), böylece hiçbir taraf wire'ı tek başına değiştiremiyor.
+
+**Ama mekanizmanın bilinen bir kör noktası var (defter O82):** fikstürler bugün "rahat şekil" taşıyor (JSON alanı **nesne**, damga **ISO+Z**) — ayna ise ikisini de öyle saklamıyor (`data` **TEXT string**, `created_at` **boşluklu ve zaman dilimi eksiz**). O80 ve O81 tam bu boşluktan geçti ve **hiçbir log izi bırakmadı**. Yani RISK-1'in aynası crate ile webview arasında hâlâ açık.
+>
+> ### Oturum başında ayrıca oku
+>
+> - **`docs/DESKTOP-OPEN-ITEMS.md`** — açık işler defteri. Her madde **Karar / Kod / Test** sütunlarıyla izleniyor; bir madde ancak üçü de ✅ olduğunda kapanır. *(Bu defter bir hatadan doğdu: KARAR A25 tutanağa geçti, "kapandı" sayıldı, ama kodda karşılığı yoktu.)*
+> - `docs/DESKTOP-SYNC-PROTOCOL.md` ve `docs/DESKTOP-ARCHITECTURE.md` — bağlayıcı sözleşmeler, EK bölümleriyle birlikte
+> - **Uyarı:** `SYNCDESKTOP.md` henüz revize edilmedi (O15). S1–S10, D1–D13, P17–P20, A25 ve §6.2'deki `handle_realtime` eksiği ona işlenmedi — çeliştiği yerde **karar belgeleri (protokol/mimari EK'leri) günceldir**.
+
+---
+
+**Son güncelleme:** 2026-08-25 *(aşağısı web projesinin tarihçesidir)*
 **Durum özeti:** Faz 0-15 TAMAMLANDI — bildirim merkezi, ayarlar, raporlar, canlı dashboard, chat (DM/grup, tik makinesi, mention, dosya paylaşımı, kayda bağlı panel), Faz 13 (Güvenlik Denetimi, Kırmızı Takım, Kullanıcı Kabul & Attio Analizi — İz A/B/C), Faz 14 (Uluslararasılaştırma — tr/en/de/fr, çoklu para birimi + TCMB kuru, Attio C1–C4 — İz D/E/F) ve Faz 15 (Teslim & Final Kabul — teslim dokümanı EN+TR + ekran görüntüleri, işlevsel test kapsamı tamamlama, 4 dilli gezinti denetimi + 8 hata kapatma, kısa yeniden-kabul turu, Bölüm 6 son kabul turu) dahil. **1316 test / 9695 assertion (2026-08-25).** Proje teslim edildi — sıradaki faz yok; detay `docs/PHASE-DELIVERY.md`.
 
 > Ayrıntılı plan: `docs/ROADMAP.md`. Bu dosya her oturum başında okunur (docs/ENGINEERING-RULES.md kuralı).

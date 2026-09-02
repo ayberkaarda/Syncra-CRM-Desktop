@@ -31,6 +31,14 @@ use Illuminate\Contracts\Container\Container;
  */
 class QuotePdfService
 {
+    /**
+     * Base64 data URI cache for the header logo — resolved once per process
+     * (see logoDataUri() docblock), not once per render()/instance.
+     */
+    private static ?string $logoDataUriCache = null;
+
+    private static bool $logoDataUriResolved = false;
+
     public function __construct(private readonly Container $container) {}
 
     /**
@@ -68,6 +76,10 @@ class QuotePdfService
             // (TRY) sabit yazmak yerine buradan alır.
             'baseCurrency' => config('exchange.base_currency', 'TRY'),
             'generatedAt' => now(),
+            // Header logosu — companyInfo() içine KONMADI: bu bir şirket
+            // *verisi* değil, sunucu tarafından kontrol edilen bir marka
+            // varlığıdır (bkz. logoDataUri() docblock'u).
+            'logoDataUri' => self::logoDataUri(),
         ];
 
         /** @var DomPdfWrapper $pdf */
@@ -101,8 +113,7 @@ class QuotePdfService
 
     /**
      * Ayarlar tablosundan şirket profilini okur (Faz 10'da Ayarlar ekranından
-     * düzenlenebilir hale gelecek). Logo dosyası henüz yok; şablonda yer
-     * tutucu bırakılıp yorumla belirtilmiştir.
+     * düzenlenebilir hale gelecek).
      *
      * @return array<string, string>
      */
@@ -131,6 +142,61 @@ class QuotePdfService
             'GBP' => '£',
             default => strtoupper($code),
         };
+    }
+
+    /**
+     * PDF üst bilgisindeki logoyu bir `data:image/png;base64,...` URI'sine
+     * çevirir ve döner. `null` dönerse blade hücreyi boş bırakır — asla eski
+     * "LOGO" yer tutucusuna GERİ DÜŞMEZ (müşteriye giden belgede hata ayıklama
+     * metni görünmemeli).
+     *
+     * NEDEN data URI: `config/dompdf.php`'de `enable_remote => false` — URL
+     * ile görsel yüklenemez. Ayrıca `chroot => realpath(base_path())`
+     * `backend/`'e sabit; `frontend/public/` dompdf için erişilemez, bu yüzden
+     * varlık `backend/resources/images/logo-mark.png` altında tutulur. Data
+     * URI, dompdf'in dosya çözümlemesini ve chroot kontrolünü tamamen devre
+     * dışı bırakır — bu iki kısıtla da uyumlu tek yol budur.
+     *
+     * GÜVENLİK NOTU: bu, `App\Support\HtmlSanitizer`'ın reddettiği `data:`
+     * şemasıyla ÇELİŞMEZ — sanitizer KULLANICI kaynaklı HTML'i (e-posta
+     * şablonu gövdesi) süzer; burası sunucu tarafından kontrol edilen sabit
+     * şablon içeriğidir, kullanıcı girdisi hiçbir zaman bu satıra karışmaz.
+     *
+     * Süreç başına BİR KEZ okunur/encode edilir (memoize) — her render()
+     * çağrısında değil; bu servis toplu dışa aktarımda aynı örnekle ardışık
+     * çağrılabildiği için (bkz. sınıf docblock'u) dosya I/O'su tekrarlanmaz.
+     * `false` sentinel değeri DEĞİL, ayrı bir `resolved` bayrağı kullanılır:
+     * "dosya yok" sonucu da (`null`) geçerli ve önbelleklenmesi gereken bir
+     * durumdur.
+     *
+     * Dosya okunamazsa (yok, izin hatası, bozuk…) İSTİSNA FIRLATILMAZ — PDF
+     * üretimi bir logo yüzünden düşmemeli; sessizce `null` döner.
+     */
+    private static function logoDataUri(): ?string
+    {
+        if (self::$logoDataUriResolved) {
+            return self::$logoDataUriCache;
+        }
+
+        self::$logoDataUriResolved = true;
+
+        try {
+            $path = resource_path('images/logo-mark.png');
+
+            if (! is_file($path) || ! is_readable($path)) {
+                return self::$logoDataUriCache = null;
+            }
+
+            $contents = file_get_contents($path);
+
+            if ($contents === false || $contents === '') {
+                return self::$logoDataUriCache = null;
+            }
+
+            return self::$logoDataUriCache = 'data:image/png;base64,'.base64_encode($contents);
+        } catch (\Throwable) {
+            return self::$logoDataUriCache = null;
+        }
     }
 
     /**

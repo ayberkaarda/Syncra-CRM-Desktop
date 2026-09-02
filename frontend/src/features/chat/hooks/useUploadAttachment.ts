@@ -9,8 +9,9 @@ import { useMutation } from '@tanstack/react-query'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { toast } from '../../../components/ui'
 import { getErrorMessage } from '../../../lib/axios'
-import { uploadAttachmentRequest } from '../api'
+import { onlineOnlyMessage } from '../../../components/shared/onlineOnlyMessage'
 import type { Attachment } from '../types'
+import { getPlatform } from '../../../platform'
 
 export type UseUploadAttachmentResult = UseMutationResult<Attachment, Error, File> & {
   /** 0–100. Sunucu `Content-Length` vermezse 0'da kalır — UI belirsiz gösterge çizmelidir. */
@@ -30,14 +31,16 @@ export function useUploadAttachment(): UseUploadAttachmentResult {
       const controller = new AbortController()
       abortRef.current = controller
       setProgress(0)
-      return uploadAttachmentRequest(file, setProgress, controller.signal)
+      return getPlatform().data.chat.uploadAttachment(file, setProgress, controller.signal)
     },
     onSuccess: () => setProgress(100),
     onError: (error) => {
       setProgress(0)
       // İptal kullanıcının kendi eylemidir; hata olarak bildirilmez.
       if (abortRef.current?.signal.aborted) return
-      toast.error(getErrorMessage(error))
+      // §8 defence layer 2 (O102): offline the upload is refused before the request is built,
+      // and the user gets the attachment sentence instead of a transport failure.
+      toast.error(onlineOnlyMessage(error) ?? getErrorMessage(error))
     },
     onSettled: () => {
       abortRef.current = null

@@ -101,7 +101,6 @@
     "stageReadonlyHint": "Phasenänderungen erfolgen per Drag & Drop auf dem Board.",
     "stageHint": "Wenn nicht angegeben, ordnet der Server die Verkaufschance der ersten aktiven Phase zu.",
     "statusLabel": "Status",
-    "companyLabel": "Unternehmen",
     "contactLabel": "Kontakt",
     "contactHint": "Wenn ein Unternehmen ausgewählt ist, wird die Kontaktliste auf dieses Unternehmen gefiltert.",
     "contactLoading": "Wird geladen…",

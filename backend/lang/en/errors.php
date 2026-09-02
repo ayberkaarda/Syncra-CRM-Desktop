@@ -61,4 +61,20 @@ return [
     'saved_view' => [
         'invalid_query' => 'The saved view query contains disallowed field(s): :fields.',
     ],
+
+    /*
+     * Phase F1 - desktop sync layer (SYNCDESKTOP §4.3-§4.5).
+     *
+     * These sentences cover HTTP-level rejections only. Per-mutation outcomes
+     * (`applied`/`conflict`/`rejected`/`duplicate`) travel as a machine
+     * readable `code`; the client renders those from `desktop.errors.*` in its
+     * own language, so the server writes no sentence for them.
+     */
+    'sync' => [
+        'device_token_required' => 'This endpoint requires a desktop device token.',
+        'protocol_version_mismatch' => 'The desktop application is out of date; synchronisation has been stopped.',
+        'push_batch_too_large' => 'The submitted change batch exceeds the allowed limit.',
+        'invalid_credentials' => 'E-mail or password is incorrect.',
+        'user_inactive' => 'Your account has been deactivated. Please contact your system administrator.',
+    ],
 ];

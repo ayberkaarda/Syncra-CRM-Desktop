@@ -5,6 +5,7 @@ import axios from 'axios'
 import { api, getErrorMessage } from '../../../lib/axios'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
+import { getPlatform } from '../../../platform'
 import type {
   Task,
   TaskPayload,
@@ -26,7 +27,7 @@ export const tasksKeys = {
 
 export const taskUserOptionsKeys = { all: ['tasks', 'user-options'] as const }
 
-async function fetchTasks(query: TasksQuery): Promise<TasksListResponse> {
+export async function fetchTasks(query: TasksQuery): Promise<TasksListResponse> {
   const { data } = await api.get<TasksListResponse>('/api/tasks', {
     params: {
       page: query.page,
@@ -48,7 +49,7 @@ async function fetchTasks(query: TasksQuery): Promise<TasksListResponse> {
 }
 
 /** `GET /api/tasks/calendar` — sayfalama YOK, `from`/`to` ZORUNLU (backend 90 gün sınırı uygular). */
-async function fetchTasksCalendar(query: TasksCalendarQuery): Promise<TasksCalendarResponse> {
+export async function fetchTasksCalendar(query: TasksCalendarQuery): Promise<TasksCalendarResponse> {
   const { data } = await api.get<TasksCalendarResponse>('/api/tasks/calendar', {
     params: {
       from: query.from,
@@ -61,31 +62,31 @@ async function fetchTasksCalendar(query: TasksCalendarQuery): Promise<TasksCalen
   return data
 }
 
-async function fetchTask(id: number): Promise<Task> {
+export async function fetchTask(id: number): Promise<Task> {
   const { data } = await api.get<{ data: Task }>(`/api/tasks/${id}`)
   return data.data
 }
 
-async function createTaskRequest(payload: TaskPayload): Promise<Task> {
+export async function createTaskRequest(payload: TaskPayload): Promise<Task> {
   const { data } = await api.post<{ data: Task }>('/api/tasks', payload)
   return data.data
 }
 
-async function updateTaskRequest(id: number, payload: Partial<TaskPayload>): Promise<Task> {
+export async function updateTaskRequest(id: number, payload: Partial<TaskPayload>): Promise<Task> {
   const { data } = await api.patch<{ data: Task }>(`/api/tasks/${id}`, payload)
   return data.data
 }
 
-async function deleteTaskRequest(id: number): Promise<void> {
+export async function deleteTaskRequest(id: number): Promise<void> {
   await api.delete(`/api/tasks/${id}`)
 }
 
-async function completeTaskRequest(id: number, completed: boolean): Promise<Task> {
+export async function completeTaskRequest(id: number, completed: boolean): Promise<Task> {
   const { data } = await api.patch<{ data: Task }>(`/api/tasks/${id}/complete`, { completed })
   return data.data
 }
 
-async function assignTaskRequest(id: number, assignedTo: number | null): Promise<Task> {
+export async function assignTaskRequest(id: number, assignedTo: number | null): Promise<Task> {
   const { data } = await api.patch<{ data: Task }>(`/api/tasks/${id}/assign`, { assigned_to: assignedTo })
   return data.data
 }
@@ -93,7 +94,7 @@ async function assignTaskRequest(id: number, assignedTo: number | null): Promise
 export function useTasks(query: TasksQuery) {
   return useQuery({
     queryKey: tasksKeys.list(query),
-    queryFn: () => fetchTasks(query),
+    queryFn: () => getPlatform().data.tasks.list(query),
     placeholderData: keepPreviousData,
   })
 }
@@ -101,7 +102,7 @@ export function useTasks(query: TasksQuery) {
 export function useTasksCalendar(query: TasksCalendarQuery, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: tasksKeys.calendar(query),
-    queryFn: () => fetchTasksCalendar(query),
+    queryFn: () => getPlatform().data.tasks.calendar(query),
     placeholderData: keepPreviousData,
     enabled: options?.enabled ?? true,
   })
@@ -110,7 +111,7 @@ export function useTasksCalendar(query: TasksCalendarQuery, options?: { enabled?
 export function useTask(id: number | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: tasksKeys.detail(id ?? -1),
-    queryFn: () => fetchTask(id as number),
+    queryFn: () => getPlatform().data.tasks.get(id as number),
     enabled: (options?.enabled ?? true) && id !== undefined,
   })
 }
@@ -125,7 +126,7 @@ function invalidateTaskCaches(queryClient: ReturnType<typeof useQueryClient>, id
 export function useCreateTask() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: createTaskRequest,
+    mutationFn: (payload: TaskPayload) => getPlatform().data.tasks.create(payload),
     onSuccess: (task) => {
       invalidateTaskCaches(queryClient, task.id)
       toast.success(i18n.t('tasks:toast.created'))
@@ -137,7 +138,7 @@ export function useCreateTask() {
 export function useUpdateTask() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<TaskPayload> }) => updateTaskRequest(id, payload),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<TaskPayload> }) => getPlatform().data.tasks.update(id, payload),
     onSuccess: (task) => {
       invalidateTaskCaches(queryClient, task.id)
       toast.success(i18n.t('tasks:toast.updated'))
@@ -149,7 +150,7 @@ export function useUpdateTask() {
 export function useDeleteTask() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deleteTaskRequest(id),
+    mutationFn: (id: number) => getPlatform().data.tasks.delete(id),
     onSuccess: () => {
       invalidateTaskCaches(queryClient)
       toast.success(i18n.t('tasks:toast.deleted'))
@@ -167,7 +168,7 @@ export function useDeleteTask() {
 export function useCompleteTask() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, completed }: { id: number; completed: boolean }) => completeTaskRequest(id, completed),
+    mutationFn: ({ id, completed }: { id: number; completed: boolean }) => getPlatform().data.tasks.complete(id, completed),
     onSuccess: (task) => {
       invalidateTaskCaches(queryClient, task.id)
       toast.success(task.status === 'completed' ? i18n.t('tasks:toast.completed') : i18n.t('tasks:toast.uncompleted'))
@@ -179,7 +180,7 @@ export function useCompleteTask() {
 export function useAssignTask() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, assignedTo }: { id: number; assignedTo: number | null }) => assignTaskRequest(id, assignedTo),
+    mutationFn: ({ id, assignedTo }: { id: number; assignedTo: number | null }) => getPlatform().data.tasks.assign(id, assignedTo),
     onSuccess: (task) => {
       invalidateTaskCaches(queryClient, task.id)
       toast.success(i18n.t('tasks:toast.assigned'))
@@ -195,10 +196,10 @@ export function useAssignTask() {
  * iyimser güncellemenin amacını (anında, titremesiz geri bildirim) boşa çıkarırdı.
  */
 export async function completeTaskQuiet(id: number, completed: boolean): Promise<Task> {
-  return completeTaskRequest(id, completed)
+  return getPlatform().data.tasks.complete(id, completed)
 }
 
-async function fetchUserOptions(): Promise<UserOption[]> {
+export async function fetchUserOptions(): Promise<UserOption[]> {
   const { data } = await api.get<{ data: UserOption[] }>('/api/users', { params: { per_page: 100 } })
   return data.data
 }
@@ -207,7 +208,7 @@ async function fetchUserOptions(): Promise<UserOption[]> {
 export function useTaskUserOptions() {
   const query = useQuery({
     queryKey: taskUserOptionsKeys.all,
-    queryFn: fetchUserOptions,
+    queryFn: () => getPlatform().data.tasks.userOptions(),
     staleTime: 300_000,
     retry: false,
   })

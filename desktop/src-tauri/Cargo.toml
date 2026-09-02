@@ -1,0 +1,158 @@
+[package]
+name = "syncra-desktop"
+version = "0.1.0"
+edition = "2021"
+# Measured, not guessed: `cargo metadata --locked` over the 703 packages this workspace
+# resolves reports 513 declared `rust-version`s, and the highest is 1.89.0 (`notify-rust
+# 4.18.0`, pulled in by `tauri-plugin-notification`). The next tier down is 1.88.0
+# (`image 0.25.10`, `time 0.3.55`, `plist 1.10.0`, `darling 0.23.0`). The previous "1.80"
+# here was a declaration that no toolchain could honour — the lock has not been buildable on
+# 1.80 for a long time; CI only survives it because it installs `stable`. Re-measure this
+# number (same command, sort by rust_version) whenever `Cargo.lock` moves.
+rust-version = "1.89"
+description = "Syncra CRM desktop shell (Tauri 2)"
+license = "MIT"
+publish = false
+
+[lib]
+name = "syncra_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Path dependency on the frozen sync engine (`SYNCDESKTOP.md` §5.2 — public API not touched
+# from this crate; see `docs/DESKTOP-SYNC-PROTOCOL.md` §5 for its contract).
+syncra-sync = { path = "../crates/syncra-sync" }
+
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+
+# Plugins — `SYNCDESKTOP.md` §6.1 / `docs/DESKTOP-ARCHITECTURE.md` §5.1.
+tauri-plugin-notification = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-os = "2"
+tauri-plugin-process = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-log = "2"
+
+# Desktop-only; guarded with `#[cfg(desktop)]` at the call site (mobile is out of scope,
+# `SYNCDESKTOP.md` K11).
+tauri-plugin-single-instance = "2"
+
+# Screen capture for `commands::files::screenshot_to_ticket`. `SYNCDESKTOP.md` §6.4 item 8 names
+# the `screenshots` crate ("hotkey → bölge seç (`screenshots` crate) → PNG → ticket attach"), but
+# that crate is ABANDONED: 0.8.10 is its last release and its own README says "Move to XCap".
+# `xcap` is the successor by the same author, with the same shape of API (`Monitor::all` /
+# `from_point` / `capture_region`), so the change is a rename plus one coordinate type.
+#
+# The move is also what stopped a duplicate image stack: `screenshots 0.8` pinned `image 0.24`
+# while Tauri already links `image 0.25`, so both were compiled into the binary along with
+# `exr`, `tiff`, `gif` and `rayon` — 63 packages that existed only to decode formats no
+# screenshot is ever in. `xcap` depends on `image 0.25` with `default-features = false,
+# features = ["png"]`, which unifies with Tauri's copy.
+#
+# Default features only: xcap's `image` feature means `image/default` (jpeg, gif, webp, tiff,
+# exr, …) and would put the whole decoder set back. PNG is all this path encodes.
+# On Linux xcap pulls `xcb`, `zbus`, `pipewire` and `libwayshot-xcap`. Handled in F7:
+# `.github/workflows/desktop-ci.yml` now installs `libclang-dev` (pipewire-sys/libspa-sys run
+# bindgen in build.rs) and `libpipewire-0.3-dev` (their `links`/system-deps pkg-config probes).
+# Those two were added because the crate sources prove they are required; `libxcb*-dev` and the
+# rest of the "probably needed" set were deliberately left out until a build actually names one
+# — see the reasoning in that workflow's Linux dependency step.
+xcap = "0.9"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+# Only needed for `auth::list_devices` / `auth::revoke_device`, which are not `SyncEngine`
+# methods (`docs/DESKTOP-ARCHITECTURE.md` §5.2: they map straight to
+# `GET/DELETE /api/me/devices*`). Same feature set as `syncra-sync` to keep one TLS stack.
+# `multipart` is required by `commands::files::attach_from_paths` /`screenshot_to_ticket`:
+# `POST /api/attachments` is a `multipart/form-data` upload with a `file` part
+# (`backend/app/Http/Requests/StoreAttachmentRequest.php` validates `'file' => ['required','file',...]`,
+# which only matches a real uploaded file part). Without the feature `reqwest::multipart` does
+# not exist and there is no other way to reach that endpoint.
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "gzip"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+url = { version = "2", features = ["serde"] }
+thiserror = "1"
+# `features = ["log"]`: SYNCDESKTOP §9/9. With no `tracing::Subscriber` installed anywhere in
+# this app (confirmed: no `tracing-subscriber` / `tracing-log` in Cargo.lock), a plain
+# `tracing = "0.1"` dependency makes every `tracing::warn!`/`debug!`/... call in `events.rs` a
+# silent no-op — they never reach `tauri-plugin-log` or anything else. The "log" feature makes
+# `tracing` emit a `log::Record` for each event whenever no subscriber is active, which is
+# exactly this app's situation; that routes `tracing` output into the same `log`-facade pipe
+# (and therefore the same PII-masking format, `src/logging.rs`) as every other crate already
+# writing through `log` (e.g. `keyring`, `reqwest`).
+tracing = { version = "0.1", features = ["log"] }
+# PII masking layer for the log plugin (`src/logging.rs`) and its own tests. `log` and `fern`
+# are already pulled in transitively by `tauri-plugin-log` (which re-exports both); declared
+# directly here too because `logging.rs` names them by path and a transitive dependency isn't
+# usable that way. Versions match what `tauri-plugin-log 2.9.0` already resolves to in
+# `Cargo.lock` (`log 0.4.34`, `fern 0.7.1`) so this pins nothing new.
+regex = "1"
+time = { version = "0.3", features = ["formatting", "macros"] }
+log = "0.4"
+fern = "0.7"
+
+[features]
+# Empty on purpose: `custom-protocol` must stay OUT of `default`. `tauri-macros`'
+# `generate_context!()` treats the crate as a *dev* build whenever this feature is absent
+# (`tauri-macros::context::dev: cfg!(not(feature = "custom-protocol"))`) and, in that mode,
+# skips embedding `frontendDist` from disk as long as `build.devUrl` is set
+# (`tauri-codegen::context::context_codegen`). `desktop/dist` does not exist yet (the
+# frontend strand — `desktop/vite.desktop.config.ts` — is out of this turn's scope), so a
+# default-enabled `custom-protocol` would make `cargo check`/`clippy` panic with
+# "frontendDist ... doesn't exist". `tauri build` (production) turns this feature on
+# explicitly via `--features custom-protocol`; do not remove this comment along with it.
+default = []
+custom-protocol = ["tauri/custom-protocol"]
+
+# Same MSVC linker note as `syncra-sync` (`Cargo.toml` there): the vendored OpenSSL pulled
+# in transitively by `syncra-sync`'s SQLCipher build ships object files without PDBs.
+[lints.rust]
+linker_messages = "allow"
+
+# Windows JumpList (`SYNCDESKTOP.md` §6.4, defter O85 — `src/jump_list.rs`).
+#
+# `ICustomDestinationList` has no Tauri wrapper and no third-party crate this project would
+# rather trust, so the shell API is called directly. This adds NO package to the tree: `windows
+# 0.61.3` is already in `Cargo.lock` as a dependency of `tao`/`wry`/`tauri`, so the only effect
+# of declaring it here is a wider feature union on a crate that is compiled either way.
+#
+# Feature-by-feature, all of them named because `windows` compiles only what is asked for:
+#   Win32_UI_Shell                    ICustomDestinationList, IShellLinkW, the CLSIDs,
+#                                     SetCurrentProcessExplicitAppUserModelID, SHStrDupW
+#   Win32_UI_Shell_Common             IObjectArray / IObjectCollection (and it is what gates
+#                                     `ICustomDestinationList::AppendCategory` itself)
+#   Win32_UI_Shell_PropertiesSystem   IPropertyStore — where a link's visible title lives
+#   Win32_System_Com                  CoInitializeEx / CoCreateInstance / CoUninitialize
+#   Win32_System_Com_StructuredStorage PROPVARIANT and PropVariantClear
+#   Win32_System_Variant              VT_LPWSTR (PROPVARIANT's `vt` is a `VARENUM`)
+#   Win32_Storage_EnhancedStorage     PKEY_Title — windows-rs emits the PKEY_* constants here
+#   Win32_Foundation                  PROPERTYKEY, E_FAIL
+#
+# F8/1 (K15) adds one more, for `src/data_dir.rs`:
+#   Win32_Storage_FileSystem          GetDriveTypeW and the DRIVE_* constants — the check that
+#                                     refuses to put a WAL-mode SQLite database on a removable
+#                                     or network volume.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_EnhancedStorage",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
+] }

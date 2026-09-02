@@ -20,12 +20,23 @@
 // bir şey yok), gerçek blob URL yalnızca kalıcı kalan ikinci mount'ta üretilir ve YALNIZCA o
 // effect'in kendi cleanup'ında (unmount veya `quoteId` değişince) serbest bırakılır.
 import { useEffect, useState } from 'react'
-import { fetchQuotePdfBlob, getQuotePdfErrorMessage } from '../api/quotesApi'
+import { getQuotePdfErrorMessage } from '../api/quotesApi'
+import { getPlatform } from '../../../platform'
+import { onlineOnlyActionOf } from '../../../platform/onlineOnly'
 
 export type QuotePdfPreviewState =
   | { status: 'loading' }
   | { status: 'success'; url: string }
-  | { status: 'error'; message: string }
+  /**
+   * `onlineOnlyAction` — SYNCDESKTOP §8 ("quotes.pdf (cache yoksa)"), defter O102.
+   *
+   * The desktop adapter refuses this read offline with an `OnlineOnlyError` instead of letting
+   * it fail in the transport, and the card then shows the action's own sentence rather than a
+   * generic "PDF could not be loaded". `platform/web.ts` never produces that code, so on the web
+   * build the field is always `undefined` and the card renders exactly the message it did before
+   * (KARAR A19 — branch on the error's SHAPE, never on the platform).
+   */
+  | { status: 'error'; message: string; onlineOnlyAction?: string }
 
 const LOADING: QuotePdfPreviewState = { status: 'loading' }
 
@@ -53,16 +64,19 @@ export function useQuotePdfPreview(quoteId: number | undefined): QuotePdfPreview
     let cancelled = false
     let objectUrl: string | null = null
 
-    fetchQuotePdfBlob(quoteId)
+    getPlatform().data.quotes.pdfBlob(quoteId)
       .then((blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)
         setState({ status: 'success', url: objectUrl })
       })
       .catch(async (error: unknown) => {
-        const message = await getQuotePdfErrorMessage(error)
+        const onlineOnlyAction = onlineOnlyActionOf(error)
+        // The §8 refusal never reached a response, so there is no body for
+        // `getQuotePdfErrorMessage` to unwrap — it is not called at all in that case.
+        const message = onlineOnlyAction === undefined ? await getQuotePdfErrorMessage(error) : ''
         if (cancelled) return
-        setState({ status: 'error', message })
+        setState({ status: 'error', message, onlineOnlyAction })
       })
 
     return () => {

@@ -1,0 +1,64 @@
+{
+  "id": "push/conversation.action.delivered",
+  "why": "Whitelist 10/12. Same body as `read`, a different verb, and a different pivot column. Two fixtures rather than one: a client that sends `read` for both is green on one.",
+  "op": "action",
+  "entity": "conversation",
+  "action": "delivered",
+  "local_mutation": {
+    "entity": "conversation",
+    "op": "action",
+    "action": "delivered",
+    "client_id": "c1000000-0000-4000-8000-000000000013",
+    "payload": {
+      "message_id": 55
+    }
+  },
+  "outbox": {
+    "seq": 13,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000013",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 10701,
+    "base_sync_version": 185007,
+    "scope": null
+  },
+  "wire": {
+    "seq": 13,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000013",
+    "op": "action",
+    "entity": "conversation",
+    "server_id": 10701,
+    "action": "delivered",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "message_id": 55
+    }
+  },
+  "composer": {
+    "domain": "chat",
+    "method": "markDelivered",
+    "args": [
+      10701,
+      55
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000013",
+      "server_id": 10701,
+      "local_rowid": 13,
+      "conversation_id": 10701,
+      "type": "group",
+      "name": "Fixture kanalı",
+      "unread_count": 0,
+      "last_read_message_id": 55,
+      "is_muted": 0,
+      "sync_version": 185007
+    }
+  },
+  "server": {
+    "scenario": "conversation",
+    "bind": {
+      "server_id": "conversation.id",
+      "payload.message_id": "message.id"
+    },
+    "expect": "applied"
+  }
+}

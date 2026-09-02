@@ -1,0 +1,65 @@
+{
+  "id": "push/deal.action.assign",
+  "why": "Whitelist 2/12. `owner_id`, not `assigned_to` - the two are not interchangeable and the wrong one is a silent 422 on the server.",
+  "op": "action",
+  "entity": "deal",
+  "action": "assign",
+  "local_mutation": {
+    "entity": "deal",
+    "op": "action",
+    "action": "assign",
+    "client_id": "c1000000-0000-4000-8000-000000000005",
+    "payload": {
+      "owner_id": 9
+    }
+  },
+  "outbox": {
+    "seq": 5,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000005",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 5201,
+    "base_sync_version": 185002,
+    "scope": null
+  },
+  "wire": {
+    "seq": 5,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000005",
+    "op": "action",
+    "entity": "deal",
+    "server_id": 5201,
+    "action": "assign",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "owner_id": 9
+    }
+  },
+  "composer": {
+    "domain": "deals",
+    "method": "assign",
+    "args": [
+      5201,
+      9
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000005",
+      "server_id": 5201,
+      "local_rowid": 5,
+      "title": "Fixture anlaşması",
+      "pipeline_stage_id": 6,
+      "version": 3,
+      "sync_version": 185002,
+      "amount": "1000.00",
+      "currency": "TRY",
+      "status": "open",
+      "position": "1024"
+    }
+  },
+  "server": {
+    "scenario": "deal",
+    "bind": {
+      "server_id": "deal.id",
+      "payload.owner_id": "user.id"
+    },
+    "expect": "applied"
+  }
+}

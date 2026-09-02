@@ -25,6 +25,7 @@ import { QuoteItemsEditor } from '../components/QuoteItemsEditor'
 import { toEditableItem, toQuoteItemInput } from '../utils/quoteItems'
 import type { EditableQuoteItem } from '../utils/quoteItems'
 import { QuoteTotalsPanel } from '../components/QuoteTotalsPanel'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { useQuoteCalculate } from '../hooks/useQuoteCalculate'
 import { resolveProductPrice, useContactOptionsSearch } from '../api/catalogApi'
 import type { CompanyOption, ContactOption, DealOption } from '../api/catalogApi'
@@ -64,6 +65,10 @@ export function QuoteFormPage() {
   const createQuote = useCreateQuote()
   const updateQuote = useUpdateQuote()
   const reviseQuote = useReviseQuote()
+  // SYNCDESKTOP §8 (O102). `quotes.calculate` is §8 too, but it has no trigger of its own on
+  // this page — it is a debounced effect on the item rows — so only the revision button is
+  // guarded here; the calculate call itself is refused by the data layer (`work.ts`).
+  const reviseGuard = useOnlineOnly('quotes.revise')
 
   const [title, setTitle] = useState('')
   const [deal, setDeal] = useState<DealOption | null>(null)
@@ -335,6 +340,8 @@ export function QuoteFormPage() {
               variant="secondary"
               leftIcon={<GitBranch className="size-4" aria-hidden="true" />}
               loading={reviseQuote.isPending}
+              disabled={reviseGuard.offline}
+              title={reviseGuard.title}
               onClick={handleRevise}
             >
               {t('quotes:actions.createRevision')}

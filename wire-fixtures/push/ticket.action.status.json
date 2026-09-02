@@ -1,0 +1,62 @@
+{
+  "id": "push/ticket.action.status",
+  "why": "Whitelist 5/12. A ticket's status changes ONLY through this action - UpdateTicketRequest marks `status` `missing`, so an op=update carrying it is a 422.",
+  "op": "action",
+  "entity": "ticket",
+  "action": "status",
+  "local_mutation": {
+    "entity": "ticket",
+    "op": "action",
+    "action": "status",
+    "client_id": "c1000000-0000-4000-8000-000000000008",
+    "payload": {
+      "status": "in_progress"
+    }
+  },
+  "outbox": {
+    "seq": 8,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000008",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 7401,
+    "base_sync_version": 185004,
+    "scope": null
+  },
+  "wire": {
+    "seq": 8,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000008",
+    "op": "action",
+    "entity": "ticket",
+    "server_id": 7401,
+    "action": "status",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "status": "in_progress"
+    }
+  },
+  "composer": {
+    "domain": "tickets",
+    "method": "status",
+    "args": [
+      7401,
+      "in_progress"
+    ],
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000008",
+      "server_id": 7401,
+      "local_rowid": 8,
+      "ticket_number": "T-0001",
+      "subject": "Fixture talebi",
+      "status": "open",
+      "priority": "high",
+      "sla_paused_seconds": 0,
+      "sync_version": 185004
+    }
+  },
+  "server": {
+    "scenario": "ticket",
+    "bind": {
+      "server_id": "ticket.id"
+    },
+    "expect": "applied"
+  }
+}

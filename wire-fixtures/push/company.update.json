@@ -1,0 +1,72 @@
+{
+  "id": "push/company.update",
+  "why": "op=update. Carries base_sync_version AND changed_fields; the server writes the named fields and nothing else (K6). A payload key outside changed_fields is discarded.",
+  "op": "update",
+  "entity": "company",
+  "action": null,
+  "local_mutation": {
+    "entity": "company",
+    "op": "update",
+    "client_id": "c1000000-0000-4000-8000-000000000002",
+    "changed_fields": [
+      "name",
+      "city"
+    ],
+    "payload": {
+      "name": "Fixture Holding A.Ş. (rev 2)",
+      "city": "Ankara"
+    }
+  },
+  "outbox": {
+    "seq": 2,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000002",
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "server_id": 4101,
+    "base_sync_version": 185001,
+    "scope": null
+  },
+  "wire": {
+    "seq": 2,
+    "idempotency_key": "1d000000-0000-4000-8000-000000000002",
+    "op": "update",
+    "entity": "company",
+    "server_id": 4101,
+    "base_sync_version": 185001,
+    "changed_fields": [
+      "name",
+      "city"
+    ],
+    "occurred_at": "2026-08-30T12:00:00.000Z",
+    "payload": {
+      "name": "Fixture Holding A.Ş. (rev 2)",
+      "city": "Ankara"
+    }
+  },
+  "composer": {
+    "domain": "companies",
+    "method": "update",
+    "args": [
+      4101,
+      {
+        "name": "Fixture Holding A.Ş. (rev 2)",
+        "city": "Ankara"
+      }
+    ],
+    "note": "`changed_fields` is not an argument: writes.ts::updateRow derives it from the payload's own key set, which is the behaviour being recorded.",
+    "row": {
+      "client_id": "c1000000-0000-4000-8000-000000000002",
+      "server_id": 4101,
+      "local_rowid": 2,
+      "name": "Fixture Holding A.Ş.",
+      "sync_version": 185001
+    }
+  },
+  "server": {
+    "scenario": "company",
+    "bind": {
+      "server_id": "company.id",
+      "base_sync_version": "company.sync_version"
+    },
+    "expect": "applied"
+  }
+}

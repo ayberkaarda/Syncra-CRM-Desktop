@@ -9,12 +9,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../../lib/axios'
 import type { ExchangeRatesCurrentResponse } from '../types'
+import { getPlatform } from '../../../platform'
 
 export const exchangeRatesKeys = {
   current: ['exchange-rates', 'current'] as const,
 }
 
-async function fetchCurrentExchangeRates(): Promise<ExchangeRatesCurrentResponse> {
+export async function fetchCurrentExchangeRates(): Promise<ExchangeRatesCurrentResponse> {
   const { data } = await api.get<ExchangeRatesCurrentResponse>('/api/exchange-rates/current')
   return data
 }
@@ -24,7 +25,7 @@ const STALE_TIME_MS = 12 * 60 * 60 * 1000 // 12 saat — kurlar günde bir deği
 export function useCurrentExchangeRates() {
   return useQuery({
     queryKey: exchangeRatesKeys.current,
-    queryFn: fetchCurrentExchangeRates,
+    queryFn: () => getPlatform().data.exchange.current(),
     staleTime: STALE_TIME_MS,
     gcTime: STALE_TIME_MS,
     refetchOnWindowFocus: false,

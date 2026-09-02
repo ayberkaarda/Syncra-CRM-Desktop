@@ -1,0 +1,366 @@
+{
+  "errors": {
+    "AUTH_REQUIRED": "Keine aktive Sitzung gefunden. Bitte melden Sie sich erneut an.",
+    "OFFLINE": "Keine Internetverbindung.",
+    "PROTOCOL_ERROR": "Ein Fehler im Synchronisationsprotokoll ist aufgetreten. Möglicherweise müssen Sie die App aktualisieren.",
+    "DB_ERROR": "Ein Fehler in der lokalen Datenbank ist aufgetreten.",
+    "HTTP_ERROR": "Beim Verbinden mit dem Server ist ein Fehler aufgetreten.",
+    "SERVER_ERROR": "Auf dem Server ist ein Problem aufgetreten. Das liegt nicht an Ihrer Internetverbindung — die App versucht es in Kürze automatisch erneut.",
+    "OS_ERROR": "Das Betriebssystem konnte diese Anfrage nicht abschließen. Ein Neustart der App behebt das meist.",
+    "FILE_TYPE_REJECTED": "Dieser Dateityp kann nicht angehängt werden.",
+    "FILE_TOO_LARGE": "Die Datei ist zu groß. Eine einzelne Datei darf höchstens 25 MB haben.",
+    "QUEUE_FULL": "Der Speicher für noch zu sendende Dateien ist voll. Die Warteschlange leert sich, sobald Sie wieder online sind.",
+    "WRITE_BLOCKED": "Lokales Speicherlimit erreicht. Geben Sie Speicherplatz frei oder synchronisieren Sie.",
+    "VALIDATION_ERROR": "Die eingegebenen Daten sind ungültig.",
+    "httpStatus": "Serverfehler (HTTP {{status}}).",
+    "ONLINE_ONLY": "Diese Aktion erfordert eine Internetverbindung.",
+    "UNRESOLVED_REFERENCE": "Ein verknüpfter Datensatz wurde nicht gefunden. Synchronisieren Sie zuerst.",
+    "FIELD_CONFLICT": "Dieser Datensatz enthält Änderungen, die mit dem Server in Konflikt stehen.",
+    "RECORD_DELETED": "Dieser Datensatz wurde auf dem Server gelöscht.",
+    "INVALID_MUTATION": "Diese Änderung wurde vom Server abgelehnt.",
+    "PROTOCOL_VERSION_MISMATCH": "Ihre Synchronisationsprotokollversion ist mit dem Server nicht kompatibel. Bitte aktualisieren Sie die App.",
+    "ABILITY_REQUIRED": "Sie haben nicht die erforderliche Berechtigung für diese Aktion.",
+    "LOCKED_OUT": "Ihr Konto ist wegen zu vieler fehlgeschlagener Versuche vorübergehend gesperrt.",
+    "USER_INACTIVE": "Ihr Konto wurde deaktiviert.",
+    "INVALID_CREDENTIALS": "E-Mail-Adresse oder Passwort ist falsch.",
+    "PENDING_MUTATIONS": "Sie haben Änderungen, die noch nicht synchronisiert wurden. Synchronisieren Sie zuerst oder melden Sie sich trotzdem ab.",
+    "ROW_NOT_LOCAL": "Dieser Datensatz befindet sich nicht in Ihrer lokalen Kopie — er liegt möglicherweise außerhalb des Aufbewahrungszeitraums. Er wird sichtbar, sobald Sie wieder online sind.",
+    "unknown": "Ein unbekannter Fehler ist aufgetreten.",
+    "DATA_DIR_INVALID": "Dieser Ordner kann nicht verwendet werden. Wählen Sie einen leeren Ordner; Ihre Daten wurden nicht verändert.",
+    "DATA_DIR_UNSUPPORTED": "Dieses Laufwerk wird nicht unterstützt. Die lokale Datenbank kann nur auf einer Festplatte liegen.",
+    "DATA_DIR_MOVE_FAILED": "Die Daten konnten nicht verschoben werden. Ihr Datenspeicherort ist unverändert."
+  },
+  "onlineOnly": {
+    "leads": {
+      "convert": "Das Umwandeln eines Leads in eine Verkaufschance erfordert eine Internetverbindung.",
+      "import": "Der Import von Leads erfordert eine Internetverbindung."
+    },
+    "quotes": {
+      "send": "Das Versenden eines Angebots erfordert eine Internetverbindung.",
+      "revise": "Das Erstellen einer Angebotsrevision erfordert eine Internetverbindung.",
+      "pdf": "Ohne zwischengespeicherte Version erfordert die PDF-Anzeige eine Internetverbindung.",
+      "calculate": "Die Angebotsberechnung erfolgt auf dem Server und erfordert eine Internetverbindung."
+    },
+    "settings": "Der Zugriff auf die Einstellungen erfordert eine Internetverbindung.",
+    "users": "Die Benutzerverwaltung erfordert eine Internetverbindung.",
+    "roles": "Die Rollenverwaltung erfordert eine Internetverbindung.",
+    "reports": "Der Zugriff auf Berichte erfordert eine Internetverbindung.",
+    "dashboard": "Das Aktualisieren der Dashboard-Daten erfordert eine Internetverbindung.",
+    "logs": "Der Zugriff auf Protokolle erfordert eine Internetverbindung.",
+    "exchangeRates": "Das manuelle Aktualisieren der Wechselkurse erfordert eine Internetverbindung.",
+    "attachments": {
+      "upload": "Diese Datei wird offline in die Warteschlange gestellt und hochgeladen, sobald Sie wieder online sind."
+    },
+    "savedViews": {
+      "create": "Das Erstellen einer gespeicherten Ansicht erfordert eine Internetverbindung.",
+      "update": "Das Aktualisieren einer gespeicherten Ansicht erfordert eine Internetverbindung."
+    },
+    "password": {
+      "change": "Das Ändern Ihres Passworts erfordert eine Internetverbindung."
+    }
+  },
+  "sync": {
+    "status": {
+      "online": "Online",
+      "offline": "Offline",
+      "syncing": "Wird synchronisiert…",
+      "conflict": "Konflikt erkannt"
+    },
+    "lastSynced": "Zuletzt synchronisiert vor {{time}}",
+    "lastSyncedNever": "Noch nicht synchronisiert",
+    "pendingChanges_one": "{{count}} ausstehende Änderung",
+    "pendingChanges_other": "{{count}} ausstehende Änderungen",
+    "syncNow": "Jetzt synchronisieren",
+    "pauseSync": "Synchronisierung pausieren",
+    "resumeSync": "Synchronisierung fortsetzen",
+    "paused": "Synchronisierung pausiert",
+    "syncError": "Bei der Synchronisierung ist ein Fehler aufgetreten."
+  },
+  "logout": {
+    "title": "Abmelden",
+    "description": "Auf diesem Gerät gibt es Änderungen, die noch nicht an den Server gesendet wurden. Wir empfehlen, vor dem Abmelden zu synchronisieren.",
+    "discardWarning_one": "Beim Abmelden geht {{count}} nicht gesendete Änderung verloren.",
+    "discardWarning_other": "Beim Abmelden gehen {{count}} nicht gesendete Änderungen verloren.",
+    "force": "Trotzdem abmelden",
+    "wipedLocalOnly": "Dieses Gerät wurde lokal abgemeldet, aber sein Eintrag auf dem Server konnte nicht entfernt werden. Sie können es auf der Seite „Geräte“ verwalten."
+  },
+  "bootstrap": {
+    "title": "Ersteinrichtung",
+    "description": "Ihre Daten werden auf dieses Gerät heruntergeladen. Dies kann einige Minuten dauern.",
+    "downloading": "Daten werden heruntergeladen…",
+    "preparing": "Wird vorbereitet…",
+    "tableProgress": "{{table}}: {{count}} Datensätze",
+    "progressLabel": "{{percent}} % abgeschlossen",
+    "completed": "Einrichtung abgeschlossen",
+    "completedDescription": "Sie können jetzt offline arbeiten.",
+    "continue": "Weiter",
+    "error": "Bei der Einrichtung ist ein Fehler aufgetreten.",
+    "retry": "Erneut versuchen"
+  },
+  "conflicts": {
+    "title": "Konflikt-Posteingang",
+    "subtitle": "Ihre lokalen Änderungen stehen im Konflikt mit Änderungen auf dem Server. Wählen Sie, wie diese gelöst werden sollen.",
+    "empty": {
+      "title": "Keine Konflikte",
+      "description": "Derzeit gibt es keine zu lösenden Konflikte."
+    },
+    "keepMine": "Meine Version behalten",
+    "takeServer": "Serverversion übernehmen",
+    "mergeFields": "Feldweise zusammenführen",
+    "fieldList": {
+      "title": "Widersprüchliche Felder",
+      "localValue": "Lokaler Wert",
+      "serverValue": "Serverwert"
+    },
+    "rejected": {
+      "title": "Abgelehnt",
+      "description": "Der Server hat diese Änderung nicht akzeptiert. Der Grund steht oben."
+    },
+    "retry": "Erneut versuchen",
+    "discard": "Änderung verwerfen",
+    "resolveAll": "Alle lösen",
+    "resolveSelected": "Ausgewählte lösen",
+    "resolvedToast": "Konflikt gelöst.",
+    "resolveError": "Beim Lösen des Konflikts ist ein Fehler aufgetreten."
+  },
+  "search": {
+    "sourceLocal": "Lokal",
+    "sourceServer": "Server"
+  },
+  "storage": {
+    "title": "Speicher",
+    "retention": {
+      "label": "Aufbewahrungsdauer (Tage)",
+      "description": "Lokale Daten werden für diesen Zeitraum auf dem Gerät aufbewahrt."
+    },
+    "cap": {
+      "label": "Speicherlimit (MB)",
+      "description": "Die lokale Datenbank darf diese Größe nicht überschreiten."
+    },
+    "usage": {
+      "label": "Nutzung",
+      "value": "{{used}} / {{total}} MB verwendet"
+    },
+    "downloadArchive": {
+      "button": "Archiv herunterladen",
+      "description": "Lädt die Historie innerhalb des gewählten Aufbewahrungszeitraums als Archivdatei herunter."
+    },
+    "clearLocal": {
+      "button": "Lokale Daten löschen",
+      "title": "Lokale Daten löschen",
+      "description": "Diese Aktion kann NICHT RÜCKGÄNGIG gemacht werden. Alle lokalen Daten auf diesem Gerät werden gelöscht und beim nächsten Synchronisieren erneut vom Server heruntergeladen.",
+      "confirmSuffix": "Möchten Sie die lokalen Daten wirklich löschen?"
+    },
+    "dataLocation": {
+      "label": "Datenspeicherort",
+      "description": "Die verschlüsselte lokale Datenbank und der Dateicache werden in diesem Ordner abgelegt.",
+      "change": "Speicherort ändern…",
+      "title": "Datenspeicherort verschieben",
+      "confirm": "Sie werden aufgefordert, einen Ordner auszuwählen. Während des Verschiebens wird die Synchronisierung angehalten und die Anwendung reagiert möglicherweise kurz nicht. Der alte Ordner wird gelöscht, sobald die Kopie überprüft wurde.",
+      "fixedDiskOnly": "Nur Festplatten: Der WAL-Modus von SQLite ist auf Wechsel- und Netzlaufwerken nicht zuverlässig.",
+      "success": "Die Daten wurden nach {{path}} verschoben.",
+      "leftover": "Die Daten wurden verschoben, der alte Ordner konnte jedoch nicht gelöscht werden. Eine verschlüsselte Kopie liegt weiterhin unter: {{path}}",
+      "unavailable": "Der eingestellte Datenordner konnte nicht erreicht werden ({{path}}). Die Anwendung läuft am Standardspeicherort; noch nicht gesendete Änderungen können sich im alten Ordner befinden. Schließen Sie das Laufwerk an und starten Sie die Anwendung neu."
+    },
+    "saveSuccess": "Speichereinstellungen gespeichert.",
+    "saveError": "Beim Speichern der Speichereinstellungen ist ein Fehler aufgetreten."
+  },
+  "devices": {
+    "title": "Geräte",
+    "subtitle": "Verwalten Sie die mit diesem Konto verknüpften Geräte.",
+    "columns": {
+      "name": "Gerät",
+      "platform": "Plattform",
+      "lastUsed": "Zuletzt verwendet",
+      "actions": "Aktionen"
+    },
+    "thisDevice": "Dieses Gerät",
+    "revoke": "Abmelden",
+    "revokeConfirm": {
+      "title": "Gerät abmelden",
+      "description": "Dieses Gerät wird abgemeldet und kann erst nach erneuter Anmeldung wieder synchronisieren.",
+      "confirmSuffix": "wird abgemeldet. Sind Sie sicher?"
+    },
+    "empty": {
+      "title": "Keine Geräte gefunden",
+      "description": "Mit diesem Konto sind keine Geräte verknüpft."
+    },
+    "loadError": "Beim Laden der Geräte ist ein Fehler aufgetreten.",
+    "revokeSuccess": "Gerät abgemeldet.",
+    "revokeError": "Beim Abmelden des Geräts ist ein Fehler aufgetreten."
+  },
+  "tray": {
+    "menu": {
+      "open": "Öffnen",
+      "syncNow": "Jetzt synchronisieren",
+      "quickCapture": "Schnellerfassung",
+      "pauseSync": "Synchronisierung pausieren",
+      "resumeSync": "Synchronisierung fortsetzen",
+      "quit": "Beenden"
+    },
+    "tooltip": {
+      "online": "Syncra — Online",
+      "offline": "Syncra — Offline",
+      "syncing": "Syncra — Wird synchronisiert",
+      "conflict": "Syncra — Konflikt erkannt"
+    }
+  },
+  "clipboard": {
+    "addAsLeadTitle": "Syncra",
+    "addAsLeadBody": "Den kopierten Kontakt als Interessenten anlegen?",
+    "optIn": {
+      "label": "Zwischenablage beobachten und Interessenten vorschlagen",
+      "description": "Solange dies aus ist, wird die Zwischenablage nie gelesen. Ist es an, erscheint eine Benachrichtigung nur, wenn die Zwischenablage genau eine E-Mail-Adresse oder eine E.164-Telefonnummer enthält; der Inhalt wird niemals auf die Festplatte oder ins Protokoll geschrieben."
+    }
+  },
+  "quickCapture": {
+    "title": "Schnellerfassung",
+    "dismissHint": "Esc zum Schließen",
+    "types": {
+      "lead": "Interessent",
+      "note": "Notiz",
+      "task": "Aufgabe",
+      "activity": "Aktivität"
+    },
+    "activityTypes": {
+      "call": "Anruf",
+      "meeting": "Besprechung",
+      "email": "E-Mail",
+      "note": "Notiz"
+    }
+  },
+  "files": {
+    "attach": {
+      "uploaded": "{{name}} wurde dem Datensatz hinzugefügt.",
+      "queued": "{{name}} steht in der Warteschlange und wurde noch nicht gesendet.",
+      "rejected": "{{name}} konnte nicht hinzugefügt werden."
+    },
+    "drop": {
+      "started_one": "{{count}} Datei wird hinzugefügt…",
+      "started_other": "{{count}} Dateien werden hinzugefügt…",
+      "noTarget": "Öffnen Sie zuerst einen Deal oder ein Ticket und ziehen Sie die Dateien dann auf das Fenster.",
+      "failed": "Die abgelegten Dateien konnten nicht verarbeitet werden."
+    },
+    "quotePdf": {
+      "action": "Angebots-PDF öffnen",
+      "opened": "Das PDF wurde aus der Kopie auf diesem Gerät geöffnet.",
+      "downloaded": "Das PDF wurde heruntergeladen und geöffnet.",
+      "error": "Das PDF konnte nicht geöffnet werden."
+    },
+    "screenshot": {
+      "action": "Screenshot an das Ticket anhängen",
+      "error": "Der Screenshot konnte nicht erstellt werden."
+    }
+  },
+  "preferences": {
+    "title": "Einstellungen",
+    "hotkey": {
+      "label": "Tastenkürzel für die Schnellerfassung",
+      "description": "Zum Beispiel: CmdOrCtrl+Shift+Space. Mindestens eine Modifikatortaste ist erforderlich.",
+      "conflict": "Dieses Tastenkürzel wird bereits von einer anderen Anwendung verwendet. Das bisherige Kürzel bleibt aktiv.",
+      "saved": "Tastenkürzel gespeichert."
+    },
+    "autostart": {
+      "label": "Syncra beim Start des Computers ausführen",
+      "description": "Wenn aktiviert, startet die App bei Ihrer Anmeldung im Hintergrund und die Synchronisierung wird dort fortgesetzt, wo sie aufgehört hat. Diese Einstellung gehört zu diesem Computer, nicht zu Ihrem Konto.",
+      "saved": "Autostart-Einstellung gespeichert.",
+      "saveError": "Die Autostart-Einstellung konnte nicht geändert werden."
+    }
+  },
+  "window": {
+    "closeToTray": {
+      "label": "Beim Schließen des Fensters im Tray weiterlaufen",
+      "notificationTitle": "Syncra läuft im Hintergrund",
+      "notificationBody": "Die App läuft weiterhin im Tray. Verwenden Sie „Beenden“ im Tray-Menü, um sie vollständig zu schließen."
+    }
+  },
+  "jumpList": {
+    "category": "Zuletzt geöffnet",
+    "fallbackTitle": "{{entity}} #{{id}}"
+  },
+  "recordBadge": {
+    "pending": "Ausstehend",
+    "conflict": "Konflikt"
+  },
+  "entities": {
+    "company": "Unternehmen",
+    "contact": "Kontakt",
+    "lead": "Interessent",
+    "deal": "Verkaufschance",
+    "task": "Aufgabe",
+    "activity": "Aktivität",
+    "ticket": "Ticket",
+    "quote": "Angebot",
+    "conversation": "Unterhaltung",
+    "message": "Nachricht",
+    "conversation_user": "Chat-Mitgliedschaft",
+    "notification": "Benachrichtigung",
+    "tag": "Tag",
+    "pipeline_stage": "Phase",
+    "custom_field": "Benutzerdefiniertes Feld",
+    "product": "Produkt",
+    "price_list": "Preisliste",
+    "price_list_item": "Preislistenposition",
+    "exchange_rate": "Wechselkurs",
+    "saved_view": "Gespeicherte Ansicht",
+    "setting": "Einstellung",
+    "user": "Benutzer"
+  },
+  "fields": {
+    "title": "Titel",
+    "description": "Beschreibung",
+    "amount": "Betrag",
+    "currency": "Währung",
+    "probability": "Wahrscheinlichkeit",
+    "expected_close_date": "Voraussichtliches Abschlussdatum",
+    "company_id": "Unternehmen",
+    "contact_id": "Kontakt",
+    "owner_id": "Inhaber",
+    "tag_ids": "Tags",
+    "tags": "Tags",
+    "custom_fields": "Benutzerdefinierte Felder",
+    "first_name": "Vorname",
+    "last_name": "Nachname",
+    "email": "E-Mail",
+    "phone": "Telefon",
+    "company_name": "Unternehmensname",
+    "position": "Position",
+    "source": "Quelle",
+    "status": "Status",
+    "score": "Score",
+    "notes": "Notizen",
+    "mobile": "Mobil",
+    "is_primary": "Primärer Kontakt",
+    "address": "Adresse",
+    "city": "Stadt",
+    "country": "Land",
+    "name": "Name",
+    "website": "Website",
+    "industry": "Branche",
+    "employee_count": "Mitarbeiterzahl",
+    "annual_revenue": "Jahresumsatz",
+    "due_at": "Fälligkeit",
+    "reminder_at": "Erinnerung",
+    "priority": "Priorität",
+    "assigned_to": "Zuständig",
+    "taskable_type": "Typ des verknüpften Datensatzes",
+    "taskable_id": "Verknüpfter Datensatz",
+    "completed_at": "Abgeschlossen am",
+    "type": "Typ",
+    "subject": "Betreff",
+    "body": "Beschreibung",
+    "occurred_at": "Zeitpunkt",
+    "duration_minutes": "Dauer (Minuten)",
+    "outcome": "Ergebnis",
+    "activityable_type": "Typ des verknüpften Datensatzes",
+    "activityable_id": "Verknüpfter Datensatz",
+    "category": "Kategorie",
+    "sla_due_at": "SLA-Frist",
+    "deal_id": "Verkaufschance",
+    "valid_until": "Gültig Bis",
+    "discount_type": "Rabatttyp",
+    "discount_value": "Rabattwert",
+    "terms": "Bedingungen",
+    "is_muted": "Stummgeschaltet"
+  }
+}

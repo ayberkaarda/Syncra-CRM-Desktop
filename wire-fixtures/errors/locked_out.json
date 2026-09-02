@@ -1,0 +1,19 @@
+{
+  "id": "errors/locked_out",
+  "why": "The other half of case 2, and the one that cost a live round-trip to find (AUTH-1 U11/U12): a 423 carries `retry_after` beside the code, still nested under `errors`, and LoginPage's countdown is unbuildable without it. Recorded here as the shape, so a crate-side change to the parser cannot quietly drop the field again.",
+  "http_status": 423,
+  "body": {
+    "errors": {
+      "message": "Cok fazla basarisiz deneme.",
+      "code": "LOCKED_OUT",
+      "retry_after": 137
+    }
+  },
+  "expect": {
+    "code": "LOCKED_OUT",
+    "retry_after": 137,
+    "message_present": true
+  },
+  "server": null,
+  "server_note": "No backend consumer. Triggering a real lockout means driving the shared login throttle through its whole window, which is a timing-dependent setup this suite deliberately does not own - `backend/tests/Feature/Sync/DeviceTokenTest.php` already covers the lockout itself. Listed as remaining work: bind this fixture to that test rather than to a new one."
+}

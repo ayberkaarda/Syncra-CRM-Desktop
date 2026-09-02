@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle } from 'lucide-react'
 import { Button, Checkbox, Input, Modal } from '../../../components/ui'
+import { useOnlineOnly } from '../../../platform/useOnlineOnly'
 import { getErrorMessage } from '../../../lib/axios'
 import { useCheckDuplicates, useConvertLead } from '../api/leadsApi'
 import { DuplicateWarningPanel } from './DuplicateWarningPanel'
@@ -33,6 +34,7 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
   const navigate = useNavigate()
   const checkDuplicates = useCheckDuplicates()
   const convertLead = useConvertLead()
+  const convertGuard = useOnlineOnly('leads.convert')
 
   const [createDeal, setCreateDeal] = useState(false)
   const [dealTitle, setDealTitle] = useState('')
@@ -121,7 +123,16 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
           <Button type="button" variant="secondary" onClick={onClose}>
             {t('leads:convertModal.cancel')}
           </Button>
-          <Button type="button" loading={convertLead.isPending} onClick={handleConvert}>
+          <Button
+            type="button"
+            loading={convertLead.isPending}
+            // SYNCDESKTOP §8 (O102). The row action that opens this modal is guarded too, but a
+            // modal left open across a connectivity change would otherwise still offer a submit
+            // button whose verb now refuses — inert on the web build, where the guard never trips.
+            disabled={convertGuard.offline}
+            title={convertGuard.title}
+            onClick={handleConvert}
+          >
             {t('leads:convertModal.submit')}
           </Button>
         </div>

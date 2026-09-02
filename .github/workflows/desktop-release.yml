@@ -1,0 +1,242 @@
+name: Desktop Release
+
+# DRAFT — SYNCDESKTOP.md F7 ("Paketleme ve CI").
+#
+# Never executed (push forbidden for lanes in this repo, docs/ENGINEERING-RULES.md §1 / SYNCDESKTOP.md
+# §0.2). Syntax is validated locally with a YAML parser and `bash -n` on every `run:`
+# block — see the F3-E phase report. `desktop/` (Tauri app, package.json,
+# src-tauri/tauri.conf.json) now exists (landed F2/W2-b/F3-A) and every path this workflow
+# references was re-checked against it in F3-E — see `docs/DESKTOP-ARCHITECTURE.md` EK 2.
+# Still forward-looking, though: two real blockers remain before this workflow can produce
+# a working release, both called out at their step below —
+#   1. `plugins.updater` is not yet configured in `desktop/src-tauri/tauri.conf.json`
+#      (E.5.3 — real pubkey/endpoints land in F7 proper, not this pass).
+#   2. The CSP and the baked-in API URL (`VITE_API_URL`/`VITE_REVERB_*`) this job builds with
+#      must come from a REAL production `frontend/.env`, not the localhost example. This is
+#      now ENFORCED rather than documented (open item O27): the env is seeded from
+#      `secrets.DESKTOP_RELEASE_ENV` when that secret exists, and the
+#      "Assert release host is publishable" step below fails the job before any build work if
+#      the resolved API/Reverb host is a loopback or link-local name. Until the secret is
+#      configured this job therefore fails fast and on purpose, instead of publishing a signed
+#      installer that talks to the runner's own localhost.
+#
+# Bundle targets (MSI+NSIS on Windows, DMG on macOS, AppImage+deb on Linux) are NOT
+# chosen by this workflow — they come from `desktop/src-tauri/tauri.conf.json`'s
+# `bundle.targets` (SYNCDESKTOP.md F7 kabul lists these four as the expected outputs;
+# `tauri build` with no --bundles flag builds whatever that config declares for the
+# host platform).
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing desktop-v* tag to (re-)publish a release for'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish-desktop:
+    name: build + publish (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-24.04, and O34 is closed by measurement rather than by preference. The old
+        # comment here held the release on 22.04 because a release runner's glibc is the floor
+        # of the binary it ships (22.04 = 2.35, 24.04 = 2.39) and bumping it drops older
+        # distributions — a real argument, and it was called a product decision awaiting a
+        # call. The 2026-09-02 release run made the call: **22.04 cannot build this project at
+        # all.** `libspa` fails with E0308/E0425/E0560/E0609 — the Rust crate reading fields
+        # that jammy's libpipewire-0.3-dev headers do not have. There is no 22.04 binary whose
+        # glibc floor needs protecting, so the trade-off had no second side. It also removes
+        # the cost the old comment named: CI and release now build on the same base, and a
+        # Linux break surfaces in CI instead of on a tag.
+        os: [windows-latest, ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      # Same Windows preconditions as desktop-ci.yml's desktop-rust job — see that file for
+      # the full rationale. Re-diagnosed in F3-A: the vendored-OpenSSL Perl issue is PATH
+      # order (Git's bundled Perl lacks ExtUtils::MakeMaker/Locale::Maketext::Simple and
+      # resolves before a full Perl install), not a missing installation; MAX_PATH needs a
+      # short CARGO_TARGET_DIR.
+      - name: Prefer Strawberry Perl over Git's Perl (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $strawberry = 'C:\Strawberry\perl\bin'
+          if (-not (Test-Path $strawberry)) {
+            throw "Strawberry Perl not found at $strawberry - runner image changed, update this step"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $strawberry
+
+      - name: Use short CARGO_TARGET_DIR (Windows MAX_PATH workaround)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\t | Out-Null
+          Add-Content -Path $env:GITHUB_ENV -Value 'CARGO_TARGET_DIR=C:\t'
+
+      # Precondition 4: Linux build dependencies and disk headroom, from the same script the
+      # CI workflow uses. This step used to carry its own copy of the apt list and it was the
+      # STALEST of the three: it never gained libclang-dev / libpipewire-0.3-dev (the xcap
+      # chain, F5-8 screenshot capture) or libgbm-dev, so a real release on Linux would have
+      # failed exactly where CI failed on 2026-09-01 — except later, on a tag, with signing
+      # keys in scope. Two copies had already drifted within one commit; three was not a
+      # number to keep.
+      - name: Prepare Linux runner (disk report + reclaim, system deps)
+        if: runner.os == 'Linux'
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/linux-runner-prep.sh"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable (branch ref pinned to a commit; action publishes no version tags)
+        with:
+          toolchain: stable
+
+      # Precondition 3: cold vendored-OpenSSL compile 7m53s locally (F3-A measurement, whole
+      # `desktop/` workspace after `.cargo/config.toml` removal); cache keys on
+      # job/OS/rustc/Cargo.lock automatically. `desktop/` is the workspace root (members
+      # crates/syncra-sync + src-tauri, `desktop/Cargo.toml`) — its default `desktop/target`
+      # is the single shared build output both crates compile into.
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: desktop -> target
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            frontend/package-lock.json
+
+      # F3-E: this step's original name ("Install frontend dependencies") was misleading —
+      # it installs the desktop SHELL's own `node_modules` (its `package.json`, with
+      # `@tauri-apps/*`, kept deliberately separate from `frontend/package.json` per KARAR
+      # A1). The shared `frontend/src` tree that `desktop/vite.desktop.config.ts` aliases
+      # `@` to has its own bare imports (axios, i18next, ...) that only resolve out of
+      # `frontend/node_modules` (confirmed: `axios` exists there, not under
+      # `desktop/node_modules`) — hence the separate step below for that install.
+      - name: Install desktop shell dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # `desktop/scripts/tauri.mjs` builds the packaged app's CSP *and* the `SYNCRA_API_URL`
+      # baked into the binary from `../frontend/.env` (E.5.2 ACIK 1 / KARAR D-2, D-3). That
+      # file is gitignored and does not exist on a runner, so the release env has to be
+      # provided as a secret whose content is a literal `.env` body:
+      #
+      #   secrets.DESKTOP_RELEASE_ENV
+      #     VITE_API_URL=https://<production host>
+      #     VITE_REVERB_APP_KEY=<key>
+      #     VITE_REVERB_HOST=<production websocket host>
+      #     VITE_REVERB_PORT=<port>
+      #     VITE_REVERB_SCHEME=https
+      #
+      # The `.env.example` fallback is kept ONLY so this workflow stays mechanically
+      # exercisable end to end; it is localhost and the assert step below rejects it. `shell:
+      # bash` is explicit because this job also runs on `windows-latest`, where the default
+      # shell is pwsh.
+      - name: Seed frontend/.env for the packaged build
+        working-directory: frontend
+        shell: bash
+        env:
+          DESKTOP_RELEASE_ENV: ${{ secrets.DESKTOP_RELEASE_ENV }}
+        run: |
+          # Length, never the value: a secret that exists but arrived empty is indistinguishable
+          # from an unset one at `[ -n ]`, and the 2026-09-01 release run failed exactly there —
+          # the secret had been created 54 seconds before the run started and the wiring was
+          # correct, yet this step still took the fallback. The byte count settles which of the
+          # two it was on the next attempt instead of leaving it to inference.
+          echo "DESKTOP_RELEASE_ENV byte length: ${#DESKTOP_RELEASE_ENV}"
+          if [ -n "$DESKTOP_RELEASE_ENV" ]; then
+            printf '%s\n' "$DESKTOP_RELEASE_ENV" > .env
+            echo "frontend/.env written from secrets.DESKTOP_RELEASE_ENV"
+            echo "seeded $(grep -c '^VITE_' .env) VITE_* lines into frontend/.env"
+          else
+            cp .env.example .env
+            echo "::warning::secrets.DESKTOP_RELEASE_ENV is not set; fell back to the localhost frontend/.env.example. The release-host assert below will fail this job on purpose."
+          fi
+
+      # Open item O27 — the gate that makes blocker #2 a build failure instead of a comment.
+      #
+      # `VITE_API_URL` and `VITE_REVERB_*` are not runtime settings: the wrapper turns them
+      # into `SYNCRA_API_URL` (frozen into the binary by `state.rs`' `option_env!`) and into
+      # `app.security.csp` (frozen into the packaged webview). If they name the build
+      # machine — localhost, 127.0.0.0/8, ::1, a `.local` mDNS name — the published installer
+      # is a signed artifact that quietly talks to the end user's own computer. Nothing in the
+      # build or in `tauri-action` notices that; this step does, and it runs BEFORE the
+      # expensive build so the job fails in seconds.
+      #
+      # Deliberately NOT part of `desktop-ci.yml`: building against localhost is correct
+      # there (`tauri build --debug` matrix, `desktop-release-smoke`), so the check belongs on
+      # the release path only. `scripts/check-release-host.mjs` shares its resolution code with
+      # `scripts/tauri.mjs` (`scripts/build-env.mjs`), so it gates the exact values the build
+      # would inject rather than a re-implementation of them.
+      - name: Assert release host is publishable (no loopback/link-local)
+        working-directory: desktop
+        shell: bash
+        run: npm run check:release-host
+
+      # tauri-action builds the app, creates/updates a (draft) GitHub Release tagged
+      # with the pushed `desktop-v*` tag, uploads the platform bundle(s), and — because
+      # TAURI_SIGNING_PRIVATE_KEY(+ _PASSWORD) is set — minisign-signs each bundle and
+      # writes/merges the updater manifest (`latest.json`) into that same release.
+      # Running this job across the 3-OS matrix against the same tag means each
+      # platform's run appends its own signed entry to the one shared latest.json
+      # (SYNCDESKTOP.md §6.5: updater manifest lives at
+      # https://<release-host>/desktop/latest.json, channel `stable`).
+      #
+      # Secrets required (repo/environment secrets, not committed anywhere):
+      #   TAURI_SIGNING_PRIVATE_KEY          - minisign private key (base64), generated
+      #                                         via `tauri signer generate`
+      #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD - passphrase for the above
+      #   GITHUB_TOKEN                       - provided automatically by Actions
+      #
+      # F3-E PRECONDITION (blocker #1 from the top-of-file note, `docs/DESKTOP-ARCHITECTURE.md`
+      # E.5.3/EK 2): `desktop/src-tauri/tauri.conf.json` has NO `plugins.updater` block yet.
+      # `tauri-plugin-updater`'s Config requires `pubkey: String` with no default, and the
+      # plugin is registered unconditionally except under `#[cfg(not(debug_assertions))]`
+      # (`desktop/src-tauri/src/lib.rs`) — i.e. it IS compiled into a release build (unlike
+      # `desktop-ci.yml`'s `--debug` build, which is unaffected). Today, a bundle produced by
+      # this job installs and then PANICS in `.setup()` on first launch. This job must not be
+      # run for a real release until F7 lands a real pubkey + updater endpoint config; a fake
+      # placeholder pubkey was deliberately NOT committed anywhere in this pass.
+      #
+      # `-f custom-protocol` mirrors the same feature flag `desktop-ci.yml`'s
+      # `desktop-tauri-build` job now passes explicitly (E.5.3 Duzeltme 3): the crate's
+      # `default = []` leaves `custom-protocol` off on purpose so `cargo check`/`clippy` don't
+      # need `desktop/dist` to exist, so an actual package build has to opt back in to get its
+      # frontend embedded instead of pointed at `devUrl`.
+      - name: tauri build + publish release
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: desktop
+          args: -f custom-protocol
+          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          releaseName: "Syncra Desktop ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseBody: 'See assets below to download and install this version. Auto-generated by desktop-release.yml.'
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true

@@ -8,6 +8,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api } from '../../../lib/axios'
 import type { SearchResponse } from '../types'
+import { getPlatform } from '../../../platform'
 
 /**
  * `SearchRequest::rules()` (`'q' => ['required','string','min:2','max:100']`) İLE BİREBİR AYNI
@@ -22,7 +23,7 @@ export const searchKeys = {
   query: (term: string) => ['global-search', term] as const,
 }
 
-async function fetchGlobalSearch(term: string): Promise<SearchResponse> {
+export async function fetchGlobalSearch(term: string): Promise<SearchResponse> {
   const { data } = await api.get<{ data: SearchResponse }>('/api/search', {
     params: { q: term },
   })
@@ -42,7 +43,7 @@ async function fetchGlobalSearch(term: string): Promise<SearchResponse> {
 export function useGlobalSearch(term: string) {
   return useQuery({
     queryKey: searchKeys.query(term),
-    queryFn: () => fetchGlobalSearch(term),
+    queryFn: () => getPlatform().data.search.query(term),
     enabled: term.length >= MIN_QUERY_LENGTH,
     placeholderData: keepPreviousData,
   })

@@ -1,0 +1,30 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Narrow default capability set for the Syncra desktop shell (SYNCDESKTOP.md §6.3, docs/DESKTOP-ARCHITECTURE.md §5.3). clipboard-manager:allow-read-text stays ABSENT and no runtime grant was built for it: F5-6 reads the clipboard from RUST (src/clipboard.rs), where capabilities do not apply, so the webview still cannot read the clipboard at all — a narrower surface than granting it and gating it. The quick-capture window (F5-3) is listed under `windows` and needs core:window:allow-hide to dismiss itself. F8/1 (K15) applies the same reasoning to the folder picker: storage::move_data_dir calls the dialog plugin's RUST API, so dialog:allow-open below is not what enables it — the permission is kept because move_data_dir also accepts an explicit path and a later phase may add @tauri-apps/plugin-dialog to desktop/package.json, but today no webview code opens a dialog. fs:scope below is deliberately NOT widened when the user moves the data directory: it cannot be (the path is a runtime choice), and it does not need to be — every byte the shell reads or writes under the data root goes through Rust (commands::files, crate::jump_list, crate::data_dir), where the fs plugin's scope does not apply. A JS-side fs call would stop working after a move; there is none, and this note is why there must not be one.",
+  "windows": ["main", "quick-capture"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "notification:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "deep-link:default",
+    "autostart:default",
+    "updater:default",
+    "dialog:allow-open",
+    "os:allow-platform",
+    "os:allow-arch",
+    "process:allow-restart",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [{ "url": "https://*" }, { "url": "http://*" }]
+    },
+    {
+      "identifier": "fs:scope",
+      "allow": ["$APPDATA/syncra/**", "$TEMP/syncra/**"]
+    }
+  ]
+}

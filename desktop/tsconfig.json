@@ -1,0 +1,22 @@
+{
+  // Desktop type-check project. Extends the WEB app's config verbatim
+  // (`frontend/tsconfig.app.json`) so the shared `frontend/src` tree is checked under exactly
+  // the same rules in both builds — `docs/DESKTOP-ARCHITECTURE.md` KARAR A1 (the web build's
+  // behaviour, and the rules it is held to, do not change).
+  //
+  // Only `desktop/src` is listed in `include`; every `frontend/src` file reached through an
+  // import is pulled into the program automatically, which is exactly the surface the desktop
+  // entry actually uses.
+  "extends": "../frontend/tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.desktop.tsbuildinfo",
+    // §4.2: the ONLY alias, and it exists only for `desktop/src` — `frontend/src`'s own
+    // imports are all relative (`@` appears in zero of them), so this never changes how the
+    // web build resolves anything. Must mirror `resolve.alias['@']` in
+    // `vite.desktop.config.ts`; if one moves, the other is wrong.
+    "paths": {
+      "@/*": ["../frontend/src/*"]
+    }
+  },
+  "include": ["src", "vite.desktop.config.ts"]
+}

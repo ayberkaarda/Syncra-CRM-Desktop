@@ -34,6 +34,7 @@ import { useDeal, useDeleteDeal } from '../api/dealsApi'
 import { quotesGroupConfig } from '../../related/adapters'
 import { RelatedRecordsPanel } from '../../related/RelatedRecordsPanel'
 import { ConvertedAmount } from '../../exchange/components/ConvertedAmount'
+import { isRecordNotMirrored } from '../../../platform/errors'
 
 export function DealDetailPage() {
   const { t } = useTranslation('deals')
@@ -42,7 +43,7 @@ export function DealDetailPage() {
   const navigate = useNavigate()
   const { can } = usePermission()
 
-  const { data: deal, isLoading, isError, refetch } = useDeal(Number.isFinite(dealId) ? dealId : undefined)
+  const { data: deal, isLoading, isError, error, refetch } = useDeal(Number.isFinite(dealId) ? dealId : undefined)
   const deleteDeal = useDeleteDeal()
 
   const [editOpen, setEditOpen] = useState(false)
@@ -67,9 +68,15 @@ export function DealDetailPage() {
   }
 
   if (isError || !deal) {
+    // A valid link to a real record can still fail to load offline: the local mirror only
+    // keeps a retention window, and a record outside it is not a broken link (O91). The desktop
+    // data layer signals that case structurally (`ROW_NOT_LOCAL`, `platform/data/engine.ts`
+    // `MissingRowError`) rather than through the message text, so this branches on the code —
+    // never on `error.message` — and is a no-op on the web build, which never produces that code.
+    const notMirrored = isRecordNotMirrored(error)
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
-        <p className="text-sm text-fg-muted">{t('detail.loadError')}</p>
+        <p className="text-sm text-fg-muted">{notMirrored ? t('desktop:errors.ROW_NOT_LOCAL') : t('detail.loadError')}</p>
         <Button variant="secondary" onClick={() => refetch()}>
           {t('detail.retry')}
         </Button>

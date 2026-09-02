@@ -1,17 +1,19 @@
 // In-app görev hatırlatıcısı — `private-user.{id}` kanalı, `.task.reminder` olayı.
 //
-// Abonelik/temizlik deseni `useRealtimeSession.ts` (`src/features/auth/hooks/`) ile AYNI kanala
-// AYRI bir dinleyici kurar (bkz. görev tanımı §"Hatırlatıcı dinleyicisi": "useRealtimeSession.ts'i
-// DEĞİŞTİRME — kendi hook'unu yaz, aynı kanala ayrı dinleyici kurulabilir"). İki hook da
-// `App.tsx`'te `AuthBootstrap` içinde AYNI ömürle (aynı `userId` bağımlılığıyla) mount
-// edilir — ikisi de kullanıcı değişince/logout'ta AYNI ANDA temizlenir, bu yüzden ikisinin de
-// `echo.leave(channelName)` çağırması güvenlidir (bkz. `useRealtimeSession.ts`'teki analog yorum).
+// AYNI `user.{id}` kanalını `useRealtimeSession.ts`, `useNotificationSocket.ts` ve
+// `useChatUnread.ts` da dinliyor (bkz. görev tanımı §"Hatırlatıcı dinleyicisi":
+// "useRealtimeSession.ts'i DEĞİŞTİRME — kendi hook'unu yaz, aynı kanala ayrı dinleyici
+// kurulabilir"). `Echo.leave()` referans SAYMADIĞI için doğrudan çağrılsaydı bu diğer
+// abonelerin dinleyicilerini de düşürürdü — bu yüzden kanal PAYLAŞILAN, referans sayan
+// `src/lib/channelRegistry.ts` üzerinden alınır/bırakılır; unmount'ta yalnızca KENDİ
+// dinleyicimiz `channel.stopListening()` ile bırakılır, kanalın kendisi sayaç sıfıra inince
+// gerçekten bırakılır (`releaseChannel`).
 //
 // `AuthBootstrap`, `RouterProvider`'ın KARDEŞİDİR (React ağacında İÇİNDE değil) — bu yüzden
 // `useNavigate()` hook'u burada KULLANILAMAZ, `useRealtimeSession.ts` ile aynı gerekçeyle
 // `router.navigate()` imperatif API'si kullanılır.
 import { useEffect } from 'react'
-import { getEcho } from '../../../lib/echo'
+import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { toast } from '../../../components/ui'
 import { useAuthStore } from '../../auth/store'
 import { router } from '../../../router'
@@ -34,13 +36,11 @@ export function useTaskReminders() {
   useEffect(() => {
     if (!userId) return
 
-    const echo = getEcho()
-    if (!echo) return
-
     const channelName = `user.${userId}`
-    const channel = echo.private(channelName)
+    const channel = acquireChannel(channelName)
+    if (!channel) return
 
-    channel.listen(EVENT_NAME, (payload: TaskReminderEvent) => {
+    const handleReminder = (payload: TaskReminderEvent) => {
       const descriptionParts = [i18n.t('tasks:reminders.dueLabel', { date: formatDueAt(payload.due_at) })]
       if (payload.taskable_label) descriptionParts.push(payload.taskable_label)
 
@@ -66,10 +66,13 @@ export function useTaskReminders() {
           },
         },
       })
-    })
+    }
+
+    channel.listen(EVENT_NAME, handleReminder)
 
     return () => {
-      echo.leave(channelName)
+      channel.stopListening(EVENT_NAME, handleReminder)
+      releaseChannel(channelName)
     }
   }, [userId])
 }
