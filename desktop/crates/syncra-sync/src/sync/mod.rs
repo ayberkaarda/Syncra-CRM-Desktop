@@ -19,7 +19,7 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use rusqlite::Connection;
 use serde_json::Value as Json;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use tokio::sync::broadcast;
@@ -129,6 +129,26 @@ struct Inner {
     /// with, so one must land before the next is requested, and none may be on the wire across
     /// an archive's cursor reset. Always taken after `round`, never before it.
     pulling: tokio::sync::Mutex<()>,
+    /// Data generation. Advanced by every wipe of the local database (a login by another
+    /// user, logout, `clear_local`, `USER_DEACTIVATED`) and by nothing else, always while the
+    /// `db` mutex is held.
+    ///
+    /// A pull or a push records it together with the token it sends, and checks it again
+    /// under the same mutex right before it writes anything from the response. A different
+    /// value means the data the request was made against no longer exists, so the response is
+    /// dropped. This is what keeps a wipe that does not hold `pulling` safe: the
+    /// `USER_DEACTIVATED` wipe runs inside the error path of a pull that already holds that
+    /// lock, and waiting for it there would deadlock the engine on itself.
+    ///
+    /// A same-user login or a 401 wipes nothing and does not advance it: a response in flight
+    /// across them belongs to the same data, and dropping an accepted push's verdict there
+    /// would only send the batch again.
+    epoch: AtomicU64,
+    /// Token generation. Advanced whenever the token changes (every login, logout, a 401,
+    /// `USER_DEACTIVATED`), under the `db` mutex. A 401 or a `USER_DEACTIVATED` acts only if
+    /// the request that heard it was sent with the current token, so an old token's verdict
+    /// cannot drop a fresh one.
+    token_gen: AtomicU64,
     /// Set once the server reports a protocol version this build cannot speak.
     halted: AtomicBool,
     /// Signalled by the triggers of §5.5 so the background loop wakes early.
@@ -263,6 +283,8 @@ impl SyncEngine {
             manifest: Mutex::new(None),
             round: tokio::sync::Mutex::new(()),
             pulling: tokio::sync::Mutex::new(()),
+            epoch: AtomicU64::new(0),
+            token_gen: AtomicU64::new(0),
             halted: AtomicBool::new(false),
             wake: tokio::sync::Notify::new(),
             stopping: AtomicBool::new(false),
@@ -308,25 +330,33 @@ impl SyncEngine {
             abilities: response.abilities.clone(),
         };
 
+        let cfg_service = self.inner.cfg.read().unwrap().keychain_service.clone();
         {
             let conn = self.db()?;
+            // The token changes under the same lock the generations are read under, so a
+            // request records either the old token with the old generations or the new token
+            // with the new ones.
+            self.advance_token_gen();
             let previous = db::get_setting(&conn, SETTING_USER_ID)?
                 .and_then(|raw| raw.parse::<i64>().ok());
             if previous.is_some_and(|prev| prev != user_id) {
+                // A request still on the wire was made against the previous user's data;
+                // whatever it brings back must not land in this user's.
+                self.advance_epoch();
                 // O67: the previous user's cached PDFs go with their rows, not after them.
                 wipe_local(&conn)?;
+                // The previous user's grants are not this user's.
+                *self.inner.manifest.lock().unwrap() = None;
             }
             db::put_setting(&conn, SETTING_USER_ID, &user_id.to_string())?;
             db::put_setting(&conn, SETTING_SESSION, &serde_json::to_string(&session)?)?;
+            self.inner
+                .keystore
+                .set(&cfg_service, keystore::KEY_TOKEN, &response.token)?;
+            *self.inner.token.write().unwrap() = Some(response.token);
+            *self.inner.session.write().unwrap() = Some(session.clone());
+            self.inner.halted.store(false, Ordering::SeqCst);
         }
-
-        let cfg_service = self.inner.cfg.read().unwrap().keychain_service.clone();
-        self.inner
-            .keystore
-            .set(&cfg_service, keystore::KEY_TOKEN, &response.token)?;
-        *self.inner.token.write().unwrap() = Some(response.token);
-        *self.inner.session.write().unwrap() = Some(session.clone());
-        self.inner.halted.store(false, Ordering::SeqCst);
         self.set_online_flag(true);
         self.refresh_status()?;
 
@@ -336,21 +366,31 @@ impl SyncEngine {
     /// Resume a stored session: keychain token plus a manifest round-trip to prove it still
     /// works and that the protocol version still matches.
     pub async fn restore_session(&self) -> Result<Option<Session>> {
-        let Some(_token) = self.token() else {
+        let (Some(_token), epoch, _) = self.credentials()? else {
             return Ok(None);
         };
-        let manifest = self.load_manifest(true).await?;
-        let mut session = self.inner.session.read().unwrap().clone();
-        if let Some(ref mut s) = session {
-            if !manifest.user.is_null() {
-                s.user = manifest.user.clone();
-            }
-        }
-        if let Some(ref s) = session {
+        let manifest = match self.load_manifest(true).await {
+            Err(err) if is_superseded(&err) => return Ok(self.session()),
+            result => result?,
+        };
+        let session = {
             let conn = self.db()?;
-            db::put_setting(&conn, SETTING_SESSION, &serde_json::to_string(s)?)?;
-        }
-        *self.inner.session.write().unwrap() = session.clone();
+            // A logout or another login while the manifest was on the wire: the answer
+            // describes a session that is no longer this one, and writing it would bring
+            // the old session document back.
+            if self.epoch() != epoch {
+                return Ok(self.session());
+            }
+            let mut session = self.inner.session.read().unwrap().clone();
+            if let Some(ref mut s) = session {
+                if !manifest.user.is_null() {
+                    s.user = manifest.user.clone();
+                }
+                db::put_setting(&conn, SETTING_SESSION, &serde_json::to_string(s)?)?;
+            }
+            *self.inner.session.write().unwrap() = session.clone();
+            session
+        };
         self.set_online_flag(true);
         self.refresh_status()?;
         Ok(session)
@@ -403,15 +443,18 @@ impl SyncEngine {
         self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
         {
             let conn = self.db()?;
+            // The pull lock does not cover a push on the wire; the generation does.
+            self.advance_epoch();
+            self.advance_token_gen();
             wipe_local(&conn)?;
             db::put_setting(&conn, SETTING_USER_ID, "")?;
             db::put_setting(&conn, SETTING_SESSION, "")?;
+            *self.inner.token.write().unwrap() = None;
+            *self.inner.session.write().unwrap() = None;
+            *self.inner.manifest.lock().unwrap() = None;
         }
         // Released only once the token is gone, so a pull queued behind the lock finds no
         // session to pull for.
-        *self.inner.token.write().unwrap() = None;
-        *self.inner.session.write().unwrap() = None;
-        *self.inner.manifest.lock().unwrap() = None;
         drop(pulling);
         self.refresh_status()?;
         Ok(match revocation {
@@ -426,10 +469,15 @@ impl SyncEngine {
     /// The wipe waits for any pull on the wire. A response requested before it and applied
     /// after it would put its rows and its cursors back: the next delta then starts above
     /// everything the wipe removed, and none of that ever comes down again.
+    ///
+    /// A push on the wire is not covered by that lock. Its verdict would be written from the
+    /// batch kept in memory, a conflict for a row that no longer exists, so the wipe also
+    /// advances the data generation and the push drops what comes back.
     pub async fn clear_local(&self) -> Result<()> {
         let _pulling = self.inner.pulling.lock().await;
         {
             let conn = self.db()?;
+            self.advance_epoch();
             wipe_local(&conn)?;
         }
         self.refresh_status()?;
@@ -444,9 +492,28 @@ impl SyncEngine {
     ///
     /// K12: rows outside the window are not sent at all; [`SyncEngine::download_archive`]
     /// is how the user widens it later.
+    ///
+    /// If another user logs in while it runs, the download that was under way is for data
+    /// that no longer exists, and it starts again for the session that does. The shell shares
+    /// one bootstrap between callers, so that is also the bootstrap the new login asked for.
     pub async fn bootstrap(
         &self,
         progress: impl Fn(BootstrapProgress) + Send + Sync,
+    ) -> Result<()> {
+        // Every pass round this loop takes a real wipe (a login by another user or a
+        // deactivation; logout and `clear_local` wait for the pull lock). After a deactivation
+        // there is no token, and the next pass ends in `Auth`.
+        loop {
+            match self.bootstrap_once(&progress).await {
+                Err(err) if is_superseded(&err) => continue,
+                result => return result,
+            }
+        }
+    }
+
+    async fn bootstrap_once(
+        &self,
+        progress: &(dyn Fn(BootstrapProgress) + Send + Sync),
     ) -> Result<()> {
         let manifest = self.load_manifest(true).await?;
         let entities = pull::granted_entities(&manifest);
@@ -454,7 +521,7 @@ impl SyncEngine {
         // Clamped to the server's own `min:1|max:365` rule: a preference of 0 (or anything
         // past a year) would be a 422 on every request of the bootstrap (U3).
         let window_days = window_days.clamp(1, manifest.policy.retention_days_max.max(1));
-        self.pull_until_drained(&manifest, &entities, Some(window_days), Some(&progress))
+        self.pull_until_drained(&manifest, &entities, Some(window_days), Some(progress))
             .await?;
         self.refresh_status()?;
         self.emit(EngineEvent::TablesChanged { entities });
@@ -479,11 +546,19 @@ impl SyncEngine {
             return Ok(SyncReport::default());
         };
 
+        let token_gen = self.token_gen();
         self.set_syncing(true);
         let result = self.run_round().await;
         self.set_syncing(false);
 
         match result {
+            // The local data the round was working on was wiped under it; nothing it did
+            // counts for whatever exists now. Not an error the user can act on, and not a
+            // completed sync either, so the round reports nothing and `last_sync_at` stays.
+            Err(err) if is_superseded(&err) => {
+                self.refresh_status()?;
+                Ok(SyncReport::default())
+            }
             Ok(report) => {
                 self.mark_synced_now();
                 if !report.tables_changed.is_empty() {
@@ -494,7 +569,9 @@ impl SyncEngine {
             }
             Err(err) => {
                 if matches!(err, SyncError::Auth) {
-                    self.handle_auth_lost()?;
+                    // Scoped to the session the round started in: a login that happened
+                    // while it ran must not lose its fresh token to the old one's 401.
+                    self.handle_auth_lost(token_gen)?;
                 }
                 if matches!(err, SyncError::Offline) || is_server_5xx(&err) {
                     self.set_online_flag(false);
@@ -532,10 +609,13 @@ impl SyncEngine {
     }
 
     async fn push_round(&self, policy: &ServerPolicy, report: &mut SyncReport) -> Result<()> {
-        let token = self.token().ok_or(SyncError::Auth)?;
-        let batches = {
+        // The batches are read under the same lock as the token and the generation, so they
+        // are the outbox of exactly the session the token belongs to.
+        let (token, epoch, token_gen, batches) = {
             let conn = self.db()?;
-            push::prepare(&conn, policy.push_batch_max, policy.push_bytes_max)?
+            let token = self.token().ok_or(SyncError::Auth)?;
+            let batches = push::prepare(&conn, policy.push_batch_max, policy.push_bytes_max)?;
+            (token, self.epoch(), self.token_gen(), batches)
         };
 
         for batch in batches {
@@ -544,6 +624,9 @@ impl SyncEngine {
             }
             {
                 let conn = self.db()?;
+                if self.epoch() != epoch {
+                    return Err(superseded());
+                }
                 push::mark_inflight(&conn, &batch)?;
             }
 
@@ -556,6 +639,13 @@ impl SyncEngine {
                 Ok(response) => {
                     let (outcome, entities, new_conflicts) = {
                         let conn = self.db()?;
+                        if self.epoch() != epoch {
+                            // The verdict is for a batch read before a wipe. Not one line of
+                            // it is written: no conflict from the copy in memory, no server
+                            // identity, no settled row. The wipe took the batch's outbox rows
+                            // with it, so there is nothing to put back either.
+                            return Err(superseded());
+                        }
                         push::apply_results(&conn, &batch, &response)?
                     };
                     report.pushed += batch.len() as u32;
@@ -576,10 +666,13 @@ impl SyncEngine {
                 Err(err) => {
                     {
                         let conn = self.db()?;
-                        push::requeue_after_failure(&conn, &batch, &err.to_string())?;
+                        // After a wipe the rows are gone; there is nothing to requeue.
+                        if self.epoch() == epoch {
+                            push::requeue_after_failure(&conn, &batch, &err.to_string())?;
+                        }
                     }
                     // After the connection is released: the A25 wipe takes the same lock.
-                    self.observe_transport_error(&err);
+                    self.observe_transport_error(&err, token_gen);
                     return Err(err);
                 }
             }
@@ -606,7 +699,8 @@ impl SyncEngine {
         window_days: Option<u32>,
         progress: Option<&(dyn Fn(BootstrapProgress) + Send + Sync)>,
     ) -> Result<pull::PullOutcome> {
-        let token = self.token().ok_or(SyncError::Auth)?;
+        let (token, epoch, token_gen) = self.credentials()?;
+        let token = token.ok_or(SyncError::Auth)?;
         let limit = manifest.policy.pull_limit_max.clamp(1, 500);
         let mut total = pull::PullOutcome::default();
         // `entities` says which tables this call waits for; every request still carries every
@@ -625,17 +719,27 @@ impl SyncEngine {
 
             let request = {
                 let conn = self.db()?;
+                if self.epoch() != epoch {
+                    return Err(superseded());
+                }
                 pull::build_request(&conn, &granted, limit, window_days)?
             };
             let response = match self.inner.transport.pull(&token, &request).await {
                 Ok(response) => response,
                 Err(err) => {
-                    self.observe_transport_error(&err);
+                    self.observe_transport_error(&err, token_gen);
                     return Err(err);
                 }
             };
             let outcome = {
                 let conn = self.db()?;
+                // The pull lock keeps `clear_local`, `logout` and an archive reset away, but
+                // not a login or a `USER_DEACTIVATED` wipe. Checked under the connection
+                // lock every wipe also holds, so no wipe can slip in between this and the
+                // write.
+                if self.epoch() != epoch {
+                    return Err(superseded());
+                }
                 pull::apply(&conn, &response)?
             };
 
@@ -669,7 +773,17 @@ impl SyncEngine {
     ///
     /// `window_days` only applies while a cursor is 0 (§4.4), so the cursors are reset for
     /// this pass; the upsert is idempotent, so re-seeing known rows costs nothing but time.
+    ///
+    /// If the local data is wiped while it runs, there is nothing left to widen: it returns
+    /// without an error and without having written anything.
     pub async fn download_archive(&self, extra_days: u32) -> Result<()> {
+        match self.download_archive_once(extra_days).await {
+            Err(err) if is_superseded(&err) => Ok(()),
+            result => result,
+        }
+    }
+
+    async fn download_archive_once(&self, extra_days: u32) -> Result<()> {
         let manifest = self.load_manifest(true).await?;
         let entities = pull::granted_entities(&manifest);
         let window = {
@@ -1390,17 +1504,35 @@ impl SyncEngine {
                 }
             }
         }
-        let token = self.token().ok_or(SyncError::Auth)?;
+        let (token, epoch, token_gen) = self.credentials()?;
+        let token = token.ok_or(SyncError::Auth)?;
         let manifest = match self.inner.transport.manifest(&token).await {
             Ok(manifest) => manifest,
             Err(err) => {
-                self.observe_transport_error(&err);
+                self.observe_transport_error(&err, token_gen);
                 return Err(err);
             }
         };
 
-        if manifest.protocol_version != PROTOCOL_VERSION {
-            self.inner.halted.store(true, Ordering::SeqCst);
+        let mismatch = {
+            // Nothing from an answer for wiped data is kept: not the cache, and not the halt
+            // either, which would otherwise stop the next user's session over the previous
+            // one's response. Checked under the lock a login clears `halted` and a logout
+            // clears the cache under, so neither can slip in between check and write.
+            let _conn = self.db()?;
+            if self.epoch() != epoch {
+                return Err(superseded());
+            }
+            let mismatch = manifest.protocol_version != PROTOCOL_VERSION;
+            if mismatch {
+                self.inner.halted.store(true, Ordering::SeqCst);
+            } else {
+                *self.inner.manifest.lock().unwrap() = Some((Instant::now(), manifest.clone()));
+            }
+            mismatch
+        };
+
+        if mismatch {
             self.emit(EngineEvent::ProtocolMismatch {
                 server: manifest.protocol_version,
             });
@@ -1409,8 +1541,6 @@ impl SyncEngine {
                 manifest.protocol_version
             )));
         }
-
-        *self.inner.manifest.lock().unwrap() = Some((Instant::now(), manifest.clone()));
         Ok(manifest)
     }
 
@@ -1432,17 +1562,25 @@ impl SyncEngine {
     /// Errors are swallowed on purpose: this runs on the failure path of a call that is
     /// already returning an error, and a keychain hiccup here must not replace the error the
     /// caller is about to see.
-    fn observe_transport_error(&self, err: &SyncError) {
+    ///
+    /// `token_gen` is the token generation the failed call was sent with. The verdict is
+    /// about that token only: if a login, a logout or another 401 came first, it is dropped,
+    /// so user A's `USER_DEACTIVATED` cannot wipe user B's mirror or delete B's token.
+    ///
+    /// Takes no `pulling` lock on purpose. This runs inside a pull's own error path, where
+    /// that lock is already held; the data generation advanced by the wipe is what stops
+    /// other requests on the wire from writing afterwards.
+    fn observe_transport_error(&self, err: &SyncError, token_gen: u64) {
         match err {
             SyncError::Auth => {
-                if let Err(e) = self.handle_auth_lost() {
+                if let Err(e) = self.handle_auth_lost(token_gen) {
                     tracing::warn!(error = %e, "could not clear the session after a 401");
                 }
             }
             SyncError::Server(server)
                 if server.status == 403 && server.code == crate::protocol::codes::USER_DEACTIVATED =>
             {
-                if let Err(e) = self.handle_deactivated() {
+                if let Err(e) = self.handle_deactivated(token_gen) {
                     tracing::warn!(error = %e, "could not wipe after USER_DEACTIVATED");
                 }
             }
@@ -1452,18 +1590,23 @@ impl SyncEngine {
 
     /// KARAR A25: the account is gone, so the local mirror goes with it — encrypted database
     /// contents, outbox, conflicts and the keychain token.
-    fn handle_deactivated(&self) -> Result<()> {
+    fn handle_deactivated(&self, token_gen: u64) -> Result<()> {
         let service = self.inner.cfg.read().unwrap().keychain_service.clone();
-        self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
         {
             let conn = self.db()?;
+            if self.token_gen() != token_gen {
+                return Ok(());
+            }
+            self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
+            self.advance_epoch();
+            self.advance_token_gen();
             wipe_local(&conn)?;
             db::put_setting(&conn, SETTING_USER_ID, "")?;
             db::put_setting(&conn, SETTING_SESSION, "")?;
+            *self.inner.token.write().unwrap() = None;
+            *self.inner.session.write().unwrap() = None;
+            *self.inner.manifest.lock().unwrap() = None;
         }
-        *self.inner.token.write().unwrap() = None;
-        *self.inner.session.write().unwrap() = None;
-        *self.inner.manifest.lock().unwrap() = None;
         self.emit(EngineEvent::AuthLost);
         self.refresh_status()?;
         Ok(())
@@ -1471,14 +1614,50 @@ impl SyncEngine {
 
     /// A 401 drops the session but **keeps the outbox** (§5.5): the same user logging back
     /// in resumes exactly where they left off.
-    fn handle_auth_lost(&self) -> Result<()> {
+    fn handle_auth_lost(&self, token_gen: u64) -> Result<()> {
         let service = self.inner.cfg.read().unwrap().keychain_service.clone();
-        self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
-        *self.inner.token.write().unwrap() = None;
-        *self.inner.session.write().unwrap() = None;
-        *self.inner.manifest.lock().unwrap() = None;
+        {
+            let _conn = self.db()?;
+            if self.token_gen() != token_gen {
+                return Ok(());
+            }
+            self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
+            // The data stays, so only the token generation moves: a pull or push already on
+            // the wire still writes into the same user's mirror.
+            self.advance_token_gen();
+            *self.inner.token.write().unwrap() = None;
+            *self.inner.session.write().unwrap() = None;
+            *self.inner.manifest.lock().unwrap() = None;
+        }
         self.emit(EngineEvent::AuthLost);
         Ok(())
+    }
+
+    /// The current data generation (see [`Inner::epoch`]).
+    fn epoch(&self) -> u64 {
+        self.inner.epoch.load(Ordering::SeqCst)
+    }
+
+    /// Start a new data generation. Callers hold the `db` mutex, which is what orders this
+    /// against every check made before a write.
+    fn advance_epoch(&self) {
+        self.inner.epoch.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// The current token generation (see [`Inner::token_gen`]).
+    fn token_gen(&self) -> u64 {
+        self.inner.token_gen.load(Ordering::SeqCst)
+    }
+
+    /// Start a new token generation. Callers hold the `db` mutex.
+    fn advance_token_gen(&self) {
+        self.inner.token_gen.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// The token and both generations, read together under the `db` mutex.
+    fn credentials(&self) -> Result<(Option<String>, u64, u64)> {
+        let _conn = self.db()?;
+        Ok((self.token(), self.epoch(), self.token_gen()))
     }
 
     /// Retention runs at most once a day (§5.5).
@@ -1496,6 +1675,28 @@ impl SyncEngine {
         }
         Ok(())
     }
+}
+
+/// Message of the internal "response dropped" signal; see [`superseded`].
+const SUPERSEDED: &str =
+    "the local data was wiped while this request was on the wire; its response was discarded";
+
+/// What a pull, a push or a manifest fetch returns internally when the local data was wiped
+/// while it was on the wire and its response was dropped.
+///
+/// It never reaches a caller of the public API as an error: [`SyncEngine::sync_now`] turns it
+/// into an empty report, [`SyncEngine::bootstrap`] starts again for the session that now
+/// exists, [`SyncEngine::download_archive`] and [`SyncEngine::restore_session`] return
+/// quietly, and a realtime pull ignores every error anyway. `Validation` rather than `Auth`
+/// for the carrier, because `Auth` drops the session, and the session that now exists did
+/// nothing wrong.
+fn superseded() -> SyncError {
+    SyncError::Validation(SUPERSEDED.into())
+}
+
+/// Whether `err` is the signal [`superseded`] builds.
+fn is_superseded(err: &SyncError) -> bool {
+    matches!(err, SyncError::Validation(message) if message == SUPERSEDED)
 }
 
 /// Overwrite a mirror row with the server's version of it.
