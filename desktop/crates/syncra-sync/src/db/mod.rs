@@ -24,9 +24,12 @@ const MIGRATION_0004: &str = include_str!("../../migrations/0004_message_attachm
 /// Adds `outbox.sent`, which keeps a mutation that may already be on the server from
 /// absorbing later edits under its old idempotency key — see the file for the full contract.
 const MIGRATION_0005: &str = include_str!("../../migrations/0005_outbox_sent.sql");
+/// Counts every outbox row from before `outbox.sent` as sent: an older build's crash recovery
+/// left no trace of a row having gone out — see the file.
+const MIGRATION_0006: &str = include_str!("../../migrations/0006_outbox_sent_conservative.sql");
 
 /// Schema version written to `PRAGMA user_version` once every migration has run.
-const SCHEMA_VERSION: i32 = 5;
+const SCHEMA_VERSION: i32 = 6;
 
 /// Every migration, in order, paired with the `user_version` it brings the database to.
 ///
@@ -44,6 +47,7 @@ const MIGRATIONS: &[(i32, &str)] = &[
     (3, MIGRATION_0003),
     (4, MIGRATION_0004),
     (5, MIGRATION_0005),
+    (6, MIGRATION_0006),
 ];
 
 /// Open (or create) the encrypted database and bring it to the current schema version.
@@ -648,6 +652,100 @@ mod tests {
         let conn2 = open(&path, &key).unwrap();
         let version2: i32 = conn2.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
         assert_eq!(version2, SCHEMA_VERSION);
+    }
+
+    /// Upgrade of a populated v4 outbox (migrations 0005 and 0006).
+    ///
+    /// A build from before `outbox.sent` recovered a crash by turning `inflight` rows back
+    /// into `queued` with `attempts` untouched, so a create that the server applied before the
+    /// crash looks like one that never left. After the upgrade no row of that outbox may absorb
+    /// a later edit under its old key, and no create of it may be cancelled by a delete.
+    #[test]
+    fn existing_v4_outbox_is_classified_as_sent_on_upgrade() {
+        use crate::outbox::{self, EnqueueOutcome};
+        use crate::types::{Entity, LocalMutation};
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let key = "e".repeat(64);
+        let recovered_create = uuid::Uuid::now_v7();
+        let recovered_create_2 = uuid::Uuid::now_v7();
+        let failed_once = uuid::Uuid::now_v7();
+        let on_the_wire = uuid::Uuid::now_v7();
+
+        {
+            let conn = Connection::open_with_flags(
+                &path,
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+            )
+            .unwrap();
+            conn.pragma_update(None, "key", &key).unwrap();
+            conn.execute_batch(MIGRATION_0001).unwrap();
+            conn.execute_batch(MIGRATION_0002).unwrap();
+            register_functions(&conn).unwrap();
+            conn.execute_batch(MIGRATION_0003).unwrap();
+            conn.execute_batch(MIGRATION_0004).unwrap();
+            conn.pragma_update(None, "user_version", 4).unwrap();
+            let rows = [
+                (1, recovered_create, "create", 0, "queued"),
+                (2, recovered_create_2, "create", 0, "queued"),
+                (3, failed_once, "create", 2, "queued"),
+                (4, on_the_wire, "create", 0, "inflight"),
+            ];
+            for (seq, client_id, op, attempts, state) in rows {
+                conn.execute(
+                    "INSERT INTO outbox(id, seq, idempotency_key, entity, op, client_id, payload,
+                                        occurred_at, attempts, state)
+                     VALUES (?1, ?2, ?3, 'company', ?4, ?5, '{\"name\":\"Old\"}',
+                             '2026-10-01T00:00:00.000Z', ?6, ?7)",
+                    rusqlite::params![
+                        uuid::Uuid::now_v7().to_string(),
+                        seq,
+                        format!("key-{seq}"),
+                        op,
+                        client_id.to_string(),
+                        attempts,
+                        state
+                    ],
+                )
+                .unwrap();
+            }
+        }
+
+        let conn = open(&path, &key).unwrap();
+        let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        let unsent: i64 = conn
+            .query_row("SELECT count(*) FROM outbox WHERE sent = 0", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(unsent, 0, "a row from before `outbox.sent` was classified as never sent");
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let edit = LocalMutation::update(
+            Entity::Company,
+            recovered_create,
+            &["name"],
+            serde_json::json!({"name": "New"}),
+        );
+        let edited = outbox::enqueue(&tx, &edit, None, None).unwrap();
+        assert!(
+            matches!(edited, EnqueueOutcome::Queued(_)),
+            "an edit was folded into a recovered row under its old key: {edited:?}"
+        );
+        let deletion = LocalMutation::delete(Entity::Company, recovered_create_2);
+        let deleted = outbox::enqueue(&tx, &deletion, None, None).unwrap();
+        assert!(
+            matches!(deleted, EnqueueOutcome::Queued(_)),
+            "a recovered create was cancelled locally: {deleted:?}"
+        );
+        tx.commit().unwrap();
+
+        let old_payload: String = conn
+            .query_row("SELECT payload FROM outbox WHERE seq = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(old_payload, "{\"name\":\"Old\"}", "the recovered row's payload changed");
+        let total: i64 = conn.query_row("SELECT count(*) FROM outbox", [], |r| r.get(0)).unwrap();
+        assert_eq!(total, 6);
     }
 
     /// A migration whose `execute_batch` fails partway through must leave the database exactly

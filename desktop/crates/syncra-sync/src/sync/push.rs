@@ -36,6 +36,71 @@ pub fn prepare(conn: &Connection, max_count: u32, max_bytes: u64) -> Result<Vec<
     Ok(outbox::batches(queued, max_count, max_bytes))
 }
 
+/// The `(entity, client_id)` a mutation addresses; `None` for `notification.read_all`.
+pub fn row_key(row: &OutboxRow) -> Option<(Entity, String)> {
+    row.client_id.clone().map(|cid| (row.entity, cid))
+}
+
+/// The next batch of a push round, read from the database right before it is sent.
+///
+/// A round sends one batch at a time and calls this again for the next one, under the same
+/// lock as [`mark_inflight`]. Reading every batch up front kept copies in memory for the whole
+/// round: an edit folded meanwhile into a row of a later batch was sent with the old values
+/// and then settled, and a create cancelled by a delete went out anyway.
+///
+/// * `sent` holds the rows this round has already sent. One of them still queued was left
+///   out of `results` (protocol §4.3 P10b); it waits for the next round.
+/// * `held` holds the rows such a deferral left unresolved. Nothing else addressing one of
+///   them, or naming its `client_id` in its payload, goes out in this round: a delete, an
+///   update or an action sent ahead of the create it depends on is answered
+///   `UNRESOLVED_REFERENCE` and parked in the Conflict Inbox, and the server keeps the row.
+///   Every row kept back this way is added to `held`, so later rows of the same key stay
+///   behind it in push order.
+/// * An `update` of a row that already has a mutation earlier in the batch ends the batch.
+///   Its base was read before that mutation's verdict; the next batch is read after the verdict
+///   has rebased it (`outbox::rebase_on_create`, `outbox::rebase_on_update`), so the server
+///   does not count this device's own write as somebody else's.
+pub fn next_batch(
+    conn: &Connection,
+    max_count: u32,
+    max_bytes: u64,
+    sent: &HashSet<Uuid>,
+    held: &mut HashSet<(Entity, String)>,
+) -> Result<Vec<OutboxRow>> {
+    let mut batch: Vec<OutboxRow> = Vec::new();
+    let mut in_batch: HashSet<(Entity, String)> = HashSet::new();
+    let mut bytes: u64 = 0;
+
+    for row in outbox::queued_in_push_order(conn)? {
+        let key = row_key(&row);
+        if sent.contains(&row.id) {
+            held.extend(key);
+            continue;
+        }
+        let blocked = key.as_ref().is_some_and(|k| held.contains(k))
+            || row
+                .payload
+                .as_ref()
+                .map(|p| p.to_string())
+                .is_some_and(|text| held.iter().any(|(_, cid)| text.contains(cid.as_str())));
+        if blocked {
+            held.extend(key);
+            continue;
+        }
+        if row.op == crate::types::Op::Update && key.as_ref().is_some_and(|k| in_batch.contains(k)) {
+            break;
+        }
+        let size = row.wire_bytes() as u64;
+        if !batch.is_empty() && (batch.len() as u32 >= max_count || bytes + size > max_bytes) {
+            break;
+        }
+        bytes += size;
+        in_batch.extend(key);
+        batch.push(row);
+    }
+    Ok(batch)
+}
+
 /// Mark a batch as in flight just before the request goes out.
 pub fn mark_inflight(conn: &Connection, batch: &[OutboxRow]) -> Result<()> {
     let tx = conn.unchecked_transaction()?;

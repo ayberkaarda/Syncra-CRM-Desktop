@@ -129,6 +129,15 @@ fn next_seq(tx: &Transaction<'_>) -> Result<i64> {
     Ok(seq)
 }
 
+/// Take the next change revision (migration 0006): a counter that only goes up, across
+/// settles and wipes, for [`changed_since`].
+fn next_rev(tx: &Transaction<'_>) -> Result<i64> {
+    tx.execute("UPDATE outbox_revision SET value = value + 1 WHERE id = 1", [])?;
+    let rev: i64 =
+        tx.query_row("SELECT value FROM outbox_revision WHERE id = 1", [], |r| r.get(0))?;
+    Ok(rev)
+}
+
 /// The newest queued row for `(entity, client_id)` that has never been sent, if any.
 ///
 /// A row that went out once and came back to `queued` (a 5xx, a timeout, a crash in flight)
@@ -259,10 +268,11 @@ pub fn enqueue(
                 (Op::Create, Op::Update) => {
                     let merged = merge_payload(existing.payload.clone(), &mutation.payload);
                     tx.execute(
-                        "UPDATE outbox SET payload = ?1, occurred_at = ?2 WHERE id = ?3",
+                        "UPDATE outbox SET payload = ?1, occurred_at = ?2, rev = ?3 WHERE id = ?4",
                         rusqlite::params![
                             merged.to_string(),
                             occurred_at,
+                            next_rev(tx)?,
                             existing.id.to_string()
                         ],
                     )?;
@@ -276,12 +286,14 @@ pub fn enqueue(
                         mutation.changed_fields.as_deref(),
                     );
                     tx.execute(
-                        "UPDATE outbox SET payload = ?1, changed_fields = ?2, occurred_at = ?3
-                          WHERE id = ?4",
+                        "UPDATE outbox SET payload = ?1, changed_fields = ?2, occurred_at = ?3,
+                                           rev = ?4
+                          WHERE id = ?5",
                         rusqlite::params![
                             merged.to_string(),
                             serde_json::to_string(&fields)?,
                             occurred_at,
+                            next_rev(tx)?,
                             existing.id.to_string()
                         ],
                     )?;
@@ -299,8 +311,8 @@ pub fn enqueue(
     tx.execute(
         "INSERT INTO outbox(id, seq, idempotency_key, entity, op, action, scope, client_id,
                             server_id, base_sync_version, changed_fields, payload, occurred_at,
-                            attempts, state)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 0, 'queued')",
+                            attempts, state, rev)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 0, 'queued', ?14)",
         rusqlite::params![
             id.to_string(),
             seq,
@@ -323,6 +335,7 @@ pub fn enqueue(
                 Some(mutation.payload.to_string())
             },
             occurred_at,
+            next_rev(tx)?,
         ],
     )?;
 
@@ -521,6 +534,34 @@ pub fn pending_count(conn: &Connection) -> Result<u32> {
         |r| r.get(0),
     )?;
     Ok(count as u32)
+}
+
+/// Where the outbox stands at one moment, for [`changed_since`].
+#[derive(Debug, Clone)]
+pub struct ChangeMark {
+    rev: i64,
+}
+
+/// Take a [`ChangeMark`] of the outbox as it is now.
+pub fn change_mark(conn: &Connection) -> Result<ChangeMark> {
+    let rev: i64 =
+        conn.query_row("SELECT value FROM outbox_revision WHERE id = 1", [], |r| r.get(0))?;
+    Ok(ChangeMark { rev })
+}
+
+/// Whether a pending mutation was queued, or folded into, after `mark` was taken.
+///
+/// Every enqueue stamps the row it writes with the next change revision (see [`enqueue`]),
+/// a counter that never goes back: neither `seq`, which is handed out again once the newest
+/// row has left, nor `occurred_at`, which follows the wall clock, can tell this.
+pub fn changed_since(conn: &Connection, mark: &ChangeMark) -> Result<bool> {
+    let changed: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM outbox
+                        WHERE state IN ('queued', 'inflight') AND rev > ?1)",
+        rusqlite::params![mark.rev],
+        |r| r.get(0),
+    )?;
+    Ok(changed)
 }
 
 /// Total outbox size, including failures parked in the Conflict Inbox.

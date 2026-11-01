@@ -18,6 +18,7 @@ use crate::{conflicts, retention};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use rusqlite::Connection;
 use serde_json::Value as Json;
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -149,6 +150,12 @@ struct Inner {
     /// the request that heard it was sent with the current token, so an old token's verdict
     /// cannot drop a fresh one.
     token_gen: AtomicU64,
+    /// Login generation. Advanced by every login, under the `db` mutex, and by nothing else.
+    /// A logout compares it rather than [`Inner::token_gen`]: a 401 moves the token
+    /// generation and clears the token without starting a new session, so a moved token
+    /// generation with no token left cannot tell "this session lost its token" from "a newer
+    /// session logged in and then lost its token".
+    login_gen: AtomicU64,
     /// Set once the server reports a protocol version this build cannot speak.
     halted: AtomicBool,
     /// Signalled by the triggers of §5.5 so the background loop wakes early.
@@ -285,6 +292,7 @@ impl SyncEngine {
             pulling: tokio::sync::Mutex::new(()),
             epoch: AtomicU64::new(0),
             token_gen: AtomicU64::new(0),
+            login_gen: AtomicU64::new(0),
             halted: AtomicBool::new(false),
             wake: tokio::sync::Notify::new(),
             stopping: AtomicBool::new(false),
@@ -337,6 +345,7 @@ impl SyncEngine {
             // request records either the old token with the old generations or the new token
             // with the new ones.
             self.advance_token_gen();
+            self.inner.login_gen.fetch_add(1, Ordering::SeqCst);
             let previous = db::get_setting(&conn, SETTING_USER_ID)?
                 .and_then(|raw| raw.parse::<i64>().ok());
             if previous.is_some_and(|prev| prev != user_id) {
@@ -410,16 +419,39 @@ impl SyncEngine {
     /// bearer token still exists. It is best-effort: an offline logout must still succeed
     /// locally, so a failure downgrades the result to [`LogoutOutcome::WipedLocalOnly`] rather
     /// than aborting the wipe or being swallowed (AUTH-1 U6).
+    ///
+    /// # The session it logs out of
+    ///
+    /// The token, the token generation and the state of the outbox are read together when the
+    /// call starts, and checked again under the same `db` lock the wipe runs under, after the
+    /// revocation has come back:
+    ///
+    /// * If a login happened meanwhile (by this user or by somebody else, whether or not a 401
+    ///   has dropped its token since), that newer session is not the one being logged out of.
+    ///   A 401 alone, with no login, is still this session. Nothing is deleted — not its token in the keychain, not its mirror, not its outbox — and the call
+    ///   fails with [`SyncError::Validation`].
+    /// * Edits made while the revocation was on the wire are **refused, not lost**: the call
+    ///   returns [`LogoutOutcome::PendingMutations`] and keeps them. Without `force` that is
+    ///   any pending mutation; with `force` it is a mutation queued or changed after the call
+    ///   started, which the user's consent did not cover. The server token may already be
+    ///   revoked by then; the next request answers 401, which keeps the outbox (§5.5), and the
+    ///   user can sign in again to push it.
     pub async fn logout(&self, force: bool) -> Result<LogoutOutcome> {
-        let pending = {
+        let (token, token_id, login_gen, pending, mark) = {
             let conn = self.db()?;
-            outbox::pending_count(&conn)?
+            (
+                self.token(),
+                self.session().map(|s| s.token_id),
+                self.inner.login_gen.load(Ordering::SeqCst),
+                outbox::pending_count(&conn)?,
+                outbox::change_mark(&conn)?,
+            )
         };
         if pending > 0 && !force {
             return Ok(LogoutOutcome::PendingMutations(pending));
         }
 
-        let revocation = match (self.token(), self.session().map(|s| s.token_id)) {
+        let revocation = match (token, token_id) {
             (Some(token), Some(token_id)) => {
                 match self.inner.transport.revoke_device(&token, token_id).await {
                     Ok(()) => None,
@@ -440,9 +472,24 @@ impl SyncEngine {
         // rows and cursors back into the wiped mirror.
         let pulling = self.inner.pulling.lock().await;
         let service = self.inner.cfg.read().unwrap().keychain_service.clone();
-        self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
         {
             let conn = self.db()?;
+            if self.inner.login_gen.load(Ordering::SeqCst) != login_gen {
+                // A login while the revocation was on the wire: the session that exists now
+                // is not the one this call was asked to end. That holds even when its token is
+                // gone again (a 401 after that login): the mirror is then the newer session's,
+                // kept for its user to sign back in to (§5.5).
+                return Err(SyncError::Validation(
+                    "a newer session started while logging out; nothing was wiped".into(),
+                ));
+            }
+            let now_pending = outbox::pending_count(&conn)?;
+            if now_pending > 0 && (!force || outbox::changed_since(&conn, &mark)?) {
+                return Ok(LogoutOutcome::PendingMutations(now_pending));
+            }
+            // Under the lock every token change takes, so the keychain entry deleted here is
+            // the one whose generation was checked above.
+            self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
             // The pull lock does not cover a push on the wire; the generation does.
             self.advance_epoch();
             self.advance_token_gen();
@@ -515,13 +562,13 @@ impl SyncEngine {
         &self,
         progress: &(dyn Fn(BootstrapProgress) + Send + Sync),
     ) -> Result<()> {
-        let manifest = self.load_manifest(true).await?;
+        let (manifest, epoch) = self.load_scoped_manifest(true).await?;
         let entities = pull::granted_entities(&manifest);
         let window_days = self.inner.cfg.read().unwrap().retention_days;
         // Clamped to the server's own `min:1|max:365` rule: a preference of 0 (or anything
         // past a year) would be a 422 on every request of the bootstrap (U3).
         let window_days = window_days.clamp(1, manifest.policy.retention_days_max.max(1));
-        self.pull_until_drained(&manifest, &entities, Some(window_days), Some(progress))
+        self.pull_until_drained(&manifest, epoch, &entities, Some(window_days), Some(progress))
             .await?;
         self.refresh_status()?;
         self.emit(EngineEvent::TablesChanged { entities });
@@ -583,17 +630,17 @@ impl SyncEngine {
     }
 
     async fn run_round(&self) -> Result<SyncReport> {
-        let manifest = self.load_manifest(false).await?;
+        let (manifest, epoch) = self.load_scoped_manifest(false).await?;
         let policy = manifest.policy;
         let mut report = SyncReport::default();
 
-        self.push_round(&policy, &mut report).await?;
+        self.push_round(&policy, epoch, &mut report).await?;
 
         let entities = pull::granted_entities(&manifest);
         // `None`, not `0`: a delta pull sends no retention window at all (§4.4). Sending `0`
         // made the server answer 422 to the pull half of every single round (U3).
         let pulled = self
-            .pull_until_drained(&manifest, &entities, None, None)
+            .pull_until_drained(&manifest, epoch, &entities, None, None)
             .await?;
         report.pulled_rows = pulled.rows;
         report.deletions = pulled.deletions;
@@ -608,27 +655,48 @@ impl SyncEngine {
         Ok(report)
     }
 
-    async fn push_round(&self, policy: &ServerPolicy, report: &mut SyncReport) -> Result<()> {
-        // The batches are read under the same lock as the token and the generation, so they
-        // are the outbox of exactly the session the token belongs to.
-        let (token, epoch, token_gen, batches) = {
-            let conn = self.db()?;
-            let token = self.token().ok_or(SyncError::Auth)?;
-            let batches = push::prepare(&conn, policy.push_batch_max, policy.push_bytes_max)?;
-            (token, self.epoch(), self.token_gen(), batches)
+    async fn push_round(
+        &self,
+        policy: &ServerPolicy,
+        epoch: u64,
+        report: &mut SyncReport,
+    ) -> Result<()> {
+        // The token is read under the same lock as the generation, so every batch below is
+        // read from the outbox of exactly the session the token belongs to.
+        let (token, token_gen) = {
+            let _conn = self.db()?;
+            // `epoch` is the generation the manifest was fetched in; its policy is not this
+            // data's if a wipe came between.
+            if self.epoch() != epoch {
+                return Err(superseded());
+            }
+            (self.token().ok_or(SyncError::Auth)?, self.token_gen())
         };
 
-        for batch in batches {
-            if batch.is_empty() {
-                continue;
-            }
-            {
+        let mut sent: HashSet<Uuid> = HashSet::new();
+        let mut held: HashSet<(Entity, String)> = HashSet::new();
+        loop {
+            // Each batch is read from the database right before it goes out, under the lock
+            // that marks it in flight (see `push::next_batch`).
+            let batch = {
                 let conn = self.db()?;
                 if self.epoch() != epoch {
                     return Err(superseded());
                 }
+                let batch = push::next_batch(
+                    &conn,
+                    policy.push_batch_max,
+                    policy.push_bytes_max,
+                    &sent,
+                    &mut held,
+                )?;
+                if batch.is_empty() {
+                    break;
+                }
                 push::mark_inflight(&conn, &batch)?;
-            }
+                batch
+            };
+            sent.extend(batch.iter().map(|row| row.id));
 
             let request = PushRequest {
                 batch_id: Uuid::now_v7().to_string(),
@@ -648,6 +716,13 @@ impl SyncEngine {
                         }
                         push::apply_results(&conn, &batch, &response)?
                     };
+                    // A mutation left out of `results` holds back what depends on it for the
+                    // rest of this round.
+                    for row in &batch {
+                        if !response.results.iter().any(|r| r.seq == row.seq) {
+                            held.extend(push::row_key(row));
+                        }
+                    }
                     report.pushed += batch.len() as u32;
                     report.applied += outcome.applied;
                     report.duplicates += outcome.duplicates;
@@ -683,23 +758,32 @@ impl SyncEngine {
     async fn pull_until_drained(
         &self,
         manifest: &Manifest,
+        epoch: u64,
         entities: &[Entity],
         window_days: Option<u32>,
         progress: Option<&(dyn Fn(BootstrapProgress) + Send + Sync)>,
     ) -> Result<pull::PullOutcome> {
         let _pulling = self.inner.pulling.lock().await;
-        self.drain(manifest, entities, window_days, progress).await
+        self.drain(manifest, epoch, entities, window_days, progress).await
     }
 
     /// The pull loop. Callers hold `Inner::pulling`.
+    ///
+    /// `epoch` is the data generation `manifest` was fetched in. A wipe since then means the
+    /// tables, the limit and the grants it describes belong to a session that is gone, and
+    /// none of it may drive a pull made with the token of the session that exists now.
     async fn drain(
         &self,
         manifest: &Manifest,
+        epoch: u64,
         entities: &[Entity],
         window_days: Option<u32>,
         progress: Option<&(dyn Fn(BootstrapProgress) + Send + Sync)>,
     ) -> Result<pull::PullOutcome> {
-        let (token, epoch, token_gen) = self.credentials()?;
+        let (token, current, token_gen) = self.credentials()?;
+        if current != epoch {
+            return Err(superseded());
+        }
         let token = token.ok_or(SyncError::Auth)?;
         let limit = manifest.policy.pull_limit_max.clamp(1, 500);
         let mut total = pull::PullOutcome::default();
@@ -784,7 +868,7 @@ impl SyncEngine {
     }
 
     async fn download_archive_once(&self, extra_days: u32) -> Result<()> {
-        let manifest = self.load_manifest(true).await?;
+        let (manifest, epoch) = self.load_scoped_manifest(true).await?;
         let entities = pull::granted_entities(&manifest);
         let window = {
             let cfg = self.inner.cfg.read().unwrap();
@@ -799,6 +883,12 @@ impl SyncEngine {
 
         {
             let conn = self.db()?;
+            // A wipe while the manifest was fetched or the lock awaited: these cursors belong
+            // to another session's data, which asked for no archive, and the manifest's table
+            // list is not its own.
+            if self.epoch() != epoch {
+                return Err(superseded());
+            }
             for entity in &entities {
                 db::set_cursor(&conn, *entity, 0)?;
             }
@@ -808,7 +898,7 @@ impl SyncEngine {
         // window is genuinely applied and genuinely validated by the server (U3).
         let window = window.clamp(1, manifest.policy.retention_days_max.max(1));
 
-        self.drain(&manifest, &entities, Some(window), None).await?;
+        self.drain(&manifest, epoch, &entities, Some(window), None).await?;
         drop(pulling);
         self.refresh_status()?;
         self.emit(EngineEvent::TablesChanged { entities });
@@ -821,7 +911,7 @@ impl SyncEngine {
         if event.entities.is_empty() || !self.status().online {
             return;
         }
-        let Ok(manifest) = self.load_manifest(false).await else {
+        let Ok((manifest, epoch)) = self.load_scoped_manifest(false).await else {
             return;
         };
         let granted = pull::granted_entities(&manifest);
@@ -834,7 +924,7 @@ impl SyncEngine {
             return;
         }
         if let Ok(outcome) = self
-            .pull_until_drained(&manifest, &wanted, None, None)
+            .pull_until_drained(&manifest, epoch, &wanted, None, None)
             .await
         {
             let _ = self.refresh_status();
@@ -1497,10 +1587,21 @@ impl SyncEngine {
 
     /// The manifest, cached for ten minutes (§5.5), with the protocol check applied.
     async fn load_manifest(&self, force: bool) -> Result<Manifest> {
+        Ok(self.load_scoped_manifest(force).await?.0)
+    }
+
+    /// [`Self::load_manifest`], plus the data generation the manifest belongs to.
+    ///
+    /// A caller hands that generation to everything the manifest drives (`push_round`,
+    /// `drain`, the archive reset), which refuse to run once it is no longer current.
+    async fn load_scoped_manifest(&self, force: bool) -> Result<(Manifest, u64)> {
         if !force {
+            // Read under the lock every wipe clears the cache under, so the cached manifest and
+            // the generation returned with it are a pair.
+            let _conn = self.db()?;
             if let Some((fetched_at, manifest)) = self.inner.manifest.lock().unwrap().clone() {
                 if fetched_at.elapsed().as_secs() < MANIFEST_CACHE_SECS {
-                    return Ok(manifest);
+                    return Ok((manifest, self.epoch()));
                 }
             }
         }
@@ -1541,7 +1642,7 @@ impl SyncEngine {
                 manifest.protocol_version
             )));
         }
-        Ok(manifest)
+        Ok((manifest, epoch))
     }
 
     /// Apply the session consequences of a failed server call.

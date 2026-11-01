@@ -20,12 +20,13 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use syncra_sync::keystore::{KeyStore, KEY_DB};
+use syncra_sync::keystore::{KeyStore, KEY_DB, KEY_TOKEN};
 use syncra_sync::{
-    Entity, LocalMutation, MemoryKeyStore, RealtimeEvent, SyncConfig, SyncEngine, SyncReport,
+    Entity, LocalMutation, LogoutOutcome, MemoryKeyStore, RealtimeEvent, SyncConfig, SyncEngine,
+    SyncReport,
 };
 use uuid::Uuid;
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 // ---------------------------------------------------------------------------
@@ -248,21 +249,43 @@ enum Answer {
     Deferred,
 }
 
+/// One server row, with the write history the conflict check reads.
+struct ServerRow {
+    server_id: i64,
+    name: String,
+    deleted: bool,
+    version: i64,
+    /// `(version, created, fields written)`, one entry per write: the audit trail.
+    history: Vec<(i64, bool, Vec<String>)>,
+}
+
 #[derive(Default)]
 struct ServerState {
     /// `idempotency_key` → stored result, replayed for a known key whatever the payload.
     results: HashMap<String, Value>,
-    /// `client_id` → (`name`, deleted).
-    rows: HashMap<String, (String, bool)>,
+    /// `client_id` → row.
+    rows: HashMap<String, ServerRow>,
     by_server_id: HashMap<i64, String>,
     version: i64,
     answers: Vec<Answer>,
     /// Every mutation that changed something, in order.
     applied: Vec<Value>,
+    /// Every `conflict` or `rejected` result, in order.
+    refused: Vec<Value>,
 }
 
-/// A push endpoint with the server's idempotency ledger: a key it has seen gets the stored
-/// result back, and its payload is ignored.
+/// A push endpoint that behaves like the real one where it matters here:
+///
+/// * the idempotency ledger: a key it has seen gets the stored result back, and its payload
+///   is ignored (`SyncPushService::replayOf`); only `applied` results are stored;
+/// * the conflict check of `ConflictDetector::detect`: an update whose `base_sync_version` is
+///   below the row's version conflicts on every field of its `changed_fields` that a write
+///   above the base touched. With a base above 0 the row's `created` entry does not count;
+///   with a base of 0, or none, it does;
+/// * `changed_fields` is the contract: only those fields of the payload are written;
+/// * a target addressed by an unknown `client_id` is `UNRESOLVED_REFERENCE`
+///   (`MutationApplier::applyUpdate`/`applyDelete`), and a delete addressed by an unknown
+///   `server_id` is a `duplicate`.
 #[derive(Clone, Default)]
 struct LedgerServer(Arc<Mutex<ServerState>>);
 
@@ -272,12 +295,47 @@ impl LedgerServer {
     }
 
     fn row(&self, client_id: Uuid) -> Option<(String, bool)> {
-        self.0.lock().unwrap().rows.get(&client_id.to_string()).cloned()
+        self.0
+            .lock()
+            .unwrap()
+            .rows
+            .get(&client_id.to_string())
+            .map(|row| (row.name.clone(), row.deleted))
     }
 
     fn applied(&self) -> Vec<Value> {
         self.0.lock().unwrap().applied.clone()
     }
+
+    fn refused(&self) -> Vec<Value> {
+        self.0.lock().unwrap().refused.clone()
+    }
+
+    /// Somebody else renames the row on the server.
+    fn foreign_rename(&self, client_id: Uuid, name: &str) {
+        let mut state = self.0.lock().unwrap();
+        state.version += 1;
+        let version = state.version;
+        let row = state.rows.get_mut(&client_id.to_string()).expect("a known row");
+        row.name = name.to_string();
+        row.version = version;
+        row.history.push((version, false, vec!["name".to_string()]));
+    }
+}
+
+/// `ConflictDetector::detect` over a [`ServerRow`]: the conflicting fields, empty to apply.
+fn conflicting_fields(row: &ServerRow, changed: &[String], base: Option<i64>) -> Vec<String> {
+    if base.is_some_and(|base| row.version <= base) {
+        return Vec::new();
+    }
+    let since = base.unwrap_or(0);
+    let touched: Vec<&String> = row
+        .history
+        .iter()
+        .filter(|(version, created, _)| *version > since && !(*created && since > 0))
+        .flat_map(|(_, _, fields)| fields.iter())
+        .collect();
+    changed.iter().filter(|f| touched.contains(f)).cloned().collect()
 }
 
 impl Respond for LedgerServer {
@@ -299,37 +357,97 @@ impl Respond for LedgerServer {
             if answer == Answer::Deferred {
                 continue;
             }
-            let client_id = m["client_id"]
-                .as_str()
-                .map(str::to_string)
-                .or_else(|| m["server_id"].as_i64().and_then(|id| state.by_server_id.get(&id).cloned()))
-                .expect("a mutation the server can place");
+            let op = m["op"].as_str().expect("op").to_string();
+            let target = match m["client_id"].as_str() {
+                Some(client_id) => Some(client_id.to_string()),
+                None => m["server_id"].as_i64().and_then(|id| state.by_server_id.get(&id).cloned()),
+            };
+            let known = target.as_ref().is_some_and(|c| state.rows.contains_key(c));
+
+            let refusal = match op.as_str() {
+                "create" => None,
+                "update" | "delete" if !known && m["client_id"].is_string() => {
+                    Some(rejected(seq, "UNRESOLVED_REFERENCE"))
+                }
+                "delete" if !known => {
+                    results.push(duplicate(seq, m["server_id"].as_i64().unwrap_or_default()));
+                    continue;
+                }
+                "update" if !known => Some(rejected(seq, "RECORD_DELETED")),
+                "update" => {
+                    let row = &state.rows[target.as_ref().unwrap()];
+                    let changed: Vec<String> = m["changed_fields"]
+                        .as_array()
+                        .map(|a| a.iter().filter_map(|f| f.as_str().map(str::to_string)).collect())
+                        .unwrap_or_default();
+                    let fields = conflicting_fields(row, &changed, m["base_sync_version"].as_i64());
+                    if fields.is_empty() {
+                        None
+                    } else {
+                        let names: Vec<&str> = fields.iter().map(String::as_str).collect();
+                        Some(conflict(
+                            seq,
+                            &names,
+                            json!({ "id": row.server_id, "name": row.name, "sync_version": row.version }),
+                            row.version,
+                        ))
+                    }
+                }
+                "delete" => None,
+                other => panic!("unexpected op {other}"),
+            };
+            if let Some(refusal) = refusal {
+                state.refused.push(refusal.clone());
+                results.push(refusal);
+                continue;
+            }
+
+            let client_id = target.expect("a mutation the server can place");
             state.version += 1;
             let version = state.version;
-            match m["op"].as_str().expect("op") {
+            match op.as_str() {
                 "create" => {
+                    if let Some(row) = state.rows.get(&client_id) {
+                        // The UNIQUE `client_id` index: a second create of the same row is the
+                        // first one replayed.
+                        results.push(json!({ "seq": seq, "status": "duplicate", "server_id": row.server_id, "sync_version": row.version }));
+                        continue;
+                    }
                     let server_id = 500 + state.by_server_id.len() as i64;
                     state.by_server_id.insert(server_id, client_id.clone());
                     let name = m["payload"]["name"].as_str().unwrap_or_default().to_string();
-                    state.rows.insert(client_id.clone(), (name, false));
+                    let fields = m["payload"]
+                        .as_object()
+                        .map(|o| o.keys().cloned().collect())
+                        .unwrap_or_default();
+                    state.rows.insert(
+                        client_id.clone(),
+                        ServerRow { server_id, name, deleted: false, version, history: vec![(version, true, fields)] },
+                    );
                 }
                 "update" => {
+                    let changed: Vec<String> = m["changed_fields"]
+                        .as_array()
+                        .map(|a| a.iter().filter_map(|f| f.as_str().map(str::to_string)).collect())
+                        .unwrap_or_default();
                     let row = state.rows.get_mut(&client_id).expect("update of a known row");
-                    if let Some(name) = m["payload"]["name"].as_str() {
-                        row.0 = name.to_string();
+                    if changed.iter().any(|f| f == "name") {
+                        if let Some(name) = m["payload"]["name"].as_str() {
+                            row.name = name.to_string();
+                        }
                     }
+                    row.version = version;
+                    row.history.push((version, false, changed));
                 }
                 "delete" => {
-                    state.rows.get_mut(&client_id).expect("delete of a known row").1 = true;
+                    let row = state.rows.get_mut(&client_id).expect("delete of a known row");
+                    row.deleted = true;
+                    row.version = version;
+                    row.history.push((version, false, vec!["deleted_at".to_string()]));
                 }
-                other => panic!("unexpected op {other}"),
+                _ => unreachable!(),
             }
-            let server_id = state
-                .by_server_id
-                .iter()
-                .find(|(_, c)| **c == client_id)
-                .map(|(id, _)| *id)
-                .expect("server id");
+            let server_id = state.rows[&client_id].server_id;
             let result = json!({ "seq": seq, "status": "applied", "server_id": server_id, "sync_version": version });
             state.results.insert(key, result.clone());
             state.applied.push(m.clone());
@@ -349,10 +467,28 @@ impl Respond for LedgerServer {
 struct Setup {
     h: Harness,
     proxy: gate::Proxy,
+    keystore: Arc<MemoryKeyStore>,
+}
+
+impl Setup {
+    /// The device token in the keychain, as the next app start would find it.
+    fn stored_token(&self) -> Option<String> {
+        let service =
+            SyncConfig::new(url::Url::parse("http://127.0.0.1/api/").unwrap(), "x").keychain_service;
+        self.keystore.get(&service, KEY_TOKEN).expect("keystore")
+    }
 }
 
 /// An engine that talks to `server` through a [`gate::Proxy`].
 async fn engine_behind_proxy(server: MockServer) -> (Harness, gate::Proxy) {
+    let (h, proxy, _) = engine_behind_proxy_with_keystore(server).await;
+    (h, proxy)
+}
+
+/// Same, also handing back the keystore the engine keeps its secrets in.
+async fn engine_behind_proxy_with_keystore(
+    server: MockServer,
+) -> (Harness, gate::Proxy, Arc<MemoryKeyStore>) {
     let proxy = gate::Proxy::start(*server.address());
     let dir = tempfile::tempdir().expect("tempdir");
     let cfg = SyncConfig::new(
@@ -366,17 +502,28 @@ async fn engine_behind_proxy(server: MockServer) -> (Harness, gate::Proxy) {
         .await
         .expect("open engine");
     let db_key = keystore.get(&service, KEY_DB).expect("keystore").expect("db key");
-    (Harness { server, engine, dir, db_key, db_path }, proxy)
+    (Harness { server, engine, dir, db_key, db_path }, proxy, keystore)
 }
 
 /// Logged in as user 1; every user's pull answers with that user's own rows. `manifest_ok`
 /// limits how many manifests are served before `403 USER_DEACTIVATED`; `None` serves them
 /// for the whole test.
 async fn setup(manifest_ok: Option<u64>) -> Setup {
+    setup_with_manifest(manifest_ok, manifest_body(&[Entity::Company], 1)).await
+}
+
+/// [`setup`] with pushes cut into batches of at most `batch_max` mutations.
+async fn setup_with_batch_max(batch_max: u32) -> Setup {
+    let mut manifest = manifest_body(&[Entity::Company], 1);
+    manifest["policy"]["push_batch_max"] = json!(batch_max);
+    setup_with_manifest(None, manifest).await
+}
+
+async fn setup_with_manifest(manifest_ok: Option<u64>, manifest_body: Value) -> Setup {
     let server = MockServer::start().await;
     let manifest = Mock::given(method("GET"))
         .and(path("/api/sync/manifest"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(manifest_body(&[Entity::Company], 1)));
+        .respond_with(ResponseTemplate::new(200).set_body_json(manifest_body));
     match manifest_ok {
         Some(n) => {
             manifest.up_to_n_times(n).mount(&server).await;
@@ -389,9 +536,9 @@ async fn setup(manifest_ok: Option<u64>) -> Setup {
         .respond_with(PerUserPull)
         .mount(&server)
         .await;
-    let (h, proxy) = engine_behind_proxy(server).await;
+    let (h, proxy, keystore) = engine_behind_proxy_with_keystore(server).await;
     h.login_as(1, "a@example.com").await;
-    Setup { h, proxy }
+    Setup { h, proxy, keystore }
 }
 
 async fn mount_verdict(h: &Harness, verdict: &'static str) {
@@ -951,7 +1098,505 @@ async fn a_deferred_mutation_keeps_its_key_and_attempts_and_takes_no_later_edit(
 
     s.h.engine.sync_now().await.expect("the resend");
     let pushes = push_requests(&s.h.server).await;
-    assert_eq!(pushes.last().unwrap()["mutations"][0]["idempotency_key"], json!(key));
-    assert_eq!(ledger.row(id), Some(("Second".to_string(), false)));
+    // Pushes: the create, the deferred round, then the resend. The follow-up edit goes in a
+    // batch of its own after the resend's verdict, which rebased it.
+    assert_eq!(pushes[2]["mutations"][0]["idempotency_key"], json!(key), "the resend changed key");
+    assert_eq!(ledger.row(id), Some(("Second".to_string(), false)), "the follow-up edit was lost");
+    assert_eq!(pushes[2]["mutations"].as_array().map(Vec::len), Some(1));
     assert!(outbox(&s.h).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 5. A logout whose revocation is overtaken
+// ---------------------------------------------------------------------------
+
+/// User A's logout is waiting for the server to revoke A's token when user B logs in and
+/// makes an edit. When the revocation comes back, the logout belongs to a session that no
+/// longer exists: B's token, mirror and outbox stay.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_logout_overtaken_by_another_login_leaves_the_new_session_alone() {
+    let s = setup(None).await;
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let login_b = async {
+        held.arrived().await;
+        s.h.login_as(2, "b@example.com").await;
+        create_company(&s.h, "B's");
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(true), login_b);
+
+    assert!(logout.is_err(), "the overtaken logout reported success: {logout:?}");
+    assert_eq!(s.h.engine.session().map(|s| s.user_id), Some(2), "B's session was dropped");
+    assert_eq!(s.h.engine.status().pending, 1, "B's unsent work was wiped");
+    assert_eq!(count(&s.h, "SELECT count(*) FROM companies WHERE name = 'B''s'"), 1);
+    assert_eq!(s.stored_token().as_deref(), Some("token-for-2"), "B's stored token was deleted");
+}
+
+/// The same with the same user signing in again: the new token is not the one being revoked.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_logout_overtaken_by_a_relogin_keeps_the_new_token() {
+    let s = setup(None).await;
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let relogin = async {
+        held.arrived().await;
+        s.h.login_as(1, "a@example.com").await;
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(false), relogin);
+
+    assert!(logout.is_err(), "the overtaken logout reported success: {logout:?}");
+    assert!(s.h.engine.session().is_some(), "the new session was dropped");
+    assert_eq!(s.stored_token().as_deref(), Some("token-for-1"), "the new stored token was deleted");
+}
+
+/// An edit made while the revocation is on the wire is refused rather than wiped.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_edit_made_during_a_logout_is_kept() {
+    let s = setup(None).await;
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let edit = async {
+        held.arrived().await;
+        create_company(&s.h, "Late");
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(false), edit);
+
+    assert_eq!(logout.expect("logout"), LogoutOutcome::PendingMutations(1));
+    assert_eq!(s.h.engine.status().pending, 1, "the late edit was wiped");
+    assert!(s.h.engine.session().is_some());
+}
+
+/// `force` covers the edits that existed when the user agreed to lose them, not one made
+/// after that.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_forced_logout_does_not_wipe_an_edit_made_after_it_started() {
+    let s = setup(None).await;
+    create_company(&s.h, "Early");
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let edit = async {
+        held.arrived().await;
+        create_company(&s.h, "Late");
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(true), edit);
+
+    assert_eq!(logout.expect("logout"), LogoutOutcome::PendingMutations(2));
+    assert_eq!(count(&s.h, "SELECT count(*) FROM companies"), 2, "an edit was wiped");
+}
+
+/// The same with the late edit folded into a row that already existed (no new `seq`).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_forced_logout_does_not_wipe_an_edit_folded_after_it_started() {
+    let s = setup(None).await;
+    let id = create_company(&s.h, "Early");
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let edit = async {
+        held.arrived().await;
+        rename(&s.h, id, "Late");
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(true), edit);
+
+    assert_eq!(logout.expect("logout"), LogoutOutcome::PendingMutations(1));
+    assert_eq!(count(&s.h, "SELECT count(*) FROM companies WHERE name = 'Late'"), 1);
+}
+
+/// Nothing happened during the revocation: a forced logout still wipes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_forced_logout_with_no_late_edit_still_wipes() {
+    let s = setup(None).await;
+    create_company(&s.h, "Early");
+    assert_eq!(s.h.engine.logout(true).await.expect("logout"), LogoutOutcome::Wiped);
+    assert_eq!(count(&s.h, "SELECT count(*) FROM outbox"), 0);
+    assert!(s.h.engine.session().is_none());
+    assert_eq!(s.stored_token(), None);
+}
+
+/// From here on, every request made with `user`'s token answers 401.
+async fn reject_token_of(h: &Harness, user: i64) {
+    Mock::given(header("authorization", format!("Bearer token-for-{user}").as_str()))
+        .respond_with(ResponseTemplate::new(401).set_body_json(json!({ "message": "Unauthenticated." })))
+        .with_priority(1)
+        .mount(&h.server)
+        .await;
+}
+
+/// A's revocation is on the wire; B logs in, pulls B's rows, and a 401 then drops B's token
+/// (the data stays for B, §5.5). When A's revocation comes back, no token exists, but the
+/// mirror is B's: the logout must not wipe it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_logout_overtaken_by_a_login_that_then_lost_its_token_leaves_the_new_data_alone() {
+    let s = setup(None).await;
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let login_b = async {
+        held.arrived().await;
+        s.h.login_as(2, "b@example.com").await;
+        s.h.engine.sync_now().await.expect("B's round");
+        assert_eq!(rows_of(&s.h, 2), 3, "B's rows did not come down");
+        reject_token_of(&s.h, 2).await;
+        assert!(s.h.engine.sync_now().await.is_err(), "B's 401 was not reported");
+        assert!(s.h.engine.session().is_none(), "the 401 did not drop B's session");
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(true), login_b);
+
+    assert!(logout.is_err(), "the overtaken logout reported success: {logout:?}");
+    assert_eq!(rows_of(&s.h, 2), 3, "B's mirror was wiped by A's logout");
+    assert_eq!(companies_cursor(&s.h), 203, "B's cursor was wiped by A's logout");
+}
+
+/// Control: a 401 for the departing session itself, with no login in between, is still that
+/// session, and the logout wipes it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_logout_whose_own_token_answers_401_meanwhile_still_wipes() {
+    let s = setup(None).await;
+    s.h.engine.sync_now().await.expect("A's round");
+    assert_eq!(rows_of(&s.h, 1), 3);
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let lost = async {
+        held.arrived().await;
+        reject_token_of(&s.h, 1).await;
+        // The revocation itself is held at the proxy, so this 401 comes from a sync request.
+        assert!(s.h.engine.sync_now().await.is_err(), "A's 401 was not reported");
+        assert!(s.h.engine.session().is_none(), "the 401 did not drop A's session");
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(true), lost);
+
+    assert!(
+        matches!(logout, Ok(LogoutOutcome::Wiped | LogoutOutcome::WipedLocalOnly(_))),
+        "the logout did not wipe: {logout:?}"
+    );
+    assert_eq!(rows_of(&s.h, 1), 0, "A's mirror outlived A's logout");
+    assert_eq!(s.stored_token(), None);
+}
+
+/// A row stamped ahead of a clock that has since gone back (or in the same millisecond) does
+/// not hide a later edit folded into it: the fold is newer by revision, not by wall clock.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_forced_logout_does_not_wipe_a_fold_whose_clock_went_back() {
+    let s = setup(None).await;
+    let id = create_company(&s.h, "Early");
+    s.h.raw_conn()
+        .execute("UPDATE outbox SET occurred_at = '2999-01-01T00:00:00.000Z'", [])
+        .expect("stamp ahead");
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let edit = async {
+        held.arrived().await;
+        rename(&s.h, id, "Late");
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(true), edit);
+
+    assert_eq!(logout.expect("logout"), LogoutOutcome::PendingMutations(1));
+    assert_eq!(count(&s.h, "SELECT count(*) FROM companies WHERE name = 'Late'"), 1);
+}
+
+/// The newest row settles while the revocation is on the wire, and a new edit then takes its
+/// `seq` again. It is still newer than the logout's mark.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_forced_logout_does_not_wipe_an_edit_that_reused_a_settled_seq() {
+    let s = setup(None).await;
+    let _ledger = mount_ledger(&s.h).await;
+    create_company(&s.h, "Early");
+    s.h.raw_conn()
+        .execute("UPDATE outbox SET occurred_at = '2999-01-01T00:00:00.000Z'", [])
+        .expect("stamp ahead");
+    let held = s.proxy.hold("/api/me/devices/10");
+
+    let edit = async {
+        held.arrived().await;
+        s.h.engine.sync_now().await.expect("the early edit settles");
+        assert!(outbox(&s.h).is_empty());
+        create_company(&s.h, "Late");
+        assert_eq!(count(&s.h, "SELECT seq FROM outbox"), 1, "the new row did not reuse the seq");
+        held.release();
+    };
+    let (logout, ()) = tokio::join!(s.h.engine.logout(true), edit);
+
+    assert_eq!(logout.expect("logout"), LogoutOutcome::PendingMutations(1));
+    assert_eq!(count(&s.h, "SELECT count(*) FROM companies WHERE name = 'Late'"), 1);
+}
+
+// ---------------------------------------------------------------------------
+// 6. A manifest from before a wipe
+// ---------------------------------------------------------------------------
+
+/// User 1 is granted companies only, everybody else companies and contacts.
+struct PerUserGrants;
+
+impl Respond for PerUserGrants {
+    fn respond(&self, req: &Request) -> ResponseTemplate {
+        let granted: &[Entity] = if user_of(req) == 1 {
+            &[Entity::Company]
+        } else {
+            &[Entity::Company, Entity::Contact]
+        };
+        ResponseTemplate::new(200).set_body_json(manifest_body(granted, 1))
+    }
+}
+
+async fn setup_per_user_grants() -> Setup {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/sync/manifest"))
+        .respond_with(PerUserGrants)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST")).and(path("/api/sync/pull")).respond_with(PerUserPull).mount(&server).await;
+    let (h, proxy, keystore) = engine_behind_proxy_with_keystore(server).await;
+    h.login_as(1, "a@example.com").await;
+    Setup { h, proxy, keystore }
+}
+
+/// `(user, body)` of every pull the server received.
+async fn pulls_by_user(server: &MockServer) -> Vec<(i64, Value)> {
+    server
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| r.url.path() == "/api/sync/pull")
+        .map(|r| (user_of(&r), serde_json::from_slice(&r.body).expect("pull body")))
+        .collect()
+}
+
+/// Hold user A's realtime pull (so the pull lock is taken), run `call` until its manifest has
+/// come back and it waits for that lock, then log user B in and let the pull go.
+async fn overtake_after_manifest<F: std::future::Future>(s: &Setup, call: F) -> F::Output {
+    s.h.engine.restore_session().await.expect("warm the manifest cache");
+    let before = manifest_request_count(&s.h.server).await;
+    let held = s.proxy.hold("/api/sync/pull");
+    let done = AtomicBool::new(false);
+
+    let race = async {
+        held.arrived().await;
+        for _ in 0..2000 {
+            if manifest_request_count(&s.h.server).await > before {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert!(manifest_request_count(&s.h.server).await > before, "the call fetched no manifest");
+        // The answer is applied and the call is queued on the pull lock well inside this.
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        s.h.login_as(2, "b@example.com").await;
+        assert!(!done.load(Ordering::SeqCst), "the call finished before B logged in");
+        held.release();
+    };
+    let call = async {
+        // Polled after the realtime pull below has taken the lock.
+        held.arrived().await;
+        tracked(&done, call).await
+    };
+    let ((), out, ()) = tokio::join!(s.h.engine.handle_realtime(realtime_companies()), call, race);
+    out
+}
+
+fn assert_no_pull_of_b_used_a_manifest(pulls: &[(i64, Value)]) {
+    for (user, body) in pulls {
+        if *user == 2 {
+            assert!(
+                body["cursors"].get("contacts").is_some(),
+                "a pull with B's token was driven by A's manifest: {body}"
+            );
+        }
+    }
+}
+
+/// An archive download for user A whose manifest arrived before user B logged in: it neither
+/// resets B's cursors nor pulls with B's token from A's table list.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_archive_download_does_not_run_on_a_manifest_from_before_a_login() {
+    let s = setup_per_user_grants().await;
+    let archive = overtake_after_manifest(&s, s.h.engine.download_archive(30)).await;
+
+    archive.expect("an overtaken archive download is not an error");
+    let pulls = pulls_by_user(&s.h.server).await;
+    assert_no_pull_of_b_used_a_manifest(&pulls);
+    assert!(pulls.iter().all(|(user, _)| *user == 1), "B pulled for an archive B never asked for");
+}
+
+/// A bootstrap for user A in the same position starts again with B's own manifest.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bootstrap_does_not_run_on_a_manifest_from_before_a_login() {
+    let s = setup_per_user_grants().await;
+    let boot = overtake_after_manifest(&s, s.h.engine.bootstrap(|_| {})).await;
+
+    boot.expect("an overtaken bootstrap is not an error");
+    let pulls = pulls_by_user(&s.h.server).await;
+    assert_no_pull_of_b_used_a_manifest(&pulls);
+    assert!(pulls.iter().any(|(user, _)| *user == 2), "the bootstrap did not start again for B");
+}
+
+// ---------------------------------------------------------------------------
+// 7. Push batches read right before they are sent
+// ---------------------------------------------------------------------------
+
+/// The first batch is on the wire when a create in the second one is edited. The second batch
+/// carries the edit.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_edit_to_a_later_batch_during_a_round_is_sent() {
+    let s = setup_with_batch_max(1).await;
+    let ledger = mount_ledger(&s.h).await;
+    create_company(&s.h, "X");
+    let y = create_company(&s.h, "Y");
+    let held = s.proxy.hold("/api/sync/push");
+
+    let edit = async {
+        held.arrived().await;
+        rename(&s.h, y, "Y2");
+        held.release();
+    };
+    let (round, ()) = tokio::join!(s.h.engine.sync_now(), edit);
+
+    round.expect("round");
+    assert_eq!(ledger.row(y), Some(("Y2".to_string(), false)), "the edit never reached the server");
+    assert!(outbox(&s.h).is_empty());
+}
+
+/// A create in a later batch is cancelled by a delete while the first batch is on the wire.
+/// It is not sent.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_create_cancelled_during_a_round_is_not_sent() {
+    let s = setup_with_batch_max(1).await;
+    let ledger = mount_ledger(&s.h).await;
+    create_company(&s.h, "X");
+    let y = create_company(&s.h, "Y");
+    let held = s.proxy.hold("/api/sync/push");
+
+    let edit = async {
+        held.arrived().await;
+        delete(&s.h, y);
+        held.release();
+    };
+    let (round, ()) = tokio::join!(s.h.engine.sync_now(), edit);
+
+    round.expect("round");
+    assert_eq!(ledger.row(y), None, "a create the user cancelled reached the server");
+    assert!(outbox(&s.h).is_empty());
+}
+
+/// The same with two updates folded together in a later batch.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_update_folded_into_a_later_batch_during_a_round_is_sent() {
+    let s = setup_with_batch_max(1).await;
+    let ledger = mount_ledger(&s.h).await;
+    let x = create_company(&s.h, "X");
+    let y = create_company(&s.h, "Y");
+    s.h.engine.sync_now().await.expect("creates");
+    rename(&s.h, x, "X1");
+    rename(&s.h, y, "Y1");
+    let held = s.proxy.hold("/api/sync/push");
+
+    let edit = async {
+        held.arrived().await;
+        rename(&s.h, y, "Y2");
+        held.release();
+    };
+    let (round, ()) = tokio::join!(s.h.engine.sync_now(), edit);
+
+    round.expect("round");
+    assert_eq!(ledger.row(y), Some(("Y2".to_string(), false)), "the folded edit was lost");
+    assert!(outbox(&s.h).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 8. Nothing goes out ahead of a create the server has not settled
+// ---------------------------------------------------------------------------
+
+/// A create went out once and was deferred; the user deletes the row. Next round the create is
+/// deferred again, and the delete in the next batch must wait for it instead of being answered
+/// `UNRESOLVED_REFERENCE` and parked, which would leave the row on the server for good.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_delete_waits_for_a_deferred_create() {
+    let s = setup_with_batch_max(1).await;
+    let ledger = mount_ledger(&s.h).await;
+    let x = create_company(&s.h, "X");
+    ledger.answer_next(Answer::Deferred);
+    s.h.engine.sync_now().await.expect("first round");
+    delete(&s.h, x);
+
+    ledger.answer_next(Answer::Deferred);
+    s.h.engine.sync_now().await.expect("second round");
+    assert!(ledger.refused().is_empty(), "the delete went out ahead of its create: {:?}", ledger.refused());
+    assert_eq!(s.h.engine.status().conflicts, 0);
+
+    s.h.engine.sync_now().await.expect("third round");
+    assert_eq!(ledger.row(x).map(|r| r.1), Some(true), "the server's row outlived the delete");
+    assert!(outbox(&s.h).is_empty());
+}
+
+/// The same with an update behind the deferred create.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_update_waits_for_a_deferred_create() {
+    let s = setup_with_batch_max(1).await;
+    let ledger = mount_ledger(&s.h).await;
+    let x = create_company(&s.h, "X");
+    ledger.answer_next(Answer::Deferred);
+    s.h.engine.sync_now().await.expect("first round");
+    rename(&s.h, x, "X2");
+
+    ledger.answer_next(Answer::Deferred);
+    s.h.engine.sync_now().await.expect("second round");
+    assert!(ledger.refused().is_empty(), "the update went out ahead of its create: {:?}", ledger.refused());
+
+    s.h.engine.sync_now().await.expect("third round");
+    assert_eq!(ledger.row(x), Some(("X2".to_string(), false)));
+    assert!(ledger.refused().is_empty(), "the update conflicted with its own create: {:?}", ledger.refused());
+    assert!(outbox(&s.h).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 9. A follow-up edit of a mutation whose answer was lost
+// ---------------------------------------------------------------------------
+
+/// An update is applied and its answer lost; the next edit of the same field is queued on its
+/// own, on the old base. When both go out, the server must not count the first as somebody
+/// else's write.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_edit_after_an_update_whose_answer_was_lost_does_not_conflict_with_it() {
+    let s = setup(None).await;
+    let ledger = mount_ledger(&s.h).await;
+    let id = create_company(&s.h, "Mine");
+    s.h.engine.sync_now().await.expect("create");
+    rename(&s.h, id, "First");
+    ledger.answer_next(Answer::LostAfterApply);
+    assert!(s.h.engine.sync_now().await.is_err());
+    rename(&s.h, id, "Second");
+
+    s.h.engine.set_online(true);
+    s.h.engine.sync_now().await.expect("the resend");
+
+    assert!(ledger.refused().is_empty(), "the device conflicted with itself: {:?}", ledger.refused());
+    assert_eq!(ledger.row(id), Some(("Second".to_string(), false)));
+    assert_eq!(s.h.engine.status().conflicts, 0);
+    assert!(outbox(&s.h).is_empty());
+}
+
+/// The rebase stops at what the device wrote: somebody else's write in between is still a
+/// conflict.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_foreign_write_after_a_lost_create_is_still_a_conflict() {
+    let s = setup(None).await;
+    let ledger = mount_ledger(&s.h).await;
+    ledger.answer_next(Answer::LostAfterApply);
+    let id = create_company(&s.h, "Mine");
+    assert!(s.h.engine.sync_now().await.is_err());
+    ledger.foreign_rename(id, "Theirs");
+    rename(&s.h, id, "Renamed");
+
+    s.h.engine.set_online(true);
+    s.h.engine.sync_now().await.expect("the resend");
+
+    assert_eq!(ledger.row(id), Some(("Theirs".to_string(), false)), "somebody else's write was overwritten");
+    assert_eq!(s.h.engine.status().conflicts, 1);
 }
