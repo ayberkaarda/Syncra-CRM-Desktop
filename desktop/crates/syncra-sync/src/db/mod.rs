@@ -21,9 +21,12 @@ const MIGRATION_0003: &str = include_str!("../../migrations/0003_normalize_times
 /// Adds the four flattened attachment-metadata columns to `messages` (KARAR A29, defter
 /// O90) — see the file for the full contract.
 const MIGRATION_0004: &str = include_str!("../../migrations/0004_message_attachment_fields.sql");
+/// Adds `outbox.sent`, which keeps a mutation that may already be on the server from
+/// absorbing later edits under its old idempotency key — see the file for the full contract.
+const MIGRATION_0005: &str = include_str!("../../migrations/0005_outbox_sent.sql");
 
 /// Schema version written to `PRAGMA user_version` once every migration has run.
-const SCHEMA_VERSION: i32 = 4;
+const SCHEMA_VERSION: i32 = 5;
 
 /// Every migration, in order, paired with the `user_version` it brings the database to.
 ///
@@ -40,6 +43,7 @@ const MIGRATIONS: &[(i32, &str)] = &[
     (2, MIGRATION_0002),
     (3, MIGRATION_0003),
     (4, MIGRATION_0004),
+    (5, MIGRATION_0005),
 ];
 
 /// Open (or create) the encrypted database and bring it to the current schema version.

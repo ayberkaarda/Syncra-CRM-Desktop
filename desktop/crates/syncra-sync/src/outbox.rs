@@ -129,7 +129,13 @@ fn next_seq(tx: &Transaction<'_>) -> Result<i64> {
     Ok(seq)
 }
 
-/// The newest queued row for `(entity, client_id)`, if any.
+/// The newest queued row for `(entity, client_id)` that has never been sent, if any.
+///
+/// A row that went out once and came back to `queued` (a 5xx, a timeout, a crash in flight)
+/// may already be applied on the server, which answers its key with the stored result from
+/// then on. Folding a later edit into it would send the edit under that key and lose it, and
+/// cancelling it against a delete would leave the server's row alive. Such a row is resent
+/// as it is, and what comes after it is queued on its own.
 fn latest_queued(
     tx: &Transaction<'_>,
     entity: Entity,
@@ -137,13 +143,16 @@ fn latest_queued(
 ) -> Result<Option<OutboxRow>> {
     let mut stmt = tx.prepare(
         "SELECT id, seq, idempotency_key, entity, op, action, scope, client_id, server_id,
-                base_sync_version, changed_fields, payload, occurred_at, attempts, state
+                base_sync_version, changed_fields, payload, occurred_at, attempts, state, sent
            FROM outbox
           WHERE entity = ?1 AND client_id = ?2 AND state = 'queued'
           ORDER BY seq DESC LIMIT 1",
     )?;
     let mut rows = stmt.query(rusqlite::params![entity.wire_name(), client_id])?;
     match rows.next()? {
+        // The newest row decides, sent or not: folding into an older unsent row behind a
+        // newer sent one would put the newest values ahead of older ones in push order.
+        Some(row) if row.get::<_, i64>(15)? != 0 => Ok(None),
         Some(row) => Ok(Some(row_from_sql(row)?)),
         None => Ok(None),
     }
@@ -211,6 +220,9 @@ impl EnqueueOutcome {
 ///   payload wins);
 /// * an `update` after a `create` folds into the create;
 /// * a `delete` after a `create` removes both — the row never existed for the server.
+///
+/// None of these apply once the queued row has been sent: the server may already hold it, so
+/// the new mutation is queued on its own (see `latest_queued`).
 ///
 /// `base_sync_version` is captured from the mirror row at enqueue time and preserved
 /// through coalescing, because it describes the server state the *first* edit was based on.
@@ -381,8 +393,10 @@ pub fn batches(rows: Vec<OutboxRow>, max_count: u32, max_bytes: u64) -> Vec<Vec<
 /// Mark rows as in flight.
 pub fn mark_inflight(tx: &Transaction<'_>, ids: &[Uuid]) -> Result<()> {
     for id in ids {
+        // `sent` is never cleared: from here on the server may hold a result under this key,
+        // whatever happens to the response (migration 0005).
         tx.execute(
-            "UPDATE outbox SET state = 'inflight' WHERE id = ?1",
+            "UPDATE outbox SET state = 'inflight', sent = 1 WHERE id = ?1",
             [id.to_string()],
         )?;
     }
