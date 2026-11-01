@@ -330,13 +330,18 @@ fn canonical(path: &Path) -> PathBuf {
     }
 }
 
-/// The target root must not exist, be empty, or contain only files this shell put there.
+/// The target root must not exist, or must be an empty directory.
 ///
-/// The third case is what makes a retry after a half-finished move possible: a copy that died
-/// partway leaves our own file names behind, and refusing to ever touch a non-empty directory
-/// would strand the user with no way forward from inside the app.
+/// It used to accept a directory holding only file names this shell uses, so that a retry
+/// after a half-finished move could reuse it (security review O11). Those names are exactly
+/// what a complete data directory left by another install, an earlier move or a restored backup
+/// holds — possibly with an outbox of changes that were never sent — and the move then copied
+/// over it on success and deleted it whole on failure. A name says nothing about whose data is
+/// behind it, so anything non-empty is refused now; a failed move removes only what it created
+/// itself ([`claim_destination`], [`release_destination`]), which is what keeps a retry possible
+/// without this exception.
 fn target_is_usable(target: &Path) -> Result<(), Rejection> {
-    let entries = match std::fs::read_dir(target) {
+    let mut entries = match std::fs::read_dir(target) {
         Ok(entries) => entries,
         // Not there yet: the copy step creates it.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -348,19 +353,168 @@ fn target_is_usable(target: &Path) -> Result<(), Rejection> {
         }
     };
 
-    for entry in entries {
+    if let Some(entry) = entries.next() {
         let entry =
             entry.map_err(|error| Rejection::Invalid(format!("cannot read an entry: {error}")))?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if !OWNED_ENTRIES.iter().any(|owned| *owned == name) {
-            return Err(Rejection::Invalid(format!(
-                "{} already contains {name}, which this application did not create",
-                target.display()
-            )));
-        }
+        let whose = if OWNED_ENTRIES.iter().any(|owned| *owned == name) {
+            "which may be another data directory's"
+        } else {
+            "which this application did not create"
+        };
+        return Err(Rejection::Invalid(format!(
+            "{} already contains {name}, {whose}; choose an empty folder",
+            target.display()
+        )));
     }
     Ok(())
+}
+
+/// A destination the move has taken for itself, and what it may remove again on failure.
+#[derive(Debug)]
+pub struct ClaimedDestination {
+    root: PathBuf,
+    /// `true` when the move created `root`; `false` when it was an existing, empty directory.
+    created: bool,
+    /// Every path below `root` this move created, in creation order (a directory before what
+    /// is in it). Rollback removes exactly these and nothing else: a file another process put
+    /// at the destination meanwhile — even under one of our own names — is not on it.
+    ledger: CopyLedger,
+}
+
+/// The files and directories a copy created, recorded the moment each one is created.
+#[derive(Debug, Default)]
+struct CopyLedger {
+    entries: Vec<(PathBuf, bool)>,
+}
+
+impl CopyLedger {
+    fn created_file(&mut self, path: &Path) {
+        self.entries.push((path.to_path_buf(), false));
+    }
+
+    fn created_dir(&mut self, path: &Path) {
+        self.entries.push((path.to_path_buf(), true));
+    }
+
+    fn holds_file(&self, path: &Path) -> bool {
+        self.entries.iter().any(|(entry, is_dir)| !is_dir && entry == path)
+    }
+}
+
+impl ClaimedDestination {
+    /// The claimed root.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Copy `src` into the claimed root ([`copy_dir_all`]'s rules), recording everything it
+    /// creates so [`release_destination`] can remove precisely that.
+    pub fn copy_from(&mut self, src: &Path) -> std::io::Result<()> {
+        copy_tree(src, &self.root, &mut self.ledger)
+    }
+}
+
+/// Take `root` as the destination of a move: create it, or accept it if it is an existing
+/// directory with nothing in it. Anything else is refused with nothing changed.
+///
+/// [`validate_target`] already checked this, but some time passes between that check and the
+/// copy (the engine is shut down in between), so it is checked again at the moment it matters.
+pub fn claim_destination(root: &Path) -> std::io::Result<ClaimedDestination> {
+    if let Some(parent) = root.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    match std::fs::create_dir(root) {
+        Ok(()) => Ok(ClaimedDestination {
+            root: root.to_path_buf(),
+            created: true,
+            ledger: CopyLedger::default(),
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            if root.is_dir() && std::fs::read_dir(root)?.next().is_none() {
+                Ok(ClaimedDestination {
+                    root: root.to_path_buf(),
+                    created: false,
+                    ledger: CopyLedger::default(),
+                })
+            } else {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    format!("{} exists and is not an empty directory", root.display()),
+                ))
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Undo a failed copy into `claim`, removing only what the move put there.
+///
+/// Only the paths [`ClaimedDestination::copy_from`] recorded as created are removed, newest
+/// first. Names are not evidence: when another process writes `syncra.db` into the destination
+/// after the claim, `create_new` refuses to copy over it, and a rollback by source names would
+/// then delete that foreign database. Directories are removed only once empty, so anything
+/// foreign added inside one (`cache/`, the root) stays, and with it the directory. The root
+/// itself goes only if the move created it and nothing else is left in it.
+///
+/// SQLite may leave `-wal`/`-shm`/`-journal` siblings behind after verification opened the
+/// copied database; they are removed too, but only when the database file next to them is one
+/// this move created.
+pub fn release_destination(claim: &ClaimedDestination) -> std::io::Result<()> {
+    let mut first_error = None;
+    let mut note = |result: std::io::Result<()>| {
+        if let Err(error) = result {
+            first_error.get_or_insert(error);
+        }
+    };
+
+    let db = claim.root.join(DB_FILE);
+    if claim.ledger.holds_file(&db) {
+        for sibling in ["syncra.db-wal", "syncra.db-shm", "syncra.db-journal"] {
+            let sibling = claim.root.join(sibling);
+            if !claim.ledger.holds_file(&sibling) {
+                note(remove_file_if_present(&sibling));
+            }
+        }
+    }
+    for (path, is_dir) in claim.ledger.entries.iter().rev() {
+        note(if *is_dir {
+            remove_dir_if_empty(path)
+        } else {
+            remove_file_if_present(path)
+        });
+    }
+    if claim.created {
+        note(remove_dir_if_empty(&claim.root));
+    }
+    match first_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+fn remove_file_if_present(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    }
+}
+
+/// Remove a directory only if nothing is left in it; one still holding something is kept,
+/// and that is not an error — what is in it is not ours to delete.
+fn remove_dir_if_empty(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_dir(path) {
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+            ) =>
+        {
+            Ok(())
+        }
+        other => other,
+    }
 }
 
 /// Prove the volume accepts a write from this process, rather than assuming it from the
@@ -490,19 +644,85 @@ pub fn reject_unsupported_volume(_path: &Path) -> Result<(), Rejection> {
 /// The data root is ours end to end, so "copy all of it" is both the safe answer and the one
 /// that cannot drift. `verify_copy` below then asserts that the two files that MUST be there
 /// are there, so an empty-source bug still fails loudly rather than succeeding vacuously.
+///
+/// # Never over an existing file
+///
+/// Every file is created with `create_new`, so a file already present at the destination makes
+/// the copy fail instead of being overwritten (O11). The destination is claimed empty first
+/// ([`claim_destination`]); this is the second line, for anything that appears in between.
+///
+/// A move copies through [`ClaimedDestination::copy_from`] instead, which records what it
+/// creates for the rollback; this ledger-free form is kept for the tests that copy a tree
+/// without a claim.
+#[cfg(test)]
 pub fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;
+    copy_tree(src, dst, &mut CopyLedger::default())
+}
+
+/// The copy itself, into an existing `dst`, recording each file and directory it creates.
+fn copy_tree(src: &Path, dst: &Path, ledger: &mut CopyLedger) -> std::io::Result<()> {
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let from = entry.path();
         let to = dst.join(entry.file_name());
         if entry.file_type()?.is_dir() {
-            copy_dir_all(&from, &to)?;
+            match std::fs::create_dir(&to) {
+                Ok(()) => ledger.created_dir(&to),
+                // An existing directory is entered, never claimed: what is in it stays out of
+                // the ledger, and every file copied into it is still `create_new`.
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && to.is_dir() => {}
+                Err(error) => return Err(error),
+            }
+            copy_tree(&from, &to, ledger)?;
         } else {
-            std::fs::copy(&from, &to)?;
+            copy_file_new(&from, &to, ledger)?;
         }
     }
     Ok(())
+}
+
+/// Copy one file to a path that must not exist yet.
+fn copy_file_new(from: &Path, to: &Path, ledger: &mut CopyLedger) -> std::io::Result<()> {
+    let mut reader = std::fs::File::open(from)?;
+    let mut writer = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(to)?;
+    // Recorded as soon as it exists: a copy that fails halfway still leaves a file that is ours.
+    ledger.created_file(to);
+    std::io::copy(&mut reader, &mut writer)?;
+    writer.sync_all()
+}
+
+/// `syncra.db` and its WAL/SHM/journal siblings at the top of a data root.
+fn is_database_file(relative: &Path) -> bool {
+    matches!(
+        relative.to_str(),
+        Some(DB_FILE | "syncra.db-wal" | "syncra.db-shm" | "syncra.db-journal")
+    )
+}
+
+/// Relative path -> size, for every file below `root` except the database files.
+fn file_tree(root: &Path) -> std::io::Result<BTreeMap<PathBuf, u64>> {
+    fn walk(base: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, u64>) -> std::io::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type()?.is_dir() {
+                walk(base, &path, out)?;
+            } else {
+                let relative = path.strip_prefix(base).unwrap_or(&path).to_path_buf();
+                if !is_database_file(&relative) {
+                    out.insert(relative, entry.metadata()?.len());
+                }
+            }
+        }
+        Ok(())
+    }
+    let mut out = BTreeMap::new();
+    walk(root, root, &mut out)?;
+    Ok(out)
 }
 
 /// Table name -> row count, for every user table in one database.
@@ -574,6 +794,31 @@ pub fn verify_copy(src: &Path, dst: &Path, key: &str) -> Result<(), String> {
     }
     if src.join(CACHE_SUBDIR).is_dir() && !dst.join(CACHE_SUBDIR).is_dir() {
         return Err(format!("{} was not copied", dst.join(CACHE_SUBDIR).display()));
+    }
+
+    // Every other file, by relative path and size. The census below proves the database (its
+    // files are left out here: opening a database can checkpoint its log and change their
+    // sizes without changing a row); this proves the rest — the cache, `recent.json`, staged
+    // attachments — which the old directory's deletion would otherwise take with it unchecked.
+    let source_tree = file_tree(src).map_err(|error| format!("cannot list the source: {error}"))?;
+    let target_tree = file_tree(dst).map_err(|error| format!("cannot list the copy: {error}"))?;
+    if source_tree != target_tree {
+        let mut differences = Vec::new();
+        for (path, size) in &source_tree {
+            match target_tree.get(path) {
+                Some(copied) if copied == size => {}
+                Some(copied) => {
+                    differences.push(format!("{}: {size} -> {copied} bytes", path.display()))
+                }
+                None => differences.push(format!("{}: missing", path.display())),
+            }
+        }
+        for path in target_tree.keys() {
+            if !source_tree.contains_key(path) {
+                differences.push(format!("{}: absent in the source", path.display()));
+            }
+        }
+        return Err(format!("files differ ({})", differences.join(", ")));
     }
 
     let source_census = table_census(&src.join(DB_FILE), key)?;
@@ -818,9 +1063,14 @@ mod tests {
         assert!(rejection.message().contains("taxes.xlsx"));
     }
 
-    /// A half-finished previous attempt (our own file names) is retryable, not a dead end.
+    /// O11 (inverted): this test used to assert that a target holding only our own file names
+    /// is ACCEPTED, so that a half-finished attempt could be retried. That acceptance was the
+    /// defect: the same names are what another install's complete data directory holds, outbox
+    /// included, and the move then overwrote it on success and deleted it on failure. A target
+    /// with anything in it is refused now; a failed move cleans up only what it created, so a
+    /// retry does not need the exception.
     #[test]
-    fn a_target_holding_only_our_own_files_is_accepted() {
+    fn a_target_holding_our_own_file_names_is_refused() {
         let temp = TempDir::new();
         let current = temp.path().join("current").join(DEFAULT_SUBDIR);
         std::fs::create_dir_all(&current).expect("current");
@@ -829,8 +1079,165 @@ mod tests {
         std::fs::create_dir_all(target.join(CACHE_SUBDIR)).expect("target");
         std::fs::write(target.join(DB_FILE), b"partial").expect("partial db");
 
+        let rejection = validate_target(&current, &picked).expect_err("must be refused");
+        assert_eq!(rejection.code(), "DATA_DIR_INVALID");
+        assert!(target.join(DB_FILE).is_file(), "nothing may be touched");
+    }
+
+    /// An existing but empty target root is still a legal destination.
+    #[test]
+    fn an_empty_existing_target_is_accepted() {
+        let temp = TempDir::new();
+        let current = temp.path().join("current").join(DEFAULT_SUBDIR);
+        std::fs::create_dir_all(&current).expect("current");
+        let picked = temp.path().join("picked");
+        std::fs::create_dir_all(picked.join(DEFAULT_SUBDIR)).expect("empty target");
+
         let resolved = validate_target(&current, &picked).expect("must be accepted");
-        assert_eq!(resolved, target);
+        assert_eq!(resolved, picked.join(DEFAULT_SUBDIR));
+    }
+
+    /// A destination that is not empty cannot be claimed, even if it appeared after
+    /// validation; an empty one can, and a missing one is created.
+    #[test]
+    fn claiming_refuses_a_non_empty_destination() {
+        let temp = TempDir::new();
+        let full = temp.path().join("full");
+        std::fs::create_dir_all(&full).expect("full");
+        std::fs::write(full.join(DB_FILE), b"someone's data").expect("db");
+        assert!(claim_destination(&full).is_err());
+        assert_eq!(std::fs::read(full.join(DB_FILE)).expect("db"), b"someone's data");
+
+        let empty = temp.path().join("empty");
+        std::fs::create_dir_all(&empty).expect("empty");
+        assert!(!claim_destination(&empty).expect("empty is claimable").created);
+
+        let missing = temp.path().join("deep").join("missing");
+        let claim = claim_destination(&missing).expect("missing is created");
+        assert!(claim.created && missing.is_dir());
+    }
+
+    /// The copy never writes over a file that is already at the destination.
+    #[test]
+    fn copying_never_overwrites_an_existing_file() {
+        let temp = TempDir::new();
+        let src = temp.path().join("src");
+        std::fs::create_dir_all(&src).expect("src");
+        std::fs::write(src.join(DB_FILE), b"new").expect("src db");
+        let dst = temp.path().join("dst");
+        std::fs::create_dir_all(&dst).expect("dst");
+        std::fs::write(dst.join(DB_FILE), b"old").expect("dst db");
+
+        assert!(copy_dir_all(&src, &dst).is_err());
+        assert_eq!(std::fs::read(dst.join(DB_FILE)).expect("dst db"), b"old");
+    }
+
+    /// Releasing a destination that existed before the move removes only what the move put
+    /// there; a destination the move created goes entirely.
+    #[test]
+    fn releasing_removes_only_what_the_move_created() {
+        let temp = TempDir::new();
+        let src = temp.path().join("src");
+        std::fs::create_dir_all(src.join(CACHE_SUBDIR)).expect("src");
+        std::fs::write(src.join(DB_FILE), b"db").expect("db");
+        std::fs::write(src.join(CACHE_SUBDIR).join("a.pdf"), b"pdf").expect("pdf");
+
+        let existing = temp.path().join("existing");
+        std::fs::create_dir_all(&existing).expect("existing");
+        let mut claim = claim_destination(&existing).expect("claim");
+        claim.copy_from(&src).expect("copy");
+        // Something that appeared there that the move did not write.
+        std::fs::write(existing.join("notes.txt"), b"keep").expect("other");
+        release_destination(&claim).expect("release");
+        assert!(existing.is_dir(), "a root that existed before stays");
+        assert!(existing.join("notes.txt").is_file(), "what the move did not write stays");
+        assert!(!existing.join(DB_FILE).exists() && !existing.join(CACHE_SUBDIR).exists());
+
+        let created = temp.path().join("created");
+        let mut claim = claim_destination(&created).expect("claim");
+        claim.copy_from(&src).expect("copy");
+        release_destination(&claim).expect("release");
+        assert!(!created.exists(), "a root the move created goes entirely");
+    }
+
+    /// A database another process wrote into the claimed destination makes the copy fail
+    /// (`create_new`), and the rollback must not then delete it because it carries our name.
+    #[test]
+    fn rollback_keeps_a_foreign_database_that_blocked_the_copy() {
+        for preexisting in [true, false] {
+            let temp = TempDir::new();
+            let src = temp.path().join("src");
+            std::fs::create_dir_all(src.join(CACHE_SUBDIR)).expect("src");
+            std::fs::write(src.join(CACHE_SUBDIR).join("a.pdf"), b"pdf").expect("pdf");
+            std::fs::write(src.join(DB_FILE), b"ours").expect("db");
+
+            let dst = temp.path().join("dst");
+            if preexisting {
+                std::fs::create_dir_all(&dst).expect("dst");
+            }
+            let mut claim = claim_destination(&dst).expect("claim");
+            // Another process, after the claim and before the copy.
+            std::fs::write(dst.join(DB_FILE), b"foreign").expect("foreign db");
+
+            assert!(claim.copy_from(&src).is_err(), "create_new refuses the foreign db");
+            release_destination(&claim).expect("release");
+            assert_eq!(
+                std::fs::read(dst.join(DB_FILE)).expect("the foreign db survives"),
+                b"foreign"
+            );
+            assert!(
+                !dst.join(CACHE_SUBDIR).join("a.pdf").exists(),
+                "what the move copied goes"
+            );
+        }
+    }
+
+    /// A file another process adds inside a directory the move created is kept, and so is
+    /// that directory (and the root holding it).
+    #[test]
+    fn rollback_keeps_foreign_files_inside_directories_the_move_created() {
+        let temp = TempDir::new();
+        let src = temp.path().join("src");
+        std::fs::create_dir_all(src.join(CACHE_SUBDIR)).expect("src");
+        std::fs::write(src.join(DB_FILE), b"db").expect("db");
+        std::fs::write(src.join(CACHE_SUBDIR).join("a.pdf"), b"pdf").expect("pdf");
+
+        let dst = temp.path().join("dst");
+        let mut claim = claim_destination(&dst).expect("claim");
+        claim.copy_from(&src).expect("copy");
+        std::fs::write(dst.join(CACHE_SUBDIR).join("foreign.bin"), b"keep").expect("foreign");
+
+        release_destination(&claim).expect("release");
+        assert_eq!(
+            std::fs::read(dst.join(CACHE_SUBDIR).join("foreign.bin")).expect("kept"),
+            b"keep"
+        );
+        assert!(!dst.join(DB_FILE).exists() && !dst.join(CACHE_SUBDIR).join("a.pdf").exists());
+    }
+
+    /// Verification compares every non-database file too: a cached blob that did not arrive
+    /// whole fails it, so the old directory is not deleted over a short copy.
+    #[test]
+    fn verification_refuses_a_copy_with_a_short_cached_file() {
+        let temp = TempDir::new();
+        let key = "0".repeat(64);
+        let src = temp.path().join("src");
+        let conn = db::open(&src.join(DB_FILE), &key).expect("open");
+        db::put_setting(&conn, "probe", "value").expect("row");
+        conn.close().expect("close");
+        std::fs::create_dir_all(src.join(CACHE_SUBDIR)).expect("cache");
+        std::fs::write(src.join(CACHE_SUBDIR).join("42-3.pdf"), b"%PDF-1.7 full").expect("blob");
+
+        let dst = temp.path().join("dst");
+        copy_dir_all(&src, &dst).expect("copy");
+        verify_copy(&src, &dst, &key).expect("a whole copy verifies");
+
+        std::fs::write(dst.join(CACHE_SUBDIR).join("42-3.pdf"), b"%PDF").expect("truncate");
+        let failure = verify_copy(&src, &dst, &key).expect_err("a short blob must fail");
+        assert!(failure.contains("42-3.pdf"), "{failure}");
+
+        std::fs::remove_file(dst.join(CACHE_SUBDIR).join("42-3.pdf")).expect("remove");
+        assert!(verify_copy(&src, &dst, &key).is_err(), "a missing blob must fail");
     }
 
     /// A path that does not exist is refused, and the probe file the writability check uses is

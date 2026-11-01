@@ -505,7 +505,20 @@ pub fn record_opened(
     let record = crate::jump_list::validated_record(&entity, &id, &title)?;
     let category = crate::jump_list::validated_category(&category_label)?;
 
-    crate::jump_list::remember(&state.root_dir(), record, category)
+    // B8: the store is tagged with the signed-in user, so an account switch drops it instead
+    // of carrying the previous user's record names forward. The stamp comes first and the write
+    // runs under the session gate, so a login by someone else between reading the owner and
+    // saving cannot be followed by this visit writing the previous user's title back.
+    let stamp = state.session_gate.stamp();
+    let owner = state.engine().session().map(|session| session.user_id);
+    crate::jump_list::remember_for_session(
+        &state.session_gate,
+        stamp,
+        &state.root_dir(),
+        record,
+        category,
+        owner,
+    )
 }
 
 #[cfg(test)]

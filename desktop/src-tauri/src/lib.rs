@@ -19,10 +19,14 @@ mod commands;
 // F8/1 (KARAR K15): where the mirror and the blob cache live, and how that is changed.
 mod data_dir;
 mod deep_link;
+// Which local paths `files::attach_from_paths` may read: only what the native layer produced.
+mod drop_grants;
 mod events;
 mod jump_list;
 mod logging;
 mod quick_capture;
+// Shell-side session generations for the cache, the attachment queue and the upload token.
+mod session_gate;
 mod state;
 mod tray;
 // No production code — `SYNCDESKTOP.md` §9 item 8's evidence: the plugin's signature-
@@ -30,7 +34,7 @@ mod tray;
 // block through the plugin's own `Config` deserializer (a keyless config is rejected).
 mod updater;
 
-use tauri::{AppHandle, Manager, RunEvent, Runtime, WindowEvent};
+use tauri::{AppHandle, DragDropEvent, Manager, RunEvent, Runtime, WebviewEvent, WindowEvent};
 #[cfg(desktop)]
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_window_state::StateFlags;
@@ -148,6 +152,20 @@ pub fn run() {
                 .rotation_strategy(logging::LOG_ROTATION_STRATEGY)
                 .build(),
         )
+        // §6.4 drag-drop: the paths of a completed drop are the only local paths the webview
+        // may hand back to `attach_from_paths` (`crate::drop_grants`). Both the window and the
+        // webview flavour of the event are taken, because which one the runtime raises depends
+        // on how the window was built; a path granted twice is just a second, unused grant.
+        .on_window_event(|window, event| {
+            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                grant_dropped_paths(window.app_handle(), paths);
+            }
+        })
+        .on_webview_event(|webview, event| {
+            if let WebviewEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                grant_dropped_paths(webview.app_handle(), paths);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::auth::login,
             commands::auth::restore,
@@ -282,12 +300,19 @@ pub fn run() {
             // open, and no jump list is worth that. A fresh install has no stored category
             // label and `jump_list::rebuild` returns `Ok(())` without touching the shell — see
             // `RecentStore::category`.
+            //
+            // B8: only a store that belongs to the user the engine restored is rebuilt; anything
+            // else (another user's names, a store from before ownership was recorded, nobody
+            // signed in) is removed instead of being put back on the taskbar.
             {
-                let store = jump_list::load_recent(&jump_list::recent_path(
-                    &app.state::<AppState>().root_dir(),
-                ));
-                if let Err(error) = jump_list::rebuild(&store) {
-                    tracing::warn!(code = %error.code, message = %error.message, "jump list: the startup rebuild failed");
+                let state = app.state::<AppState>();
+                let root = state.root_dir();
+                let user = state.engine().session().map(|session| session.user_id);
+                if jump_list::forget_unless_owned_by(&root, user) {
+                    let store = jump_list::load_recent(&jump_list::recent_path(&root));
+                    if let Err(error) = jump_list::rebuild(&store) {
+                        tracing::warn!(code = %error.code, message = %error.message, "jump list: the startup rebuild failed");
+                    }
                 }
             }
 
@@ -325,6 +350,16 @@ pub fn run() {
                 teardown(app);
             }
         });
+}
+
+/// Record the paths of a native drop as usable by `files::attach_from_paths`.
+///
+/// Before `.setup()` has managed the state there is nothing to grant into, and no webview that
+/// could act on the drop either.
+fn grant_dropped_paths<R: Runtime>(app: &AppHandle<R>, paths: &[std::path::PathBuf]) {
+    if let Some(state) = app.try_state::<AppState>() {
+        state.drop_grants.grant(paths);
+    }
 }
 
 /// Whether closing the main window should hide it instead (`DesktopSettings::close_to_tray`).

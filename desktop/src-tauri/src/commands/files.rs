@@ -25,6 +25,8 @@ use uuid::Uuid;
 use syncra_sync::keystore::{KeyStore, SystemKeyStore, KEY_TOKEN};
 
 use super::{CommandError, CommandResult};
+use crate::drop_grants::{DropGrants, GRANT_WAIT};
+use crate::session_gate::{SessionGate, SessionStamp};
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------------------------
@@ -282,6 +284,33 @@ pub struct QueuedAttachment {
     pub target: AttachTarget,
     /// RFC 3339, UTC.
     pub queued_at: String,
+    /// The signed-in session the file was staged under, persisted so that whatever reads the
+    /// queue back later can tell whose file it is. `None` when nobody was signed in.
+    #[serde(default)]
+    pub staged_for: Option<StagedSession>,
+    /// The in-process session generation the file was staged under. Never written to the
+    /// sidecar: a file read back from disk has no stamp and is therefore never sent with
+    /// whatever token is current — it has to be staged again under the session that sends it.
+    #[serde(skip)]
+    pub stamp: Option<SessionStamp>,
+}
+
+/// Who a staged file belongs to (`QueuedAttachment::staged_for`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StagedSession {
+    /// The signed-in user.
+    pub user_id: i64,
+    /// The device token behind the session; a new login is a new token.
+    pub token_id: i64,
+}
+
+impl StagedSession {
+    fn of(session: Option<&syncra_sync::Session>) -> Option<Self> {
+        session.map(|session| StagedSession {
+            user_id: session.user_id,
+            token_id: session.token_id,
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -327,14 +356,29 @@ pub async fn cache_quote_pdf(
     revision: u32,
     refresh: bool,
 ) -> CommandResult<CachedPdf> {
-    let target = quote_pdf_path(&state.cache_dir(), quote_id, revision);
+    // Taken before anything else, and in particular before the token is read: the response is
+    // only written if this is still the session (and the data directory) it was requested
+    // under. See `crate::session_gate`.
+    let gate = state.session_gate.clone();
     let reference = quote_pdf_reference(quote_id, revision);
 
-    if let Some(hit) = cache_hit(&state.engine(), &target, &reference, refresh)? {
-        return Ok(hit);
-    }
+    // A cache hit is answered and recorded under the gate as well. When the session changed
+    // between the stamp and the lookup, the lookup is repeated once under the current session
+    // (whose cache and engine may differ — a move, a wipe); a second change is a refusal.
+    let mut retried = false;
+    let (stamp, engine, target) = loop {
+        let stamp = gate.stamp();
+        let engine = state.engine();
+        let target = quote_pdf_path(&state.cache_dir(), quote_id, revision);
+        match cache_hit(&gate, stamp, &engine, &target, &reference, refresh)? {
+            CacheLookup::Hit(hit) => return Ok(hit),
+            CacheLookup::Miss => break (stamp, engine, target),
+            CacheLookup::Stale if !retried => retried = true,
+            CacheLookup::Stale => return Err(session_changed("the quote PDF")),
+        }
+    };
 
-    if !state.engine().status().online {
+    if !engine.status().online {
         return Err(CommandError::new(
             "ONLINE_ONLY",
             format!("quote {quote_id} revision {revision} is not cached and the app is offline"),
@@ -359,12 +403,17 @@ pub async fn cache_quote_pdf(
 
     let bytes = body.len() as u64;
     let write_target = target.clone();
-    blocking(move || write_atomically(&write_target, &body)).await??;
-
-    state
-        .engine()
-        .record_cached_file(QUOTE_PDF_CACHE_KIND, &reference, &target, bytes)
-        .map_err(CommandError::from)?;
+    blocking(move || {
+        store_downloaded_pdf(
+            &gate,
+            stamp,
+            &engine,
+            &write_target,
+            &reference,
+            &body,
+        )
+    })
+    .await??;
 
     Ok(CachedPdf {
         path: path_string(&target),
@@ -378,31 +427,53 @@ pub async fn cache_quote_pdf(
 /// `refresh` semantics (D3) and the ledger wiring (B1) are unit-testable without an HTTP mock
 /// or a full `AppState`.
 ///
-/// `refresh: true` always answers `Ok(None)` — the whole point of the flag is to bypass this
+/// `refresh: true` always answers `Miss` — the whole point of the flag is to bypass this
 /// check unconditionally, so it is evaluated before anything on disk is even looked at.
+///
+/// The look at the disk and the ledger write both happen inside [`SessionGate::commit`]. A
+/// login by another user, a logout, a wipe or a move can otherwise empty the cache between
+/// reading the file's metadata and recording the hit, and the next session's database would get
+/// a row for a PDF that no longer exists while the caller is handed its path. `Stale` means the
+/// session changed since `stamp` and nothing was looked at or written.
 fn cache_hit(
+    gate: &SessionGate,
+    stamp: SessionStamp,
     engine: &syncra_sync::SyncEngine,
     target: &Path,
     reference: &str,
     refresh: bool,
-) -> CommandResult<Option<CachedPdf>> {
+) -> CommandResult<CacheLookup> {
     if refresh {
-        return Ok(None);
+        return Ok(CacheLookup::Miss);
     }
 
-    let Ok(meta) = std::fs::metadata(target) else {
-        return Ok(None);
-    };
-    if !meta.is_file() {
-        return Ok(None);
-    }
+    gate.commit(stamp, || {
+        let Ok(meta) = std::fs::metadata(target) else {
+            return Ok(CacheLookup::Miss);
+        };
+        if !meta.is_file() {
+            return Ok(CacheLookup::Miss);
+        }
 
-    record_cache_hit(engine, reference, target, meta.len())?;
-    Ok(Some(CachedPdf {
-        path: path_string(target),
-        bytes: meta.len(),
-        from_cache: true,
-    }))
+        record_cache_hit(engine, reference, target, meta.len())?;
+        Ok(CacheLookup::Hit(CachedPdf {
+            path: path_string(target),
+            bytes: meta.len(),
+            from_cache: true,
+        }))
+    })
+    .unwrap_or(Ok(CacheLookup::Stale))
+}
+
+/// What [`cache_hit`] found.
+#[derive(Debug)]
+enum CacheLookup {
+    /// Served from the cache, and the hit is in the ledger.
+    Hit(CachedPdf),
+    /// Not cached (or `refresh`): download it.
+    Miss,
+    /// The session changed since the stamp; nothing was looked at.
+    Stale,
 }
 
 /// Account for a cache **hit** in the `cached_files` ledger (B1).
@@ -423,6 +494,45 @@ fn record_cache_hit(
         engine.record_cached_file(QUOTE_PDF_CACHE_KIND, reference, path, bytes)?;
     }
     Ok(())
+}
+
+/// Write a downloaded PDF to the cache and record it in the ledger, but only if the session
+/// and the data directory are still the ones the download was started under.
+///
+/// Both halves run inside [`SessionGate::commit`]: a login by another user, a logout, a local
+/// wipe or a data directory move that happened while the body was on the wire makes this a
+/// refusal with nothing written. Without it the previous user's document landed in the cache
+/// and in the next user's `cached_files`, or a moved directory was recreated at its old place
+/// and recorded in the new database. `engine` and `target` are the ones captured with `stamp`;
+/// a commit that succeeds proves neither has been replaced since, because replacing them
+/// (`AppState::adopt`) only happens inside a transition.
+fn store_downloaded_pdf(
+    gate: &SessionGate,
+    stamp: SessionStamp,
+    engine: &syncra_sync::SyncEngine,
+    target: &Path,
+    reference: &str,
+    body: &[u8],
+) -> CommandResult<()> {
+    gate.commit(stamp, || {
+        write_atomically(target, body)?;
+        engine
+            .record_cached_file(QUOTE_PDF_CACHE_KIND, reference, target, body.len() as u64)
+            .map_err(CommandError::from)?;
+        Ok(())
+    })
+    .unwrap_or_else(|| Err(session_changed("the quote PDF")))
+}
+
+/// The refusal for shell work whose session ended while it ran.
+///
+/// `AUTH_REQUIRED` because that is what it is from the caller's side: the session the request
+/// belonged to is gone, and a new request has to be made under the current one.
+fn session_changed(what: &str) -> CommandError {
+    CommandError::new(
+        "AUTH_REQUIRED",
+        format!("the session changed while {what} was in progress; nothing was stored"),
+    )
 }
 
 /// Hand a cached file to the OS default application.
@@ -471,6 +581,14 @@ pub fn open_cached<R: Runtime>(
 /// The `tauri://drag-drop` listener that calls this is webview/setup-side and is not part of
 /// this module.
 ///
+/// # Only paths the native layer produced
+///
+/// Every path must have been handed out by the native layer — the drop event the runtime
+/// delivered to Rust, or a native dialog run from Rust — and is spent on use
+/// (`crate::drop_grants`). Any other string is refused per file before the file is even looked
+/// at, so a script running in the webview cannot make the shell read and upload an arbitrary
+/// local file with the user's token.
+///
 /// Staging happens **before** the upload attempt, not instead of it: a file dropped while the
 /// network is up but the server is unhappy would otherwise be lost the moment the drop
 /// animation ends. A successful upload deletes its staged copy immediately, so the queue only
@@ -481,20 +599,68 @@ pub async fn attach_from_paths(
     paths: Vec<String>,
     target: AttachTarget,
 ) -> CommandResult<Vec<AttachOutcome>> {
+    let gate = state.session_gate.clone();
+    let stamp = gate.stamp();
+    let staged_for = StagedSession::of(state.engine().session().as_ref());
     let queue = attachments_dir(&state.cache_dir());
-    let sources: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+
+    let checked = granted_sources(&state.drop_grants, &paths, GRANT_WAIT).await;
+    let sources: Vec<PathBuf> = checked
+        .iter()
+        .filter_map(|entry| entry.as_ref().ok().cloned())
+        .collect();
 
     let staging_queue = queue.clone();
-    let staged = blocking(move || stage_batch(&staging_queue, &sources, target)).await?;
+    let staged = blocking(move || {
+        stage_batch(&staging_queue, &sources, target, &gate, stamp, staged_for)
+    })
+    .await?;
 
-    let mut outcomes = Vec::with_capacity(staged.len());
-    for entry in staged {
+    let mut staged = staged.into_iter();
+    let mut outcomes = Vec::with_capacity(checked.len());
+    for entry in checked {
         outcomes.push(match entry {
-            Staged::Rejected(outcome) => outcome,
-            Staged::Ready(queued) => deliver(&state, &queue, queued).await,
+            Err(refused) => refused,
+            Ok(_) => match staged.next() {
+                Some(Staged::Rejected(outcome)) => outcome,
+                Some(Staged::Ready(queued)) => deliver(&state, &queue, queued).await,
+                // `stage_batch` answers once per source, in order, so this arm is never taken;
+                // it refuses rather than panicking in a command.
+                None => AttachOutcome::Rejected {
+                    original_name: String::new(),
+                    code: "VALIDATION_ERROR".to_string(),
+                    message: "no staging verdict for this path".to_string(),
+                },
+            },
         });
     }
     Ok(outcomes)
+}
+
+/// Split a batch into the paths the native layer granted and a refusal for every other one,
+/// keeping the caller's order. A refused path is never opened, stat-ed or copied.
+async fn granted_sources(
+    grants: &DropGrants,
+    paths: &[String],
+    wait: std::time::Duration,
+) -> Vec<Result<PathBuf, AttachOutcome>> {
+    let mut out = Vec::with_capacity(paths.len());
+    for raw in paths {
+        let path = PathBuf::from(raw);
+        if grants.take_waiting(&path, wait).await {
+            out.push(Ok(path));
+        } else {
+            out.push(Err(AttachOutcome::Rejected {
+                original_name: path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| raw.clone()),
+                code: "VALIDATION_ERROR".to_string(),
+                message: "this path was not produced by a drop or a file dialog".to_string(),
+            }));
+        }
+    }
+    out
 }
 
 /// Capture the screen (or one region of it), write a PNG, and post it into the ticket's
@@ -522,6 +688,9 @@ pub async fn screenshot_to_ticket(
         }
     }
 
+    let gate = state.session_gate.clone();
+    let stamp = gate.stamp();
+    let staged_for = StagedSession::of(state.engine().session().as_ref());
     let queue = attachments_dir(&state.cache_dir());
     let target = AttachTarget::Record {
         record: RecordKind::Ticket,
@@ -529,7 +698,14 @@ pub async fn screenshot_to_ticket(
     };
 
     let capture_queue = queue.clone();
-    let queued = blocking(move || capture_to_queue(&capture_queue, region, target)).await??;
+    let queued = blocking(move || {
+        let image = capture(region)?;
+        gate.commit(stamp, || {
+            queue_capture(&capture_queue, &image, target, stamp, staged_for)
+        })
+        .unwrap_or_else(|| Err(session_changed("the screenshot")))
+    })
+    .await??;
 
     Ok(deliver(&state, &queue, queued).await)
 }
@@ -556,6 +732,24 @@ fn quote_pdf_reference(quote_id: i64, revision: u32) -> String {
 /// `$APPDATA/syncra/cache/attachments`.
 fn attachments_dir(cache_dir: &Path) -> PathBuf {
     cache_dir.join(ATTACHMENTS_SUBDIR)
+}
+
+/// Empty the attachment staging queue. Called when the session changes (a logout, a login by
+/// another user): staged files are the previous user's, the engine's wipe never knew about
+/// them (they are not in its ledger), and nothing may send them with the next user's token.
+///
+/// Best-effort like the cache sweep in `storage::clear_local`: the session change has already
+/// happened, and a file held open elsewhere must not turn it into a failure. Every failure is
+/// logged.
+pub fn purge_staging(cache_dir: &Path) {
+    let queue = attachments_dir(cache_dir);
+    match std::fs::remove_dir_all(&queue) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            tracing::warn!(%error, path = %queue.display(), "cannot empty the attachment queue")
+        }
+    }
 }
 
 /// Resolve a caller-supplied path to a real file inside `cache_dir`, or refuse.
@@ -706,15 +900,43 @@ enum Staged {
 ///
 /// Dropping twenty 10 MB files at once must not be able to leave 200 MB on disk just because
 /// each one was individually admissible.
-fn stage_batch(queue: &Path, sources: &[PathBuf], target: AttachTarget) -> Vec<Staged> {
+///
+/// Each file is staged inside [`SessionGate::commit`] under the batch's `stamp`, so a file
+/// cannot be written into the queue after the session it was dropped in has ended (and its
+/// queue been emptied), and every staged file carries that stamp into delivery.
+fn stage_batch(
+    queue: &Path,
+    sources: &[PathBuf],
+    target: AttachTarget,
+    gate: &SessionGate,
+    stamp: SessionStamp,
+    staged_for: Option<StagedSession>,
+) -> Vec<Staged> {
     let mut total = queued_bytes(queue);
     let mut out = Vec::with_capacity(sources.len());
 
     for source in sources {
-        let staged = stage_one(queue, source, target, total);
-        if let Staged::Ready(queued) = &staged {
-            total = total.saturating_add(queued.bytes);
-        }
+        let staged = gate
+            .commit(stamp, || stage_one(queue, source, target, total, staged_for))
+            .unwrap_or_else(|| {
+                let refusal = session_changed("the attachment");
+                Staged::Rejected(AttachOutcome::Rejected {
+                    original_name: source
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| path_string(source)),
+                    code: refusal.code,
+                    message: refusal.message,
+                })
+            });
+        let staged = match staged {
+            Staged::Ready(mut queued) => {
+                total = total.saturating_add(queued.bytes);
+                queued.stamp = Some(stamp);
+                Staged::Ready(queued)
+            }
+            rejected => rejected,
+        };
         out.push(staged);
     }
     out
@@ -726,6 +948,7 @@ fn stage_one(
     source: &Path,
     target: AttachTarget,
     already_queued: u64,
+    staged_for: Option<StagedSession>,
 ) -> Staged {
     let display_name = source
         .file_name()
@@ -800,6 +1023,8 @@ fn stage_one(
         bytes,
         target,
         queued_at: now_rfc3339(),
+        staged_for,
+        stamp: None,
     };
     if let Err(error) = write_sidecar(queue, &queued) {
         let _ = std::fs::remove_file(&blob);
@@ -808,13 +1033,26 @@ fn stage_one(
     Staged::Ready(queued)
 }
 
-/// Capture a screenshot straight into the queue directory.
+/// Capture a screenshot straight into the queue directory, outside any session. Only the
+/// manual display test uses it; the command captures first and queues inside the gate.
+#[cfg(test)]
 fn capture_to_queue(
     queue: &Path,
     region: Option<CaptureRegion>,
     target: AttachTarget,
 ) -> CommandResult<QueuedAttachment> {
     let image = capture(region)?;
+    queue_capture(queue, &image, target, SessionGate::new().stamp(), None)
+}
+
+/// Encode a captured image as PNG and stage it in the queue directory.
+fn queue_capture(
+    queue: &Path,
+    image: &xcap::image::RgbaImage,
+    target: AttachTarget,
+    stamp: SessionStamp,
+    staged_for: Option<StagedSession>,
+) -> CommandResult<QueuedAttachment> {
     let mut png = Vec::new();
     image
         .write_to(&mut std::io::Cursor::new(&mut png), xcap::image::ImageFormat::Png)
@@ -847,6 +1085,8 @@ fn capture_to_queue(
         bytes: png.len() as u64,
         target,
         queued_at: now_rfc3339(),
+        staged_for,
+        stamp: Some(stamp),
     };
     if let Err(error) = write_sidecar(queue, &queued) {
         let _ = std::fs::remove_file(&blob);
@@ -964,7 +1204,9 @@ async fn send(
     queue: &Path,
     queued: &QueuedAttachment,
 ) -> CommandResult<AttachOutcome> {
-    let token = bearer_token(&state.keychain_service)?;
+    let token = token_for_staged(&state.session_gate, queued, || {
+        bearer_token(&state.keychain_service)
+    })?;
     let blob = queue.join(format!("{}.{}", queued.id, queued.extension));
     let bytes = blocking(move || {
         std::fs::read(&blob).map_err(|e| {
@@ -988,6 +1230,27 @@ async fn send(
         attachment,
         message_id,
     })
+}
+
+/// The bearer token to send a staged file with — but only the token of the session the file
+/// was staged under.
+///
+/// The token is read inside [`SessionGate::commit`] with the file's own stamp. A login by
+/// another user between the drop and this point used to make the upload go out with the NEW
+/// user's token, putting the previous user's file into the next user's account; now it is
+/// refused, and the file stays where it was (the session change empties the queue). A file
+/// without a stamp — one read back from disk — is refused for the same reason: nothing proves
+/// whose it is.
+fn token_for_staged(
+    gate: &SessionGate,
+    queued: &QueuedAttachment,
+    read_token: impl FnOnce() -> CommandResult<String>,
+) -> CommandResult<String> {
+    let Some(stamp) = queued.stamp else {
+        return Err(session_changed("the attachment"));
+    };
+    gate.commit(stamp, read_token)
+        .unwrap_or_else(|| Err(session_changed("the attachment")))
 }
 
 /// `POST /api/attachments` — multipart, field name `file`, exactly what
@@ -1285,7 +1548,7 @@ mod tests {
         touch(&exact, MAX_FILE_BYTES);
         assert!(
             matches!(
-                stage_one(&queue, &exact, AttachTarget::Unattached, 0),
+                stage_one(&queue, &exact, AttachTarget::Unattached, 0, None),
                 Staged::Ready(_)
             ),
             "a file of exactly 25 MB is accepted by the server and must be accepted here"
@@ -1293,7 +1556,7 @@ mod tests {
 
         let over = temp.path().join("over.pdf");
         touch(&over, MAX_FILE_BYTES + 1);
-        match stage_one(&queue, &over, AttachTarget::Unattached, 0) {
+        match stage_one(&queue, &over, AttachTarget::Unattached, 0, None) {
             Staged::Rejected(AttachOutcome::Rejected { code, .. }) => {
                 assert_eq!(code, CODE_FILE_TOO_LARGE)
             }
@@ -1308,7 +1571,7 @@ mod tests {
         let source = temp.path().join("payload.exe");
         touch(&source, 10);
 
-        match stage_one(&queue, &source, AttachTarget::Unattached, 0) {
+        match stage_one(&queue, &source, AttachTarget::Unattached, 0, None) {
             Staged::Rejected(AttachOutcome::Rejected { code, .. }) => {
                 assert_eq!(code, CODE_FILE_TYPE_REJECTED)
             }
@@ -1325,7 +1588,7 @@ mod tests {
         let dir = temp.path().join("folder.pdf");
         std::fs::create_dir_all(&dir).expect("dir");
 
-        match stage_one(&queue, &dir, AttachTarget::Unattached, 0) {
+        match stage_one(&queue, &dir, AttachTarget::Unattached, 0, None) {
             Staged::Rejected(AttachOutcome::Rejected { code, .. }) => {
                 assert_eq!(code, "VALIDATION_ERROR")
             }
@@ -1377,10 +1640,14 @@ mod tests {
         let second = temp.path().join("second.pdf");
         touch(&second, 2);
 
+        let gate = SessionGate::new();
         let staged = stage_batch(
             &queue,
             &[first, second],
             AttachTarget::Unattached,
+            &gate,
+            gate.stamp(),
+            None,
         );
         assert!(matches!(staged[0], Staged::Ready(_)), "the first file fits");
         match &staged[1] {
@@ -1401,7 +1668,7 @@ mod tests {
         let source = temp.path().join("Q3 report.pdf");
         touch(&source, 12);
 
-        let Staged::Ready(queued) = stage_one(&queue, &source, AttachTarget::Unattached, 0) else {
+        let Staged::Ready(queued) = stage_one(&queue, &source, AttachTarget::Unattached, 0, None) else {
             panic!("a 12 byte pdf must stage");
         };
         assert_eq!(queued.original_name, "Q3 report.pdf");
@@ -1484,6 +1751,73 @@ mod tests {
         (engine, temp)
     }
 
+    /// [`cache_hit`] under a session that does not change: a hit, or `None` for a miss.
+    fn lookup(
+        engine: &syncra_sync::SyncEngine,
+        target: &Path,
+        reference: &str,
+        refresh: bool,
+    ) -> CommandResult<Option<CachedPdf>> {
+        let gate = SessionGate::new();
+        match cache_hit(&gate, gate.stamp(), engine, target, reference, refresh)? {
+            CacheLookup::Hit(hit) => Ok(Some(hit)),
+            CacheLookup::Miss => Ok(None),
+            CacheLookup::Stale => panic!("no transition ran, so the stamp cannot be stale"),
+        }
+    }
+
+    /// A cache hit looked up after a login by another user wiped the cache must neither
+    /// record a ledger row in the new database nor hand back the path of the deleted PDF.
+    #[tokio::test]
+    async fn a_cache_hit_after_a_session_change_records_nothing() {
+        let (engine, _db_dir) = ephemeral_engine().await;
+        let cache = TempDir::new();
+        let target = quote_pdf_path(cache.path(), 42, 3);
+        touch(&target, 8);
+        let gate = SessionGate::new();
+
+        // User A's request takes its stamp and sees the PDF ...
+        let stamp = gate.stamp();
+        // ... then user B signs in and the cache is wiped.
+        let login = gate.begin();
+        std::fs::remove_file(&target).expect("the wipe removes the PDF");
+        assert!(matches!(
+            cache_hit(&gate, stamp, &engine, &target, "42-3", false).expect("no error"),
+            CacheLookup::Stale
+        ));
+        drop(login);
+        assert!(matches!(
+            cache_hit(&gate, stamp, &engine, &target, "42-3", false).expect("no error"),
+            CacheLookup::Stale
+        ));
+        assert_eq!(
+            engine.storage_stats().cached_file_bytes,
+            0,
+            "nothing may be recorded in the new session's database"
+        );
+
+        // Under the current session the lookup is an honest miss, so the caller downloads.
+        assert!(matches!(
+            cache_hit(&gate, gate.stamp(), &engine, &target, "42-3", false).expect("no error"),
+            CacheLookup::Miss
+        ));
+    }
+
+    /// The command's call site: a stale lookup is retried under a fresh stamp, never served.
+    #[test]
+    fn the_cache_hit_runs_under_the_session_gate() {
+        let source = include_str!("files.rs");
+        let command = source
+            .split_once("pub async fn cache_quote_pdf(")
+            .expect("cache_quote_pdf")
+            .1
+            .split_once("\n}")
+            .expect("end of cache_quote_pdf")
+            .0;
+        assert!(command.contains("cache_hit(&gate, stamp,"), "{command}");
+        assert!(command.contains("CacheLookup::Stale"), "{command}");
+    }
+
     /// D3: `refresh: true` bypasses the cache-hit check even though the file is on disk and
     /// perfectly readable — the whole reason the parameter exists.
     #[tokio::test]
@@ -1493,7 +1827,7 @@ mod tests {
         let target = quote_pdf_path(cache.path(), 42, 3);
         touch(&target, 8);
 
-        let hit = cache_hit(&engine, &target, "42-3", true).expect("refresh must not error");
+        let hit = lookup(&engine, &target, "42-3", true).expect("refresh must not error");
         assert!(hit.is_none(), "refresh=true must bypass the cache entirely");
         assert_eq!(
             engine.storage_stats().cached_file_bytes,
@@ -1512,7 +1846,7 @@ mod tests {
         let target = quote_pdf_path(cache.path(), 42, 3);
         touch(&target, 8);
 
-        let hit = cache_hit(&engine, &target, "42-3", false)
+        let hit = lookup(&engine, &target, "42-3", false)
             .expect("cache_hit must not error")
             .expect("the file is on disk, so this must be a hit");
         assert!(hit.from_cache);
@@ -1523,7 +1857,7 @@ mod tests {
             "the first hit on an unrecorded blob must record it"
         );
 
-        cache_hit(&engine, &target, "42-3", false)
+        lookup(&engine, &target, "42-3", false)
             .expect("cache_hit must not error")
             .expect("still a hit");
         assert_eq!(
@@ -1540,7 +1874,7 @@ mod tests {
         let cache = TempDir::new();
         let target = quote_pdf_path(cache.path(), 1, 1);
 
-        let hit = cache_hit(&engine, &target, "1-1", false).expect("a miss is not an error");
+        let hit = lookup(&engine, &target, "1-1", false).expect("a miss is not an error");
         assert!(hit.is_none());
         assert_eq!(engine.storage_stats().cached_file_bytes, 0);
     }
@@ -1727,6 +2061,253 @@ mod tests {
             serde_json::to_value(&queued).expect("json")["status"],
             "queued"
         );
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Session boundaries: the PDF cache and the attachment queue
+    // -----------------------------------------------------------------------------------------
+
+    /// A download that started under one session and finished after a login by another user
+    /// (or a logout, or a local wipe) must not reach the cache or the current ledger.
+    #[tokio::test]
+    async fn a_pdf_finishing_after_a_session_change_is_neither_cached_nor_recorded() {
+        let (engine, _db_dir) = ephemeral_engine().await;
+        let cache = TempDir::new();
+        let target = quote_pdf_path(cache.path(), 42, 3);
+        let gate = SessionGate::new();
+
+        let stamp = gate.stamp();
+        // The login happens while the body is on the wire.
+        drop(gate.begin());
+
+        let error = store_downloaded_pdf(&gate, stamp, &engine, &target, "42-3", b"%PDF-A")
+            .expect_err("a response from the previous session must be dropped");
+        assert_eq!(error.code, "AUTH_REQUIRED");
+        assert!(!target.exists(), "nothing may be written to the cache");
+        assert_eq!(
+            engine.storage_stats().cached_file_bytes,
+            0,
+            "nothing may be recorded in the current database"
+        );
+
+        // The same call under the current session still works.
+        store_downloaded_pdf(&gate, gate.stamp(), &engine, &target, "42-3", b"%PDF-B")
+            .expect("a current download is stored");
+        assert_eq!(std::fs::read(&target).expect("cached"), b"%PDF-B");
+        assert_eq!(engine.storage_stats().cached_file_bytes, 6);
+    }
+
+    /// The download started while the login was still running and finishes after it.
+    #[tokio::test]
+    async fn a_pdf_requested_during_a_login_is_not_stored_after_it() {
+        let (engine, _db_dir) = ephemeral_engine().await;
+        let cache = TempDir::new();
+        let target = quote_pdf_path(cache.path(), 1, 1);
+        let gate = SessionGate::new();
+
+        let login = gate.begin();
+        let stamp = gate.stamp();
+        drop(login);
+
+        assert!(store_downloaded_pdf(&gate, stamp, &engine, &target, "1-1", b"%PDF").is_err());
+        assert!(!target.exists());
+    }
+
+    /// Item 4: the data directory moves while a PDF is on the wire. The old root is gone, and
+    /// the late response must not recreate it or be recorded with the old path.
+    #[tokio::test]
+    async fn a_pdf_racing_a_data_directory_move_does_not_recreate_the_old_root() {
+        let (engine, _db_dir) = ephemeral_engine().await;
+        let old_root = TempDir::new();
+        let old_cache = old_root.path().join("cache");
+        let target = quote_pdf_path(&old_cache, 7, 2);
+        let gate = SessionGate::new();
+
+        let stamp = gate.stamp();
+        let moving = gate.begin();
+        std::fs::remove_dir_all(old_root.path()).expect("the move removes the old root");
+
+        // While the move runs, and after it has finished.
+        assert!(store_downloaded_pdf(&gate, stamp, &engine, &target, "7-2", b"%PDF").is_err());
+        drop(moving);
+        assert!(store_downloaded_pdf(&gate, stamp, &engine, &target, "7-2", b"%PDF").is_err());
+
+        assert!(!old_root.path().exists(), "the old root must stay gone");
+        assert_eq!(engine.storage_stats().cached_file_bytes, 0);
+    }
+
+    /// A file dropped by one user cannot be written into the queue after the session changed.
+    #[test]
+    fn staging_after_a_session_change_writes_nothing() {
+        let temp = TempDir::new();
+        let queue = temp.path().join("queue");
+        let source = temp.path().join("a.pdf");
+        touch(&source, 4);
+        let gate = SessionGate::new();
+        let stamp = gate.stamp();
+        drop(gate.begin());
+
+        let staged = stage_batch(
+            &queue,
+            std::slice::from_ref(&source),
+            AttachTarget::Unattached,
+            &gate,
+            stamp,
+            None,
+        );
+        match &staged[0] {
+            Staged::Rejected(AttachOutcome::Rejected { code, .. }) => {
+                assert_eq!(code, "AUTH_REQUIRED")
+            }
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+        assert!(!queue.exists(), "nothing may reach the queue");
+    }
+
+    /// A staged file carries its session, both in memory and in the sidecar.
+    #[test]
+    fn a_staged_file_carries_the_session_it_was_staged_under() {
+        let temp = TempDir::new();
+        let queue = temp.path().join("queue");
+        let source = temp.path().join("a.pdf");
+        touch(&source, 4);
+        let gate = SessionGate::new();
+        let stamp = gate.stamp();
+        let owner = StagedSession {
+            user_id: 5,
+            token_id: 77,
+        };
+
+        let staged = stage_batch(
+            &queue,
+            std::slice::from_ref(&source),
+            AttachTarget::Unattached,
+            &gate,
+            stamp,
+            Some(owner),
+        );
+        let Staged::Ready(queued) = &staged[0] else {
+            panic!("expected a staged file, got {:?}", staged[0]);
+        };
+        assert_eq!(queued.stamp, Some(stamp));
+        assert_eq!(queued.staged_for, Some(owner));
+
+        let sidecar = queue.join(format!("{}.json", queued.id));
+        let read_back: QueuedAttachment =
+            serde_json::from_slice(&std::fs::read(sidecar).expect("sidecar")).expect("json");
+        assert_eq!(read_back.staged_for, Some(owner));
+        assert_eq!(read_back.stamp, None, "a stamp never survives a round trip to disk");
+    }
+
+    /// The attachment race: A drops a file, B logs in before the upload starts. The upload
+    /// must not go out with B's token.
+    #[test]
+    fn a_staged_file_is_not_sent_with_the_next_sessions_token() {
+        let temp = TempDir::new();
+        let queue = temp.path().join("queue");
+        let source = temp.path().join("a.pdf");
+        touch(&source, 4);
+        let gate = SessionGate::new();
+        let staged = stage_batch(
+            &queue,
+            std::slice::from_ref(&source),
+            AttachTarget::Unattached,
+            &gate,
+            gate.stamp(),
+            None,
+        );
+        let Staged::Ready(queued) = staged.into_iter().next().expect("one verdict") else {
+            panic!("expected a staged file");
+        };
+
+        // Same session: the token is read.
+        assert_eq!(
+            token_for_staged(&gate, &queued, || Ok("token-a".to_string())).expect("same session"),
+            "token-a"
+        );
+
+        drop(gate.begin());
+        let mut read = false;
+        let error = token_for_staged(&gate, &queued, || {
+            read = true;
+            Ok("token-b".to_string())
+        })
+        .expect_err("another session's token must not be used");
+        assert_eq!(error.code, "AUTH_REQUIRED");
+        assert!(!read, "the token must not even be read");
+
+        // A file read back from disk has no stamp and is never sent with whatever is current.
+        let mut from_disk = queued.clone();
+        from_disk.stamp = None;
+        let fresh = SessionGate::new();
+        assert!(token_for_staged(&fresh, &from_disk, || Ok("t".to_string())).is_err());
+    }
+
+    /// The session change empties the staging queue.
+    #[test]
+    fn purging_staging_removes_every_staged_file() {
+        let temp = TempDir::new();
+        let cache = temp.path().join("cache");
+        touch(&attachments_dir(&cache).join("x.pdf"), 3);
+        touch(&attachments_dir(&cache).join("x.json"), 3);
+        touch(&quote_pdf_path(&cache, 1, 1), 3);
+
+        purge_staging(&cache);
+
+        assert!(!attachments_dir(&cache).exists());
+        assert!(
+            quote_pdf_path(&cache, 1, 1).exists(),
+            "the PDF cache is the engine's to wipe"
+        );
+        // Nothing there is not an error.
+        purge_staging(&cache);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // O10: only paths the native layer produced
+    // -----------------------------------------------------------------------------------------
+
+    /// A path the webview made up is refused before the file is opened; a dropped path is
+    /// accepted once.
+    #[tokio::test]
+    async fn rejects_ungranted_attachment_path() {
+        let temp = TempDir::new();
+        let dropped = temp.path().join("dropped.pdf");
+        let secret = temp.path().join("secret.pdf");
+        touch(&dropped, 4);
+        touch(&secret, 4);
+        let grants = DropGrants::new();
+        grants.grant([&dropped]);
+
+        let wait = std::time::Duration::from_millis(20);
+        let checked = granted_sources(
+            &grants,
+            &[path_string(&dropped), path_string(&secret)],
+            wait,
+        )
+        .await;
+        assert_eq!(checked[0].as_ref().ok(), Some(&dropped));
+        match &checked[1] {
+            Err(AttachOutcome::Rejected {
+                code,
+                original_name,
+                ..
+            }) => {
+                assert_eq!(code, "VALIDATION_ERROR");
+                assert_eq!(original_name, "secret.pdf");
+            }
+            other => panic!("an ungranted path must be refused, got {other:?}"),
+        }
+
+        // A replay of the granted call is refused: the grant was spent.
+        let replay = granted_sources(&grants, &[path_string(&dropped)], wait).await;
+        assert!(replay[0].is_err());
+
+        // Another spelling of the dropped file is not the dropped path.
+        grants.grant([&dropped]);
+        let spelled = path_string(&temp.path().join("sub").join("..").join("dropped.pdf"));
+        let respelled = granted_sources(&grants, &[spelled], wait).await;
+        assert!(respelled[0].is_err());
     }
 
     // --- screen capture (manual) ----------------------------------------------------------

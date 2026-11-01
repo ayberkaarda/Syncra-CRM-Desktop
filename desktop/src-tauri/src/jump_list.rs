@@ -63,6 +63,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::{CommandError, CommandResult};
 use crate::deep_link::{self, SCHEME};
+use crate::session_gate::{SessionGate, SessionStamp};
 
 /// The AppUserModelID this process declares and every jump list is filed under.
 ///
@@ -132,6 +133,16 @@ pub struct RecentStore {
     /// Most recently opened first, at most [`MAX_RECENT`] entries.
     #[serde(default)]
     pub records: Vec<RecentRecord>,
+    /// The user these records belong to (B8).
+    ///
+    /// The titles are customer and record names, and the store outlives a session: a login by
+    /// another user without a logout in between (a session that expired, a shared machine)
+    /// used to leave the previous user's names in this file and on the taskbar. A store whose
+    /// owner is not the signed-in user is discarded rather than shown or extended; a store
+    /// without an owner (written before this field existed, or with nobody signed in) belongs
+    /// to nobody and is discarded the same way.
+    #[serde(default)]
+    pub owner: Option<i64>,
 }
 
 /// `<root>/recent.json`, where `root` is `AppState::root_dir` (`<app_data_dir>/syncra`).
@@ -344,16 +355,65 @@ pub const fn has_jump_list() -> bool {
 /// something only Windows users can discover — but persisting five record titles to a
 /// plaintext file that no menu on this machine can ever read would be the privacy cost of the
 /// feature with none of the feature.
-pub fn remember(root: &Path, record: RecentRecord, category: String) -> CommandResult<()> {
+///
+/// `owner` is the signed-in user. With nobody signed in nothing is kept (there is no session
+/// the record could belong to), and records left by another user are dropped instead of being
+/// extended (B8).
+///
+/// `stamp` is taken before `owner` is read, and the save and the rebuild run inside
+/// [`SessionGate::commit`]: `record_opened` reads the
+/// signed-in user, and a login by someone else can clear the list before the write lands.
+/// Without the gate that late write would put the previous user's record names back into
+/// `recent.json` and onto the taskbar after the switch. A stale stamp writes nothing and is not
+/// an error — the visit belonged to a session that has ended.
+pub fn remember_for_session(
+    gate: &SessionGate,
+    stamp: SessionStamp,
+    root: &Path,
+    record: RecentRecord,
+    category: String,
+    owner: Option<i64>,
+) -> CommandResult<()> {
     if !has_jump_list() {
         return Ok(());
     }
+    commit_for_session(gate, stamp, || {
+        remember_in_store(root, record, category, owner)
+    })
+}
+
+/// The gated half of [`remember_for_session`], on every platform so it is tested everywhere.
+fn commit_for_session(
+    gate: &SessionGate,
+    stamp: SessionStamp,
+    write: impl FnOnce() -> CommandResult<()>,
+) -> CommandResult<()> {
+    gate.commit(stamp, write).unwrap_or(Ok(()))
+}
+
+/// The platform-independent half of [`remember`], so the ownership rule is tested on every CI
+/// leg rather than only where a jump list exists.
+fn remember_in_store(
+    root: &Path,
+    record: RecentRecord,
+    category: String,
+    owner: Option<i64>,
+) -> CommandResult<()> {
+    let Some(owner) = owner else {
+        return Ok(());
+    };
 
     let path = recent_path(root);
     let previous = load_recent(&path);
+    let previous_records = if previous.owner == Some(owner) {
+        previous.records
+    } else {
+        Vec::new()
+    };
     let store = RecentStore {
         category,
-        records: push_recent(&previous.records, record),
+        records: push_recent(&previous_records, record),
+        owner: Some(owner),
     };
 
     // Persist first, rebuild second: the store is what the next launch reads, and a shell that
@@ -397,6 +457,20 @@ pub fn clear(root: &Path) {
     if let Err(error) = windows_impl::run_on_sta(windows_impl::delete_list) {
         tracing::warn!(%error, "jump list: cannot delete the shell's custom destination list");
     }
+}
+
+/// [`clear`], unless the stored records already belong to `user` (B8).
+///
+/// Called by `auth::login` when the signed-in user changes, and at startup against the session
+/// the engine restored, so the previous user's record names neither stay in `recent.json` nor
+/// come back onto the taskbar. Returns whether the store was kept.
+pub fn forget_unless_owned_by(root: &Path, user: Option<i64>) -> bool {
+    let store = load_recent(&recent_path(root));
+    let owned = user.is_some() && store.owner == user;
+    if !owned {
+        clear(root);
+    }
+    owned
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -996,6 +1070,7 @@ mod tests {
             records: (1..=9)
                 .map(|index| record("deal", &index.to_string(), "x"))
                 .collect(),
+            owner: None,
         };
         std::fs::write(&path, serde_json::to_string(&store).expect("json")).expect("write");
         assert_eq!(load_recent(&path).records.len(), MAX_RECENT);
@@ -1008,6 +1083,7 @@ mod tests {
         let store = RecentStore {
             category: "Son kayıtlar".into(),
             records: vec![record("deal", "29", "Acme — yıllık sözleşme")],
+            owner: None,
         };
         save_recent(&path, &store).expect("save");
         assert_eq!(load_recent(&path), store);
@@ -1024,6 +1100,7 @@ mod tests {
             &RecentStore {
                 category: "Recent".into(),
                 records: vec![record("deal", "1", "A")],
+                owner: None,
             },
         )
         .expect("save");
@@ -1047,6 +1124,7 @@ mod tests {
             &RecentStore {
                 category: "Recent".into(),
                 records: vec![record("deal", "1", "A"), record("deal", "2", "B")],
+                owner: None,
             },
         )
         .expect("first save");
@@ -1055,6 +1133,7 @@ mod tests {
             &RecentStore {
                 category: "Recent".into(),
                 records: vec![record("quote", "9", "C")],
+                owner: None,
             },
         )
         .expect("second save");
@@ -1091,6 +1170,7 @@ mod tests {
             &RecentStore {
                 category: "Recent".into(),
                 records: vec![record("deal", "29", "Acme Holding")],
+                owner: None,
             },
         )
         .expect("save");
@@ -1100,6 +1180,128 @@ mod tests {
 
         assert!(!path.exists(), "the recent-records store survived clear()");
         assert_eq!(load_recent(&path), RecentStore::default());
+    }
+
+    // --- account switch (B8) ----------------------------------------------------------------
+
+    /// The previous user's record names are not carried into the next user's list.
+    #[test]
+    fn a_new_owner_starts_an_empty_list() {
+        let dir = TempDir::new();
+        remember_in_store(dir.path(), record("company", "1", "Acme A.Ş."), "Recent".into(), Some(1))
+            .expect("user 1");
+        remember_in_store(dir.path(), record("deal", "2", "Beta deal"), "Recent".into(), Some(2))
+            .expect("user 2");
+
+        let store = load_recent(&recent_path(dir.path()));
+        assert_eq!(store.owner, Some(2));
+        assert_eq!(store.records, vec![record("deal", "2", "Beta deal")]);
+    }
+
+    /// The same owner keeps extending the list.
+    #[test]
+    fn the_same_owner_keeps_the_list() {
+        let dir = TempDir::new();
+        remember_in_store(dir.path(), record("deal", "1", "A"), "Recent".into(), Some(1))
+            .expect("first");
+        remember_in_store(dir.path(), record("deal", "2", "B"), "Recent".into(), Some(1))
+            .expect("second");
+        assert_eq!(load_recent(&recent_path(dir.path())).records.len(), 2);
+    }
+
+    /// With nobody signed in there is no session to remember a record for.
+    #[test]
+    fn nothing_is_remembered_without_a_session() {
+        let dir = TempDir::new();
+        remember_in_store(dir.path(), record("deal", "1", "A"), "Recent".into(), None)
+            .expect("no session");
+        assert!(!recent_path(dir.path()).exists());
+    }
+
+    /// The login and startup hook: a store owned by someone else is removed, the owner's own
+    /// store is kept, and a store with no owner belongs to nobody.
+    #[test]
+    fn forgetting_keeps_only_the_signed_in_users_store() {
+        let dir = TempDir::new();
+        let path = recent_path(dir.path());
+        let owned_by = |owner: Option<i64>| RecentStore {
+            category: "Recent".into(),
+            records: vec![record("company", "9", "Acme Holding")],
+            owner,
+        };
+
+        save_recent(&path, &owned_by(Some(1))).expect("save");
+        assert!(forget_unless_owned_by(dir.path(), Some(1)));
+        assert!(path.exists(), "the owner's own list stays");
+
+        assert!(!forget_unless_owned_by(dir.path(), Some(2)));
+        assert!(!path.exists(), "another user's list is removed");
+
+        save_recent(&path, &owned_by(None)).expect("save");
+        assert!(!forget_unless_owned_by(dir.path(), Some(1)));
+        assert!(!path.exists(), "a list without an owner belongs to nobody");
+
+        save_recent(&path, &owned_by(Some(1))).expect("save");
+        assert!(!forget_unless_owned_by(dir.path(), None));
+        assert!(!path.exists(), "with nobody signed in nothing is kept");
+    }
+
+    /// The call sites: a login by another user and the startup rebuild both go through the
+    /// ownership check, and `record_opened` tags what it stores.
+    #[test]
+    fn an_account_switch_forgets_the_previous_users_list() {
+        let auth = code_of(include_str!("commands/auth.rs"));
+        let login = auth
+            .split_once("pub async fn login(")
+            .expect("auth::login")
+            .1
+            .split_once("\n}")
+            .expect("end of login")
+            .0;
+        assert!(login.contains("forget_previous_user("), "{login}");
+        assert!(auth.contains("jump_list::forget_unless_owned_by("));
+
+        let lib = code_of(include_str!("lib.rs"));
+        assert!(lib.contains("jump_list::forget_unless_owned_by("));
+
+        let os = code_of(include_str!("commands/os.rs"));
+        let opened = os
+            .split_once("pub fn record_opened(")
+            .expect("os::record_opened")
+            .1;
+        let stamp_at = opened.find("session_gate.stamp()").expect("a stamp is taken");
+        let owner_at = opened.find(".session()").expect("the owner is read");
+        assert!(stamp_at < owner_at, "the stamp must come before the owner is read");
+        assert!(opened.contains("jump_list::remember_for_session("));
+    }
+
+    /// B8, late write: a visit recorded for user A that lands after B's login cleared the list
+    /// writes nothing, so A's record names do not come back.
+    #[test]
+    fn a_visit_landing_after_an_account_switch_writes_nothing() {
+        // The write is the store half only: the shell rebuild is process-wide COM state that
+        // parallel tests would race on, and the gate decides before either half runs.
+        let dir = TempDir::new();
+        let path = recent_path(dir.path());
+        let store_for = |owner: i64, title: &str| RecentStore {
+            category: "Recent".into(),
+            records: vec![record("company", "1", title)],
+            owner: Some(owner),
+        };
+        let gate = SessionGate::new();
+        // `record_opened` took its stamp and read user 1 ...
+        let stamp = gate.stamp();
+        // ... then user 2 signed in and the list was cleared.
+        drop(gate.begin());
+
+        commit_for_session(&gate, stamp, || save_recent(&path, &store_for(1, "Acme A.Ş.")))
+            .expect("a stale visit is not an error");
+        assert!(!path.exists(), "user 1's record came back");
+
+        // A visit under the current session is written as before.
+        commit_for_session(&gate, gate.stamp(), || save_recent(&path, &store_for(2, "Beta")))
+            .expect("current visit");
+        assert_eq!(load_recent(&path).owner, Some(2));
     }
 
     /// `clear` on a machine that never wrote a store is a no-op, not a failure: `logout` calls
