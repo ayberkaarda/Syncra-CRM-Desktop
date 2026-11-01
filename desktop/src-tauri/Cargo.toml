@@ -16,7 +16,10 @@ publish = false
 
 [lib]
 name = "syncra_desktop_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# `staticlib` and `cdylib` exist for Tauri's mobile targets, which are out of scope
+# (`SYNCDESKTOP.md` K11). The desktop binary links the rlib; the other two only added a 1.4 GB
+# `.lib` to every debug build.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
