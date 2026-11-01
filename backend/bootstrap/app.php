@@ -81,14 +81,16 @@ return Application::configure(basePath: dirname(__DIR__))
      *                subscriptions. Sockets already open are torn down
      *                separately by UserDeactivated on private-user.{id}.
      *
-     * DELIBERATELY ABSENT: `password.changed`. A user under a forced password
-     * change still needs a live socket - that is precisely the session in
-     * which UserDeactivated has to reach them, and the change-password screen
-     * shows connection state. The trade-off is safe because no channel
-     * callback grants data beyond identity plus the module permissions the
-     * user already holds; the password gate protects the REST endpoints that
-     * actually return records, and those stay behind `password.changed` in
-     * routes/api.php.
+     * DELIBERATELY ABSENT: `password.changed`. The route stays open, the
+     * CHANNELS do not: routes/channels.php refuses every channel - data
+     * channels and the personal `private-user.{id}` one, which also carries
+     * notifications, task reminders and chat counters - to a user who still
+     * owes the change. That is the socket equivalent of the
+     * logout/me/password-change whitelist in routes/api.php. The check lives
+     * in the callbacks rather than in a middleware here because the desktop
+     * route `api/broadcasting/auth` shares those callbacks; one gate covers
+     * both entry points, and a callback refusal stays the plain 403 the
+     * clients already handle.
      */
     ->withBroadcasting(
         __DIR__.'/../routes/channels.php',

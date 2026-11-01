@@ -393,7 +393,7 @@ class SyncPullService
         }
 
         if ($table === 'messages') {
-            $rows = $this->attachMessageAttachments($rows);
+            $rows = $this->maskDeletedMessages($this->attachMessageAttachments($rows));
         }
 
         return $this->attachEmbeds($table, $definition, $rows);
@@ -560,6 +560,31 @@ class SyncPullService
             $rows[$index]['attachment_mime'] = $attachment->mime_type;
             $rows[$index]['attachment_size'] = (int) $attachment->size;
             $rows[$index]['attachment_is_image'] = $attachment->isInlineEligibleImage();
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Tombstone mask, the pull half of `MessageResource::toArray()`: a
+     * soft-deleted message keeps its row (so the client can render "message
+     * deleted" in place) but loses its content. Soft delete leaves `body` and
+     * `attachment_id` in the table, and this query is `SELECT *` without the
+     * SoftDeletes scope, so without this step every participant's laptop kept
+     * the text and the file id the web surface no longer shows.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function maskDeletedMessages(array $rows): array
+    {
+        foreach ($rows as $index => $row) {
+            if (($row['deleted_at'] ?? null) === null) {
+                continue;
+            }
+
+            $rows[$index]['body'] = null;
+            $rows[$index]['attachment_id'] = null;
         }
 
         return $rows;

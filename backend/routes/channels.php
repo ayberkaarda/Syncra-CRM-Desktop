@@ -43,6 +43,15 @@ use Illuminate\Support\Facades\Broadcast;
 |    surface, but a websocket connection outlives the request that opened it,
 |    so every callback re-checks `is_active` at authorization time as well.
 |
+| 4. A forced password change closes every channel, the personal one included.
+|    Data channels refuse such a user through $mayReceiveData below; the
+|    personal channel refuses them too, because it is not identity-only: it
+|    carries CRM notifications, task reminders (title + related record label)
+|    and chat unread counters. That is the socket side of the line
+|    routes/api.php draws between the REST whitelist and the data endpoints.
+|    UserDeactivated is lost for that short window, which is acceptable:
+|    EnsureUserIsActive still refuses every request synchronously.
+|
 | The `/broadcasting/auth` route itself is registered in bootstrap/app.php with
 | ['web', 'auth:sanctum', 'active'] - see the note there.
 |
@@ -54,15 +63,26 @@ use Illuminate\Support\Facades\Broadcast;
 */
 
 /*
+ * Shared precondition of every data channel: an active account that does not
+ * owe a forced password change. A closure in a local variable, not a function,
+ * for the redeclaration reason above.
+ */
+$mayReceiveData = static fn (User $user): bool => $user->is_active && ! $user->must_change_password;
+
+/*
  * private-user.{id} — the user's own channel.
  *
  * App\Events\UserDeactivated broadcasts on PrivateChannel('user.'.$userId),
  * which resolves to exactly this callback. Strict identity only: no admin
  * override, because an admin listening on someone else's personal channel
  * would receive their private notifications.
+ *
+ * Refused while a forced password change is owed: besides UserDeactivated this
+ * channel carries CrmNotification, TaskReminderDue and ChatUnread payloads -
+ * record titles and labels the temporary password must not unlock.
  */
 Broadcast::channel('user.{id}', function (User $user, string $id): bool {
-    return $user->id === (int) $id;
+    return $user->id === (int) $id && ! $user->must_change_password;
 });
 
 /*
@@ -73,8 +93,8 @@ Broadcast::channel('user.{id}', function (User $user, string $id): bool {
  * are refused so a session that is being torn down cannot keep advertising
  * itself as online.
  */
-Broadcast::channel('online', function (User $user): ?array {
-    if (! $user->is_active) {
+Broadcast::channel('online', function (User $user) use ($mayReceiveData): ?array {
+    if (! $mayReceiveData($user)) {
         return null;
     }
 
@@ -88,8 +108,8 @@ Broadcast::channel('online', function (User $user): ?array {
  * permission second (cheap, spatie keeps the permission map in cache),
  * existence last (the only branch that touches the database).
  */
-Broadcast::channel('record.{type}.{id}', function (User $user, string $type, string $id): ?array {
-    if (! $user->is_active) {
+Broadcast::channel('record.{type}.{id}', function (User $user, string $type, string $id) use ($mayReceiveData): ?array {
+    if (! $mayReceiveData($user)) {
         return null;
     }
 
@@ -118,8 +138,8 @@ Broadcast::channel('record.{type}.{id}', function (User $user, string $type, str
  * authorization: a user removed from a conversation loses the channel on
  * their next subscribe. `chat.use` gates the feature as a whole.
  */
-Broadcast::channel('conversation.{id}', function (User $user, string $id): bool {
-    if (! $user->is_active || ! $user->can('chat.use')) {
+Broadcast::channel('conversation.{id}', function (User $user, string $id) use ($mayReceiveData): bool {
+    if (! $mayReceiveData($user) || ! $user->can('chat.use')) {
         return false;
     }
 
@@ -132,15 +152,15 @@ Broadcast::channel('conversation.{id}', function (User $user, string $id): bool 
 /*
  * private-logs — live activity/session log stream (Phase 5).
  */
-Broadcast::channel('logs', function (User $user): bool {
-    return $user->is_active && $user->can('logs.view');
+Broadcast::channel('logs', function (User $user) use ($mayReceiveData): bool {
+    return $mayReceiveData($user) && $user->can('logs.view');
 });
 
 /*
  * private-dashboard — live dashboard counters (Phase 11).
  */
-Broadcast::channel('dashboard', function (User $user): bool {
-    return $user->is_active && $user->can('dashboard.view');
+Broadcast::channel('dashboard', function (User $user) use ($mayReceiveData): bool {
+    return $mayReceiveData($user) && $user->can('dashboard.view');
 });
 
 /*
@@ -152,10 +172,10 @@ Broadcast::channel('dashboard', function (User $user): bool {
  * themselves. The permission is read from ChannelRegistry::board() rather than
  * written inline, so the board dictionary has exactly one home.
  */
-Broadcast::channel('deals', function (User $user): bool {
+Broadcast::channel('deals', function (User $user) use ($mayReceiveData): bool {
     $permission = ChannelRegistry::board('deals');
 
-    return $permission !== null && $user->is_active && $user->can($permission);
+    return $permission !== null && $mayReceiveData($user) && $user->can($permission);
 });
 
 /*
@@ -170,8 +190,8 @@ Broadcast::channel('deals', function (User $user): bool {
  * ChannelRegistry::board() rather than written inline, so the board
  * dictionary keeps exactly one home.
  */
-Broadcast::channel('tickets', function (User $user): bool {
+Broadcast::channel('tickets', function (User $user) use ($mayReceiveData): bool {
     $permission = ChannelRegistry::board('tickets');
 
-    return $permission !== null && $user->is_active && $user->can($permission);
+    return $permission !== null && $mayReceiveData($user) && $user->can($permission);
 });

@@ -2,10 +2,13 @@
 
 namespace App\Services\Sync;
 
+use App\Models\SavedView;
 use App\Models\User;
+use App\Services\SavedViews\SavedViewModules;
 use App\Sync\SyncableRegistry;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Decides WHICH tables and WHICH rows a caller may pull (SYNCDESKTOP §4.1).
@@ -81,9 +84,15 @@ class SyncScope
             'conversations' => $query->whereIn('id', $this->conversationIds($userId)),
             'messages', 'conversation_user' => $query->whereIn('conversation_id', $this->conversationIds($userId)),
 
-            'saved_views' => $query->where(function ($q) use ($userId): void {
-                $q->where('user_id', $userId)->orWhere('is_shared', true);
-            }),
+            // Ownership/sharing AND module access, the two halves of
+            // SavedViewPolicy::view(). Without the module half a shared
+            // `tickets` view reached a sales rep's laptop even though the web
+            // listing hides it from them.
+            'saved_views' => $query
+                ->where(function ($q) use ($userId): void {
+                    $q->where('user_id', $userId)->orWhere('is_shared', true);
+                })
+                ->whereIn('module', $this->savedViewModules($user)),
 
             // Public settings only. The private ones are an admin surface and
             // some of them (integration keys, thresholds) are exactly what a
@@ -111,6 +120,22 @@ class SyncScope
         // `password`, `remember_token` and `must_change_password`, and a
         // blacklist would leak whatever column is added next.
         return $table === 'users' ? SyncableRegistry::USER_PROJECTION : null;
+    }
+
+    /**
+     * Saved view modules whose listing this user may open, decided by the same
+     * SavedViewPolicy::viewAny() the web surface asks - never re-derived here.
+     *
+     * @return array<int, string>
+     */
+    private function savedViewModules(User $user): array
+    {
+        $gate = Gate::forUser($user);
+
+        return array_values(array_filter(
+            SavedViewModules::names(),
+            fn (string $module): bool => $gate->allows('viewAny', [SavedView::class, $module]),
+        ));
     }
 
     /**

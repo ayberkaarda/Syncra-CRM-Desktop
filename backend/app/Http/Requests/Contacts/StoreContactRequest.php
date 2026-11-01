@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Contacts;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreContactRequest extends FormRequest
 {
@@ -27,7 +28,9 @@ class StoreContactRequest extends FormRequest
             'mobile' => ['nullable', 'string', 'max:50'],
             'position' => ['nullable', 'string', 'max:255'],
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
-            'owner_id' => ['nullable', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'owner_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
             'is_primary' => ['sometimes', 'boolean'],
             'address' => ['nullable', 'string'],
             'city' => ['nullable', 'string', 'max:255'],

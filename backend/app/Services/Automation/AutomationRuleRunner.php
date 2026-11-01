@@ -6,7 +6,9 @@ use App\Models\AutomationRule;
 use App\Models\Deal;
 use App\Models\PipelineStage;
 use App\Models\Ticket;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Faz 14 / İz F — aktif kuralları bir tetikleyici olayla eşleştirir, ÇALIŞMA ANI izin
@@ -124,6 +126,20 @@ final class AutomationRuleRunner
             return;
         }
 
+        // Devre dışı bırakılmış bir hesap REST/sync yüzeyinde hiçbir şey
+        // yapamaz; kuralı da onun adına eylem üretmeye devam edemez. Spatie
+        // izinleri hesap kapatılınca silinmediği için izin kontrolü bunu
+        // tek başına yakalamaz.
+        if (! $creator->is_active) {
+            Log::warning('automation.execute.creator_inactive', [
+                'automation_rule_id' => $rule->getKey(),
+                'automation_rule_name' => $rule->name,
+                'created_by' => $creator->getKey(),
+            ]);
+
+            return;
+        }
+
         $missing = AutomationPermissionChecker::missingPermissions(
             $creator,
             $rule->trigger_type,
@@ -144,6 +160,20 @@ final class AutomationRuleRunner
             return;
         }
 
-        AutomationActionExecutor::execute($rule, $creator, $context);
+        // Eylem tetikleyen isteğin transaction'ı İÇİNDE koşar (ör.
+        // TicketService::create içindeki `eloquent.created`). Hata yukarı
+        // taşınsaydı otomasyonun bir arızası kullanıcının kaydını geri alıp 500
+        // dönerdi. İç transaction bir savepoint'tir: eylemin yarım yazımı geri
+        // alınır, tetikleyen kayıt kalır ve her kural ayrı izole olur (guard'a
+        // konacak bir catch, sonraki kuralları da atlardı).
+        try {
+            DB::transaction(fn () => AutomationActionExecutor::execute($rule, $creator, $context));
+        } catch (Throwable $e) {
+            Log::error('automation.execute.failed', [
+                'automation_rule_id' => $rule->getKey(),
+                'action_type' => $rule->action_type,
+                'exception' => $e,
+            ]);
+        }
     }
 }

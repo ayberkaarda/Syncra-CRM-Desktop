@@ -25,6 +25,12 @@ class TaskResource extends JsonResource
 
         $shortType = MorphTargets::shortName($task->taskable_type);
 
+        // Bağlı kaydın kimliği ve etiketi yalnızca o kaydı görebilene gider:
+        // `tasks.view` görevi açar, hedef modülü (ör. fırsat) değil.
+        $target = $task->relationLoaded('taskable') ? $task->taskable : null;
+        $showTarget = $target !== null && $shortType !== null
+            && ($request->user()?->can('view', $target) ?? false);
+
         return [
             'id' => $task->id,
             'title' => $task->title,
@@ -49,12 +55,12 @@ class TaskResource extends JsonResource
                 : null,
             // Hedef silinmişse (soft/hard) MorphTo null döner -> null.
             // taskable_type set değilse (görev hiçbir kayda bağlı değilse)
-            // de null.
-            'taskable' => $task->relationLoaded('taskable') && $task->taskable !== null && $shortType !== null
+            // de null. Hedefi görme izni yoksa da null.
+            'taskable' => $showTarget
                 ? [
                     'type' => $shortType,
                     'id' => $task->taskable_id,
-                    'label' => MorphTargets::label($shortType, $task->taskable),
+                    'label' => MorphTargets::label($shortType, $target),
                 ]
                 : null,
             'created_at' => $task->created_at?->toIso8601String(),

@@ -54,6 +54,13 @@ class DeviceTokenService
      */
     public const ABILITY = 'desktop';
 
+    /**
+     * Lifetime of a token issued while `must_change_password` is set: long
+     * enough to finish the change-password screen, short enough that the
+     * temporary password never turns into a lasting device credential.
+     */
+    public const FORCED_CHANGE_TOKEN_MINUTES = 15;
+
     public function __construct(
         private readonly LogFailedLogin $logFailedLogin,
         private readonly LogLockout $logLockout,
@@ -115,7 +122,24 @@ class DeviceTokenService
                 ->where('device_fingerprint', $input['device_fingerprint'])
                 ->delete();
 
-            $created = $user->createToken((string) $input['device_name'], [self::ABILITY]);
+            /*
+             * A user who still owes a forced password change gets a token
+             * that EXPIRES (FORCED_CHANGE_TOKEN_MINUTES). Refusing outright
+             * would break the desktop's own first-login flow: the client
+             * reads `must_change_password` from this response, routes to its
+             * change-password screen and calls POST /api/password/change with
+             * this very bearer. Until then the token reaches only the
+             * password.changed whitelist (me, logout, password/change and the
+             * personal broadcast channel). What it must not become is a
+             * long-lived credential minted from the temporary password, so it
+             * dies on its own unless AuthService::changePassword() lifts the
+             * expiry after a successful change.
+             */
+            $expiresAt = $user->must_change_password
+                ? now()->addMinutes(self::FORCED_CHANGE_TOKEN_MINUTES)
+                : null;
+
+            $created = $user->createToken((string) $input['device_name'], [self::ABILITY], $expiresAt);
 
             /*
              * Written after creation rather than through createToken(), which

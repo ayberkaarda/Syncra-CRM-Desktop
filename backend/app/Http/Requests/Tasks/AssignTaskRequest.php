@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Tasks;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * `PATCH /api/tasks/{task}/assign` — Yetkilendirme TaskController::assign()
@@ -21,7 +22,9 @@ class AssignTaskRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'assigned_to' => ['required', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'assigned_to' => ['required', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
         ];
     }
 }

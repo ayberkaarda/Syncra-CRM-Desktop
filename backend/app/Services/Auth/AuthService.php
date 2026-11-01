@@ -197,6 +197,18 @@ class AuthService
         $user = Auth::guard('web')->user();
         $sessionId = $request->hasSession() ? $request->session()->getId() : null;
 
+        // Bearer çağrı: oturum yok, kimlik belirtecin kendisi. Onu silmeden
+        // "çıkış" yalnızca 204 dönerdi ve aynı belirteç çalışmaya devam ederdi.
+        // Yalnızca GERÇEK bir PersonalAccessToken silinir; SPA çerez oturumu
+        // TransientToken taşır ve aşağıdaki oturum kapatma yolundan geçer.
+        // Masaüstünün olağan çıkışı (DELETE /api/me/devices/{id}) bundan
+        // etkilenmez.
+        $token = $request->user()?->currentAccessToken();
+
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+        }
+
         Auth::guard('web')->logout();
 
         if ($request->hasSession()) {
@@ -285,6 +297,14 @@ class AuthService
         }
 
         $tokens->delete();
+
+        // The device that just completed a FORCED change keeps working past
+        // the short lifetime DeviceTokenService gave it while the temporary
+        // password was the only credential: the change itself proved the
+        // current password and set a new one.
+        if ($wasForced && $current instanceof PersonalAccessToken && $current->expires_at !== null) {
+            $current->forceFill(['expires_at' => null])->save();
+        }
 
         /*
          * A password change is a privilege boundary - same rule as login.

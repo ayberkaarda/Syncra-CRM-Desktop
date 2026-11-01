@@ -276,8 +276,14 @@ class AppServiceProvider extends ServiceProvider
     protected function registerLoginRateLimiter(): void
     {
         RateLimiter::for('login', function (Request $request) {
+            // The limiter runs BEFORE LoginRequest validates the body, so the
+            // field can still be anything: `(string)` on an array (email[]=x)
+            // raised "Array to string conversion" and answered 500 instead of
+            // letting validation produce its 422.
+            $email = $request->input('email');
+
             $key = AuthService::throttleKey(
-                (string) $request->input('email'),
+                is_string($email) ? $email : '',
                 $request->ip()
             );
 

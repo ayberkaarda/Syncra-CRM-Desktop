@@ -144,7 +144,10 @@ class ChannelPayloadLeakTest extends TestCase
      */
     public function test_online_presence_payload_never_leaks_sensitive_or_internal_fields(): void
     {
-        $user = User::factory()->create(['must_change_password' => true]);
+        // `must_change_password` false: zorunlu değişim borçlusu `online`
+        // kanalına artık hiç katılamaz (bkz. ForcedPasswordChannelTest). Alanın
+        // payload'a girmediği aşağıda yine anahtar düzeyinde doğrulanır.
+        $user = User::factory()->create(['must_change_password' => false]);
         $user->assignRole('Satış Temsilcisi');
 
         $response = $this->authorize($user, 'presence-online')->assertOk();

@@ -104,7 +104,10 @@ class ReportController extends Controller
     {
         abort_unless(Gate::allows('reports.export'), Response::HTTP_FORBIDDEN);
 
-        $slug = (string) $request->query('report');
+        // `(string)` YOK: `?report[]=x` bir dizi getirir ve dizinin dizeye
+        // çevrilmesi 500 üretirdi. in_array(..., true) dizi/null'ı zaten
+        // reddeder, böylece her biçimsiz girdi 422 alır.
+        $slug = $request->query('report');
 
         if (! in_array($slug, ReportExportService::SLUGS, true)) {
             throw ValidationException::withMessages([
@@ -112,7 +115,7 @@ class ReportController extends Controller
             ]);
         }
 
-        $format = (string) $request->query('format', 'csv');
+        $format = $request->query('format', 'csv');
 
         if (! in_array($format, ['csv', 'xlsx'], true)) {
             throw ValidationException::withMessages([

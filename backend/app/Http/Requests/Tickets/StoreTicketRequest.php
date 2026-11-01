@@ -52,7 +52,9 @@ class StoreTicketRequest extends FormRequest
             'category' => ['sometimes', 'nullable', 'string', 'max:255'],
             'contact_id' => ['sometimes', 'nullable', 'integer', 'exists:contacts,id'],
             'company_id' => ['sometimes', 'nullable', 'integer', 'exists:companies,id'],
-            'assigned_to' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'assigned_to' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
             'tag_ids' => ['sometimes', 'nullable', 'array'],
             'tag_ids.*' => ['integer', 'exists:tags,id'],
             'custom_fields' => ['sometimes', 'nullable', 'array'],

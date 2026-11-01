@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Leads;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class AssignLeadRequest extends FormRequest
 {
@@ -20,7 +21,9 @@ class AssignLeadRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'owner_id' => ['required', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'owner_id' => ['required', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
         ];
     }
 }

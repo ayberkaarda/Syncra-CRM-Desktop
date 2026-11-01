@@ -6,7 +6,11 @@ use App\Models\Lead;
 use App\Models\User;
 use App\Repositories\LeadRepository;
 use App\Support\ImportBatch;
+use App\Sync\SyncCounter;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Spatie\Activitylog\ActivityLogStatus;
+use Spatie\Activitylog\CauserResolver;
 
 /**
  * CSV satırlarını lead kayıtlarına dönüştüren orkestrasyon katmanı.
@@ -108,6 +112,13 @@ class LeadImportService
         // kalmamalı.
         $logStatus->disable();
 
+        // Kuyruktaki import'ta oturum yoktur: satır başına güncelleme denetim
+        // satırları (updateWithAudit) causer'sız kalırdı. Import boyunca
+        // causer açıkça import'u başlatan kullanıcıya bağlanır.
+        /** @var CauserResolver $causer */
+        $causer = app(CauserResolver::class);
+        $causer->setCauser($actor);
+
         $createdIds = [];
         $updatedIds = [];
 
@@ -115,7 +126,7 @@ class LeadImportService
             $sinceFlush = 0;
 
             foreach ($this->parser->rows($handle) as $row) {
-                $this->processRow($row, $batch, $duplicateMode, $ownerId, $createdIds, $updatedIds);
+                $this->processRow($row, $batch, $duplicateMode, $ownerId, $actor, $createdIds, $updatedIds);
 
                 // Her satırda Redis'e yazmak yerine 50 satırda bir — bkz.
                 // ImportBatch::flush() dokümantasyonu.
@@ -129,6 +140,7 @@ class LeadImportService
             $batch->markCompleted();
         } finally {
             $logStatus->enable();
+            $causer->setCauser(null);
         }
 
         $this->logSummary($batch, $actor, $createdIds, $updatedIds);
@@ -139,7 +151,7 @@ class LeadImportService
      * @param  array<int, int>  $createdIds
      * @param  array<int, int>  $updatedIds
      */
-    private function processRow(array $row, ImportBatch $batch, string $duplicateMode, ?int $ownerId, array &$createdIds, array &$updatedIds): void
+    private function processRow(array $row, ImportBatch $batch, string $duplicateMode, ?int $ownerId, User $actor, array &$createdIds, array &$updatedIds): void
     {
         $batch->incrementProcessed();
 
@@ -188,11 +200,22 @@ class LeadImportService
 
         if ($strong !== null && $duplicateMode === 'update') {
             if ($strong['type'] === DuplicateDetector::TYPE_LEAD) {
-                $lead = Lead::query()->find($strong['id']);
+                $outcome = $this->updateMatchedLead((int) $strong['id'], $data, $actor);
 
-                if ($lead !== null) {
-                    $this->leads->update($lead, $data);
-                    $updatedIds[] = $lead->id;
+                if ($outcome === 'denied') {
+                    $batch->addError(
+                        $row['row'],
+                        "Eşleşen lead #{$strong['id']} için güncelleme yetkiniz yok (sahiplik veya dönüşmüş kayıt) — satır atlandı.",
+                        $row['raw'],
+                        'skipped',
+                    );
+                    $batch->incrementSkipped();
+
+                    return;
+                }
+
+                if ($outcome === 'updated') {
+                    $updatedIds[] = (int) $strong['id'];
                     $batch->incrementUpdated();
 
                     return;
@@ -225,6 +248,72 @@ class LeadImportService
         $lead = $this->leads->create($data);
         $createdIds[] = $lead->id;
         $batch->incrementCreated();
+    }
+
+    /**
+     * Eşleşen lead'i KİLİTLİ okuyup karar verir ve aynı transaction'da yazar.
+     *
+     * Import izni bir güncelleme izni DEĞİLDİR: satır, web'deki PATCH ile aynı
+     * LeadPolicy::update() kapısından geçer (`leads.update` + sahiplik +
+     * dönüşmüş lead kilidi). Karar kilitsiz bir anlık görüntüye göre verilseydi
+     * araya giren bir dönüşüm (LeadConversionService de satırı kilitler) ya da
+     * devretme sonrasında `converted` durum `new` ile ezilir veya artık
+     * başkasının olan lead yazılırdı. Kilit sırası SyncCounter'daki kuralı
+     * izler: önce sayaç, sonra satır.
+     *
+     * @param  array<string, mixed>  $data
+     * @return 'updated'|'denied'|'missing'
+     */
+    private function updateMatchedLead(int $leadId, array $data, User $actor): string
+    {
+        return DB::transaction(function () use ($leadId, $data, $actor): string {
+            SyncCounter::lock();
+
+            /** @var Lead|null $lead */
+            $lead = Lead::query()->whereKey($leadId)->lockForUpdate()->first();
+
+            // Aday bulunduktan sonra silinmiş olabilir: çağıran normal
+            // oluşturma akışına düşer.
+            if ($lead === null) {
+                return 'missing';
+            }
+
+            if (Gate::forUser($actor)->denies('update', $lead)) {
+                return 'denied';
+            }
+
+            // Sahip güncellemede DEĞİŞMEZ: web'de de devretme ayrı bir uçtur
+            // (UpdateLeadRequest `owner_id` => missing). Import'un `owner_id`'si
+            // yalnızca YENİ satırların sahibidir.
+            unset($data['owner_id']);
+
+            $this->updateWithAudit($lead, $data);
+
+            return 'updated';
+        });
+    }
+
+    /**
+     * Mevcut bir kaydın üzerine yazmak, yeni kayıt açmaktan farklıdır: eski
+     * değerler yalnızca alan düzeyindeki denetim satırında kalır. Toplu
+     * özet (`leads.imported`) yalnızca id taşır, ezilen değeri geri getiremez.
+     * Bu yüzden import boyunca kapatılan model loglaması, GÜNCELLEME için
+     * satır başına geçici olarak açılır; oluşturmalar özet satırında kalır.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function updateWithAudit(Lead $lead, array $data): void
+    {
+        /** @var ActivityLogStatus $logStatus */
+        $logStatus = app(ActivityLogStatus::class);
+
+        $logStatus->enable();
+
+        try {
+            $this->leads->update($lead, $data);
+        } finally {
+            $logStatus->disable();
+        }
     }
 
     /**

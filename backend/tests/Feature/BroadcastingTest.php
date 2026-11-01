@@ -128,14 +128,16 @@ class BroadcastingTest extends TestCase
             ->assertJsonPath('errors.code', 'USER_DEACTIVATED');
     }
 
-    public function test_channel_auth_is_reachable_during_a_forced_password_change(): void
+    public function test_channel_auth_is_reachable_but_refuses_the_personal_channel_during_a_forced_password_change(): void
     {
-        // Deliberate: `password.changed` is NOT on this route. A user under a
-        // forced password change still needs a live socket - that is exactly
-        // the session in which UserDeactivated has to reach them.
+        // `password.changed` is still NOT on this route (the route answers, no
+        // PASSWORD_CHANGE_REQUIRED), but the personal channel itself refuses:
+        // it carries notifications, task reminders and chat counters, not just
+        // UserDeactivated. See Security\ForcedPasswordChannelTest.
         $user = User::factory()->create(['must_change_password' => true]);
 
-        $this->authorize($user, 'private-user.'.$user->id)->assertOk();
+        $response = $this->authorize($user, 'private-user.'.$user->id)->assertStatus(403);
+        $this->assertNotSame('PASSWORD_CHANGE_REQUIRED', $response->json('errors.code'));
     }
 
     /* ----------------------------------------------------------------------

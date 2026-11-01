@@ -319,7 +319,9 @@ class TaskApiTest extends TestCase
 
     public function test_store_links_task_to_valid_taskable_target(): void
     {
-        $actor = $this->actorWithPermissions(['tasks.create']);
+        // `deals.view` gerekli: bağlı kaydın tür/id/etiketi yalnızca o kaydı
+        // görebilene döner (bkz. Security\MorphLabelLeakTest).
+        $actor = $this->actorWithPermissions(['tasks.create', 'deals.view']);
         $deal = Deal::factory()->create(['title' => 'CRM Kurulum']);
 
         $response = $this->actingAs($actor)->postJson('/api/tasks', [

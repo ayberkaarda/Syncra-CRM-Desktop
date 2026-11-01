@@ -50,7 +50,9 @@ class StoreTaskRequest extends FormRequest
             'reminder_at' => ['nullable', 'date', 'before_or_equal:due_at'],
             'priority' => ['nullable', Rule::in(['low', 'normal', 'high', 'urgent'])],
             'status' => ['nullable', Rule::in(['pending', 'in_progress', 'completed', 'cancelled'])],
-            'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'assigned_to' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
             // İkisi birlikte gönderilmeli: required_with karşılıklı, biri
             // varsa diğeri zorunlu olur. taskable_type ayrıca beyaz listede
             // olmalı (MorphTargets::TARGETS) — sınıf enjeksiyonu engellenir.
