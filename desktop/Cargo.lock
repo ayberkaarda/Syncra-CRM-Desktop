@@ -4968,7 +4968,7 @@ dependencies = [
 
 [[package]]
 name = "syncra-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fern",
  "log",
@@ -5005,7 +5005,7 @@ dependencies = [
 
 [[package]]
 name = "syncra-sync"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "keyring",
