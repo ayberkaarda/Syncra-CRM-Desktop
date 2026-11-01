@@ -6,6 +6,7 @@ use App\Models\PageVisitLog;
 use App\Models\SessionLog;
 use App\Models\SyncDeletion;
 use App\Models\SyncIdempotency;
+use App\Sync\WriteTrail;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,7 +29,7 @@ class PruneLogs extends Command
      */
     protected $signature = 'logs:prune
         {--days= : Tüm tablolar için tek bir saklama süresi (gün) — config değerlerini ezer}
-        {--table= : Yalnızca bu tabloyu buda: page_visits|sessions|activities|sync_deletions|sync_idempotency}
+        {--table= : Yalnızca bu tabloyu buda: page_visits|sessions|activities|sync_deletions|sync_idempotency|write_trail}
         {--dry-run : Hiçbir şey silmez, kaç satırın etkileneceğini yazdırır}
         {--force : Onay istemeden çalıştır (üretimde --force olmadan silme yapılmaz)}';
 
@@ -48,7 +49,7 @@ class PruneLogs extends Command
         $targets = $this->resolveTargets($tableOption);
 
         if ($targets === null) {
-            $this->components->error("Geçersiz --table değeri: '{$tableOption}'. Beklenen: page_visits, sessions, activities.");
+            $this->components->error("Geçersiz --table değeri: '{$tableOption}'. Beklenen: page_visits, sessions, activities, sync_deletions, sync_idempotency, write_trail.");
 
             return self::FAILURE;
         }
@@ -83,15 +84,22 @@ class PruneLogs extends Command
             $totalAffected += $count;
         }
 
+        // Satırı artık olmayan sync_untrailed_writes kayıtları (WriteTrail::prune):
+        // süreye bağlı değil; yalnızca kendi --table değeriyle ya da tüm
+        // tablolarla birlikte, diğer silmelerle aynı onaydan geçerek süpürülür.
+        $sweepTrail = $tableOption === null || $tableOption === 'write_trail';
+        $trailCount = $sweepTrail ? WriteTrail::countOrphans() : 0;
+        $totalAffected += $trailCount;
+
         if ($isDryRun) {
-            $this->printPlan($plan, dryRun: true);
+            $this->printPlan($plan, dryRun: true, trailCount: $sweepTrail ? $trailCount : null);
             $this->components->info("dry-run: hiçbir şey silinmedi (toplam {$totalAffected} satır etkilenecekti).");
 
             return self::SUCCESS;
         }
 
         if ($totalAffected === 0) {
-            $this->printPlan($plan, dryRun: false);
+            $this->printPlan($plan, dryRun: false, trailCount: $sweepTrail ? $trailCount : null);
             $this->components->info('Saklama süresini aşan kayıt bulunamadı, silinecek bir şey yok.');
 
             return self::SUCCESS;
@@ -104,7 +112,7 @@ class PruneLogs extends Command
                 return self::FAILURE;
             }
 
-            $this->printPlan($plan, dryRun: false);
+            $this->printPlan($plan, dryRun: false, trailCount: $sweepTrail ? $trailCount : null);
 
             if (! $this->confirm("Toplam {$totalAffected} satır kalıcı olarak silinecek. Devam edilsin mi?")) {
                 $this->components->warn('İşlem iptal edildi.');
@@ -127,6 +135,22 @@ class PruneLogs extends Command
                     'label' => $target['label'],
                     'deleted' => $deleted,
                     'elapsed' => $elapsed,
+                ];
+
+                return true;
+            });
+        }
+
+        if ($sweepTrail) {
+            $started = microtime(true);
+
+            $this->components->task(WriteTrail::TABLE.' budanıyor (satırı silinmiş kayıtlar)', function () use (&$summary, $started) {
+                $deleted = WriteTrail::prune();
+
+                $summary['write_trail'] = [
+                    'label' => WriteTrail::TABLE,
+                    'deleted' => $deleted,
+                    'elapsed' => round(microtime(true) - $started, 2),
                 ];
 
                 return true;
@@ -203,6 +227,11 @@ class PruneLogs extends Command
             return $all;
         }
 
+        // Süreye bağlı bir tablo değil; handle() ayrıca süpürür.
+        if ($tableOption === 'write_trail') {
+            return [];
+        }
+
         if (! array_key_exists($tableOption, $all)) {
             return null;
         }
@@ -245,7 +274,7 @@ class PruneLogs extends Command
     /**
      * @param  array<string, array{target: array{label: string}, days: int, cutoff: Carbon, count: int}>  $plan
      */
-    private function printPlan(array $plan, bool $dryRun): void
+    private function printPlan(array $plan, bool $dryRun, ?int $trailCount = null): void
     {
         $rows = collect($plan)->map(fn ($entry) => [
             $entry['target']['label'],
@@ -253,6 +282,10 @@ class PruneLogs extends Command
             $entry['cutoff']->toDateTimeString().' öncesi',
             $entry['count'],
         ])->all();
+
+        if ($trailCount !== null) {
+            $rows[] = [WriteTrail::TABLE, '-', 'satırı silinmiş kayıtlar', $trailCount];
+        }
 
         $this->components->info($dryRun ? 'dry-run planı:' : 'Silme planı:');
         $this->table(['Tablo', 'Saklama Süresi', 'Kesim Tarihi', 'Etkilenecek Satır'], $rows);

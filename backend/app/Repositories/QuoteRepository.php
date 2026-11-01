@@ -175,6 +175,12 @@ class QuoteRepository
      */
     public function replaceItems(Quote $quote, array $items): void
     {
+        // The counter before the item rows: the bump below draws a version, and
+        // a desktop update holds the counter while it replaces these same rows.
+        // Inserting an item also share-locks the quote row through its foreign
+        // key, which the desktop update locks after the counter (SyncCounter).
+        SyncCounter::lock();
+
         $quote->items()->delete();
 
         $position = 1;

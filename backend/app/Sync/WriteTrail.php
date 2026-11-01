@@ -54,24 +54,44 @@ final class WriteTrail
     private const READY = 'sync.write-trail.ready';
 
     /**
-     * Whether the schema is there, asked once per request or queued job.
+     * How long one answer to `ready()` is trusted, in seconds.
+     */
+    public const READY_TTL = 60;
+
+    /**
+     * Whether the schema is there, asked at most once per request or queued
+     * job, and at most once a minute in a process that never starts a new one.
      *
      * The answer is a scoped container instance, not a static: the queue worker
      * (and Octane) drop scoped instances before every job (and request), and a
      * plain PHP request starts with none. So a long-lived process follows a
      * migration either way - it arriving, or being rolled back underneath it -
-     * from its next unit of work, with no restart and two schema queries per
-     * unit at most. A static remembered "ready" until the process died, and
-     * every audited write after a rollback failed on the dropped column.
+     * from its next unit of work, with no restart. A static remembered "ready"
+     * until the process died, and every audited write after a rollback failed
+     * on the dropped column.
+     *
+     * A process that never resets scoped state (a custom daemon loop, one job
+     * that runs for hours) would keep the first answer for good, so the answer
+     * also expires after READY_TTL seconds. Writes inside that window still take
+     * no query; a rollback is seen within a minute instead of never.
      */
     public static function ready(): bool
     {
         $container = Container::getInstance();
-        $container->scopedIf(self::READY, fn (): bool => self::auditSchema()
-            ->hasColumn(config('activitylog.table_name', 'activity_log'), self::COLUMN)
-            && Schema::hasTable(self::TABLE));
+        $container->scopedIf(self::READY, fn (): object => (object) ['ready' => false, 'askedAt' => null]);
 
-        return (bool) $container->make(self::READY);
+        /** @var object{ready: bool, askedAt: int|null} $answer */
+        $answer = $container->make(self::READY);
+        $now = now()->getTimestamp();
+
+        if ($answer->askedAt === null || $now - $answer->askedAt >= self::READY_TTL) {
+            $answer->ready = self::auditSchema()
+                ->hasColumn(config('activitylog.table_name', 'activity_log'), self::COLUMN)
+                && Schema::hasTable(self::TABLE);
+            $answer->askedAt = $now;
+        }
+
+        return $answer->ready;
     }
 
     /**
@@ -167,6 +187,19 @@ final class WriteTrail
      */
     public static function prune(): int
     {
+        return self::sweepOrphans(delete: true);
+    }
+
+    /**
+     * How many records prune() would remove, removing nothing.
+     */
+    public static function countOrphans(): int
+    {
+        return self::sweepOrphans(delete: false);
+    }
+
+    private static function sweepOrphans(bool $delete): int
+    {
         if (! self::ready()) {
             return 0;
         }
@@ -184,7 +217,7 @@ final class WriteTrail
                 });
             }
 
-            $removed += $records->delete();
+            $removed += $delete ? $records->delete() : $records->count();
         }
 
         return $removed;

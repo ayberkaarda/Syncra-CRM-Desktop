@@ -7,6 +7,7 @@ use App\Support\ActivityLogging\ActivityFormatter;
 use App\Support\ActivityLogging\PropertyTruncator;
 use App\Sync\SyncActivityContext;
 use App\Sync\WriteTrail;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
 use Throwable;
 
@@ -82,12 +83,27 @@ class ActivityLogObserver
     public function created(Activity $activity): void
     {
         try {
-            ActivityLogged::dispatch(ActivityFormatter::broadcastPayload($activity));
+            $payload = ActivityFormatter::broadcastPayload($activity);
         } catch (Throwable $e) {
-            // The audit row is the product; the broadcast is a convenience.
-            // A dead queue connection must never turn "the deal was saved" into
-            // a 500 - and must never roll back an audit write either.
             report($e);
+
+            return;
         }
+
+        // Only once the outermost transaction commits (at once when there is
+        // none): an audit row that is rolled back with its write must not
+        // reach the Logs page. The push itself runs inside this callback, so
+        // its failure is still caught here instead of surfacing from the
+        // commit.
+        DB::afterCommit(function () use ($payload): void {
+            try {
+                ActivityLogged::dispatch($payload);
+            } catch (Throwable $e) {
+                // The audit row is the product; the broadcast is a convenience.
+                // A dead queue connection must never turn "the deal was saved"
+                // into a 500 - and must never roll back an audit write either.
+                report($e);
+            }
+        });
     }
 }

@@ -35,6 +35,12 @@ class DashboardInvalidated implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
+     * Yayın, en dıştaki transaction commit olduktan sonra kuyruğa girer;
+     * geri alınırsa hiç gönderilmez. Geri alınan bir yazım yayın bırakmaz.
+     */
+    public bool $afterCommit = true;
+
+    /**
      * @param  array<int, string>  $keys  bayatlayan metrik/anahtar adları (ör. ['kpis', 'funnel', 'revenue-trend'])
      */
     public function __construct(public readonly array $keys) {}

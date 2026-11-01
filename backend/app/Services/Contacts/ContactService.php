@@ -5,6 +5,7 @@ namespace App\Services\Contacts;
 use App\Models\Contact;
 use App\Models\CustomFieldValue;
 use App\Repositories\ContactRepository;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -114,6 +115,11 @@ class ContactService
     protected function syncCustomFields(Contact $contact, array $values): void
     {
         $definitions = $this->contacts->customFieldDefinitions();
+
+        // The counter before the child rows: the bump below draws a version,
+        // and a desktop update holds the counter while it writes these same
+        // rows. Child rows first would close a cycle with it (SyncCounter).
+        SyncCounter::lock();
 
         $changed = false;
 

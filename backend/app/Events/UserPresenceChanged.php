@@ -35,6 +35,12 @@ class UserPresenceChanged implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
+     * Queued only once the outermost transaction commits, and dropped if it
+     * rolls back: a rolled-back write must leave no broadcast behind.
+     */
+    public bool $afterCommit = true;
+
+    /**
      * @param  'online'|'away'|'offline'  $status
      * @param  array<string, mixed>  $location  e.g. ['route' => 'deals.show', 'record_id' => 42]
      */

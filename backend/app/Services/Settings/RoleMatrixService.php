@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Rol / izin matrisi.
@@ -106,25 +107,77 @@ class RoleMatrixService
             );
         }
 
-        $existingIds = $role->permissions()->pluck('permissions.id')->all();
+        $after = $permissions->pluck('name')->map(fn ($name): string => (string) $name)->all();
 
-        foreach ($permissions->whereNotIn('id', $existingIds) as $permission) {
-            if (! Gate::forUser($actor)->allows($permission->name)) {
-                $this->deny(
-                    'Kendi sahip olmadığınız bir izni başka bir role veremezsiniz.',
-                    'PERMISSION_GRANT_FORBIDDEN',
-                    ['permissions' => ['Yalnızca sahip olduğunuz izinleri verebilirsiniz.']],
-                );
+        DB::transaction(function () use ($role, $permissions, $permissionNames, $actor, $after): void {
+            // Aynı role yönelik eşzamanlı iki matris kaydı sıraya girer: rol
+            // satırı kilitlenir, mevcut izinler kilitli okumayla (anlık görüntü
+            // değil, son commit) alınır. Böylece "verilen izin" denetimi de
+            // denetim kaydının "önce" listesi de diğer yöneticinin az önce
+            // commit ettiği hâle göre hesaplanır. Bu yol senkron sayacını hiç
+            // almaz; sayacı tutup rol satırını bekleyen yazıma karşı döngü yok.
+            Role::query()->whereKey($role->getKey())->lockForUpdate()->first();
+
+            $existing = $role->permissions()->lockForUpdate()->get(['permissions.id', 'permissions.name']);
+            $existingIds = $existing->pluck('id')->all();
+            $before = $existing->pluck('name')->map(fn ($name): string => (string) $name)->all();
+
+            foreach ($permissions->whereNotIn('id', $existingIds) as $permission) {
+                if (! Gate::forUser($actor)->allows($permission->name)) {
+                    $this->deny(
+                        'Kendi sahip olmadığınız bir izni başka bir role veremezsiniz.',
+                        'PERMISSION_GRANT_FORBIDDEN',
+                        ['permissions' => ['Yalnızca sahip olduğunuz izinleri verebilirsiniz.']],
+                    );
+                }
             }
-        }
 
-        $this->assertActorKeepsSettingsAccess($role, $permissionNames, $actor);
+            $this->assertActorKeepsSettingsAccess($role, $permissionNames, $actor);
 
-        // `syncPermissions` spatie'nin izin önbelleğini kendisi temizler;
-        // ayrıca `forgetCachedPermissions()` çağırmak gerekmez.
-        $role->syncPermissions($permissions);
+            $role->syncPermissions($permissions);
+
+            $this->auditChange($role, $actor, $before, $after);
+
+            // `syncPermissions` önbelleği transaction İÇİNDE temizler; commit'ten
+            // önce gelen bir istek önbelleği eski (hâlâ commit edilmiş) izinlerle
+            // yeniden doldurabilir ve kaldırılan izin önbellek süresince yaşar.
+            // Commit'ten sonra bir kez daha temizlenir.
+            DB::afterCommit(fn () => app(PermissionRegistrar::class)->forgetCachedPermissions());
+        });
 
         return $role->refresh()->load('permissions');
+    }
+
+    /**
+     * Matris değişikliği pivot tablosuna (`role_has_permissions`) yazılır;
+     * model öznitelikleri değişmediği için otomatik denetim kaydı oluşmaz.
+     * Kim, hangi role, hangi izni verdi/aldı: açıkça yazılır. Değişiklik
+     * yoksa satır da yok.
+     *
+     * @param  array<int, string>  $before
+     * @param  array<int, string>  $after
+     */
+    protected function auditChange(Role $role, User $actor, array $before, array $after): void
+    {
+        $granted = array_values(array_diff($after, $before));
+        $revoked = array_values(array_diff($before, $after));
+
+        if ($granted === [] && $revoked === []) {
+            return;
+        }
+
+        sort($granted);
+        sort($revoked);
+
+        activity('crm')
+            ->causedBy($actor)
+            ->performedOn($role)
+            ->withProperties([
+                'role' => (string) $role->name,
+                'granted' => $granted,
+                'revoked' => $revoked,
+            ])
+            ->log('roles.permissions_changed');
     }
 
     /**

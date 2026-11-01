@@ -6,6 +6,7 @@ use App\Events\UserDeactivated;
 use App\Models\User;
 use App\Repositories\UserRepository;
 use App\Services\Settings\DeniesSettingsChange;
+use App\Sync\SyncCounter;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
@@ -76,6 +77,7 @@ class UserService
 
             if ($role) {
                 $user->syncRoles([$role]);
+                $this->auditRoleChange($user, [], $role);
             }
 
             return $user->load('roles');
@@ -88,6 +90,8 @@ class UserService
     public function update(User $user, array $data): User
     {
         return DB::transaction(function () use ($user, $data) {
+            $this->lockCounterFirst();
+
             $role = isset($data['role']) ? $this->resolveRole($data['role']) : null;
             unset($data['role']);
 
@@ -121,11 +125,44 @@ class UserService
             }
 
             if ($roleChanged) {
+                $previous = $user->roles()->pluck('name')->map(fn ($name): string => (string) $name)->all();
                 $user->syncRoles([$role]);
+                $this->auditRoleChange($user, $previous, $role);
             }
 
             return $user->load('roles');
         });
+    }
+
+    /**
+     * Kullanıcı yazımlarının ortak kilit sırası: önce senkron sayacı, sonra
+     * `users` ve `personal_access_tokens` satırları.
+     *
+     * `users` senkron tablosudur; her kayıt `saving` anında sayaçtan sürüm
+     * çeker (SyncVersionObserver). Belirteçleri silip ya da Super Admin
+     * satırlarını kilitleyip sonra kaydeden bir işlem, sayacı tutup aynı
+     * satırları bekleyen başka bir kullanıcı yazımıyla 1213'e düşerdi
+     * (parola sıfırlama/silme ile pasifleştirme, rol değişikliği ile başka bir
+     * Super Admin'in pasifleştirilmesi). Bkz. SyncCounter.
+     */
+    protected function lockCounterFirst(): void
+    {
+        SyncCounter::lock();
+    }
+
+    /**
+     * Rol ataması pivot tablosuna (`model_has_roles`) yazılır; kullanıcının
+     * öznitelikleri değişmediği için otomatik denetim kaydı oluşmaz. Kimin
+     * rolünün kim tarafından neyden neye çevrildiği açıkça yazılır.
+     *
+     * @param  array<int, string>  $from
+     */
+    protected function auditRoleChange(User $user, array $from, Role $to): void
+    {
+        activity('crm')
+            ->performedOn($user)
+            ->withProperties(['from' => $from, 'to' => [(string) $to->name]])
+            ->log('users.role_changed');
     }
 
     protected function resolveRole(string $name): Role
@@ -206,6 +243,8 @@ class UserService
     public function toggleActive(User $user, bool $isActive): User
     {
         return DB::transaction(function () use ($user, $isActive) {
+            $this->lockCounterFirst();
+
             $user->is_active = $isActive;
             $user->save();
 
@@ -251,14 +290,25 @@ class UserService
     public function resetPassword(User $user, string $password): User
     {
         return DB::transaction(function () use ($user, $password) {
+            $this->lockCounterFirst();
+
             // Düz metin ata; model cast'i ('password' => 'hashed') otomatik hash'ler.
             $user->password = $password;
             $user->must_change_password = true;
             $user->setRememberToken(Str::random(60));
 
-            $user->tokens()->delete();
+            $revoked = $user->tokens()->delete();
 
             $user->save();
+
+            // Parola, hash'i ve remember_token denetim kaydına HİÇ girmez
+            // (LogsCrmActivity::GLOBALLY_EXCLUDED_ATTRIBUTES); bu yüzden model
+            // kaydı boş kalır ve sıfırlama izsiz kalırdı. Yalnızca olayın
+            // kendisi ve iptal edilen cihaz sayısı yazılır.
+            activity('crm')
+                ->performedOn($user)
+                ->withProperties(['tokens_revoked' => (int) $revoked])
+                ->log('users.password_reset');
 
             return $user->load('roles');
         });
@@ -267,6 +317,8 @@ class UserService
     public function delete(User $user): void
     {
         DB::transaction(function () use ($user) {
+            $this->lockCounterFirst();
+
             $user->setRememberToken(Str::random(60));
 
             /*

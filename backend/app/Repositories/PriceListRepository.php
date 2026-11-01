@@ -156,6 +156,10 @@ class PriceListRepository
             return;
         }
 
+        // The counter before the demoted rows, as in clearOtherPrimaryContacts():
+        // bumpRows() below draws one version per row (SyncCounter).
+        SyncCounter::lock();
+
         PriceList::query()
             ->whereIn('id', $demoted)
             ->update(['is_default' => false]);

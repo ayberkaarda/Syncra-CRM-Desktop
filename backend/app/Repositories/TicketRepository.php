@@ -156,6 +156,11 @@ class TicketRepository
             ->get()
             ->keyBy('key');
 
+        // The counter before the child rows: the bump below draws a version,
+        // and a desktop update holds the counter while it writes these same
+        // rows. Child rows first would close a cycle with it (SyncCounter).
+        SyncCounter::lock();
+
         $changed = false;
 
         foreach ($customFields as $key => $value) {

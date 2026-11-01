@@ -47,6 +47,12 @@ class TaskReminderDue implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
+     * Yayın, en dıştaki transaction commit olduktan sonra kuyruğa girer;
+     * geri alınırsa hiç gönderilmez. Geri alınan bir yazım yayın bırakmaz.
+     */
+    public bool $afterCommit = true;
+
+    /**
      * @param  int  $assignedTo  Hatırlatıcının gideceği kullanıcı — kanalın hedefi.
      * @param  array<string, mixed>  $payload  bkz. sınıf dokümanı — task_id, title,
      *                                         due_at, priority, taskable_type,

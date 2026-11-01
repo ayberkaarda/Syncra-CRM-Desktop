@@ -47,6 +47,12 @@ class MessageCreated implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
+     * Yayın, en dıştaki transaction commit olduktan sonra kuyruğa girer;
+     * geri alınırsa hiç gönderilmez. Geri alınan bir yazım yayın bırakmaz.
+     */
+    public bool $afterCommit = true;
+
+    /**
      * @param  array<string, mixed>  $message  bkz. MessageResource::payload()
      */
     public function __construct(
