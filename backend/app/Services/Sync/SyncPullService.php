@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\Support\NotificationText;
 use App\Services\Tickets\SlaService;
 use App\Sync\SyncableRegistry;
+use App\Sync\SyncCounter;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -94,8 +95,7 @@ use Illuminate\Support\Facades\Schema;
  *     the alternative - a company silently dropped by the budget - re-orphans
  *     the exact relation this fix exists to close, and the client's cursor
  *     for `companies` would have already advanced past that company's low
- *     `sync_version` by the time it fails to appear, since a bootstrap
- *     closure runs only once (gated on `cursor === 0`). This is bounded by
+ *     `sync_version` by the time it fails to appear. This is bounded by
  *     what THIS response already carries for the five referencing tables (at
  *     most `5 * limit` distinct ids, almost always far fewer since many rows
  *     share a company) rather than unbounded, but a pull that also happens to
@@ -138,39 +138,63 @@ class SyncPullService
         $bytes = 0;
         $scopeTables = $this->scope->tablesFor($user);
 
+        // Read first, and only once. Rows and tombstones are separate queries,
+        // and a commit landing between them leaves each stream complete up to a
+        // different point: a tombstone at v12 then carries the cursor over a row
+        // at v11 the row query was too early to see. Both are bounded here by a
+        // point they are certain to agree on (see SyncCounter).
+        $ceiling = SyncCounter::current();
+
         foreach ($scopeTables as $table => $definition) {
             $cursor = (int) ($cursors[$table] ?? 0);
 
             // Budget exhausted: every table not yet visited simply stays out of
-            // this response. Its cursor is untouched, so the next pull picks it
-            // up exactly where it was left.
+            // this response, with its cursor untouched. `has_more` on the last
+            // table visited is what brings the client back for them: when the
+            // budget runs out exactly between two tables, nothing was cut and
+            // no other flag would say so.
             if ($bytes >= self::MAX_BYTES) {
+                $tables[array_key_last($tables)]['has_more'] = true;
+
                 break;
             }
 
-            $rows = $this->rowsFor($user, $table, $definition, $cursor, $limit, $windowDays);
-            $deletions = $this->deletionsFor($user, $table, $cursor, $limit);
+            $rows = $this->rowsFor($user, $table, $definition, $cursor, $ceiling, $limit, $windowDays);
+            $deletions = $this->deletionsFor($user, $table, $cursor, $ceiling, $limit);
 
             $fullPage = count($rows) >= $limit || count($deletions) >= $limit;
 
+            // Rows and tombstones share ONE scalar cursor (K-C), so this page
+            // may only reach as far as BOTH streams are known to be complete.
+            // A full page of one says nothing about what lies past its last
+            // record, and anything of the other stream beyond that point has
+            // to wait for the next page: sending it would move the cursor over
+            // the unread part.
+            $horizon = PHP_INT_MAX;
+
+            if (count($rows) >= $limit) {
+                $horizon = (int) $rows[array_key_last($rows)]['sync_version'];
+            }
+
+            if (count($deletions) >= $limit) {
+                $horizon = min($horizon, (int) $deletions[array_key_last($deletions)]['sync_version']);
+            }
+
+            $rows = $this->upTo($rows, $horizon);
+
             [$rows, $rowBytes, $truncated] = $this->trimToBudget($rows, self::MAX_BYTES - $bytes);
 
-            $nextCursor = $cursor;
-
-            foreach ($rows as $row) {
-                $nextCursor = max($nextCursor, (int) $row['sync_version']);
+            if ($truncated) {
+                $horizon = (int) $rows[array_key_last($rows)]['sync_version'];
             }
 
-            // Deletions are counted only when the row set survived intact. A
-            // cursor may never move past a row that was cut, and rows and
-            // tombstones share ONE scalar cursor.
-            if (! $truncated) {
-                foreach ($deletions as $deletion) {
-                    $nextCursor = max($nextCursor, (int) $deletion['sync_version']);
-                }
-            } else {
-                $deletions = [];
-            }
+            $deletions = $this->upTo($deletions, $horizon);
+
+            $nextCursor = max([
+                $cursor,
+                ...array_map('intval', array_column($rows, 'sync_version')),
+                ...array_column($deletions, 'sync_version'),
+            ]);
 
             $tables[$table] = [
                 'rows' => $rows,
@@ -187,9 +211,18 @@ class SyncPullService
 
         // U9 closure only ever applies to a BOOTSTRAP window pull: on a delta
         // pull the window filter never ran, so there is nothing to close over
-        // (see class docblock, "TWO GAPS §4.4 NEVER CLOSED").
-        if ($windowDays !== null && (int) ($cursors['companies'] ?? 0) === 0 && array_key_exists('companies', $tables)) {
-            $bytes = $this->applyCompanyClosure($user, $tables, $bytes, $scopeTables['companies']);
+        // (see class docblock, "TWO GAPS §4.4 NEVER CLOSED"). It runs on every
+        // page of the bootstrap, not only the first: a contact on page 3 can
+        // point at a company the window left out on page 1.
+        if ($windowDays !== null && array_key_exists('companies', $tables)) {
+            $bytes = $this->applyCompanyClosure(
+                $user,
+                $tables,
+                $bytes,
+                $scopeTables['companies'],
+                (int) ($cursors['companies'] ?? 0),
+                $windowDays,
+            );
         }
 
         return [
@@ -206,10 +239,18 @@ class SyncPullService
      * response is actually sending the client, not what a wider query could
      * have returned.
      *
+     * Closure rows sit outside the keyset, so they never touch `next_cursor`:
+     * one can carry a version far above the page, and moving the cursor there
+     * would skip every company between. If its version is above the cursor the
+     * keyset simply sends it again later, and the client's upsert is idempotent.
+     *
+     * Past the first page the keyset itself no longer applies the window, so
+     * the only companies still owed are those it already passed over.
+     *
      * @param  array<string, array<string, mixed>>  $tables
      * @param  array<string, mixed>  $companiesDefinition
      */
-    private function applyCompanyClosure(User $user, array &$tables, int $bytes, array $companiesDefinition): int
+    private function applyCompanyClosure(User $user, array &$tables, int $bytes, array $companiesDefinition, int $cursor, int $windowDays): int
     {
         $alreadyPresent = array_map(
             static fn (array $row): int => (int) $row['id'],
@@ -241,6 +282,11 @@ class SyncPullService
         $query = DB::table('companies')->whereIn('id', $missingIds);
         $this->scope->applyRowScope($query, 'companies', $user);
 
+        if ($cursor > 0) {
+            $query->where('sync_version', '<=', $cursor)
+                ->where('updated_at', '<', now()->subDays($windowDays));
+        }
+
         $extraRows = $query
             ->orderBy('sync_version')
             ->get()
@@ -256,10 +302,21 @@ class SyncPullService
         foreach ($extraRows as $row) {
             $bytes += strlen((string) json_encode($row));
             $tables['companies']['rows'][] = $row;
-            $tables['companies']['next_cursor'] = max($tables['companies']['next_cursor'], (int) $row['sync_version']);
         }
 
         return $bytes;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $records  rows or tombstones, in version order
+     * @return array<int, array<string, mixed>>
+     */
+    private function upTo(array $records, int $horizon): array
+    {
+        return array_values(array_filter(
+            $records,
+            static fn (array $record): bool => (int) $record['sync_version'] <= $horizon,
+        ));
     }
 
     /**
@@ -297,9 +354,11 @@ class SyncPullService
      * @param  array<string, mixed>  $definition
      * @return array<int, array<string, mixed>>
      */
-    private function rowsFor(User $user, string $table, array $definition, int $cursor, int $limit, ?int $windowDays): array
+    private function rowsFor(User $user, string $table, array $definition, int $cursor, int $ceiling, int $limit, ?int $windowDays): array
     {
-        $query = DB::table($table)->where('sync_version', '>', $cursor);
+        $query = DB::table($table)
+            ->where('sync_version', '>', $cursor)
+            ->where('sync_version', '<=', $ceiling);
 
         $this->scope->applyRowScope($query, $table, $user);
 
@@ -611,7 +670,7 @@ class SyncPullService
      *
      * @return array<int, array<string, mixed>>
      */
-    private function deletionsFor(User $user, string $table, int $cursor, int $limit): array
+    private function deletionsFor(User $user, string $table, int $cursor, int $ceiling, int $limit): array
     {
         if (! in_array($table, SyncableRegistry::tombstoneTables(), true)) {
             return [];
@@ -619,7 +678,8 @@ class SyncPullService
 
         $query = DB::table('sync_deletions')
             ->where('table_name', $table)
-            ->where('sync_version', '>', $cursor);
+            ->where('sync_version', '>', $cursor)
+            ->where('sync_version', '<=', $ceiling);
 
         if (in_array($table, SyncableRegistry::ownerScopedTombstoneTables(), true)) {
             // The same pair SyncScope::applyRowScope() filters the ROWS on,

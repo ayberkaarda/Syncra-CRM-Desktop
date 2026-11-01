@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Models\Task;
 use App\Support\MorphTargets;
+use App\Sync\SyncCounter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -99,7 +100,7 @@ class TaskRepository
      */
     public function create(array $data): Task
     {
-        return Task::create($data);
+        return SyncCounter::atomically(fn () => Task::create($data));
     }
 
     /**
@@ -108,14 +109,14 @@ class TaskRepository
     public function update(Task $task, array $data): Task
     {
         $task->fill($data);
-        $task->save();
+        SyncCounter::atomically(fn () => $task->save());
 
         return $task;
     }
 
     public function delete(Task $task): void
     {
-        $task->delete();
+        SyncCounter::atomically(fn () => $task->delete());
     }
 
     /**

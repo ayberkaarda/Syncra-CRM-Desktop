@@ -254,7 +254,7 @@ async fn a_halted_engine_does_not_probe() {
     scheduler.stop();
 }
 
-/// A realtime hint pulls only the tables it names.
+/// A realtime hint waits only for the tables it names.
 #[tokio::test]
 async fn handle_realtime_pulls_just_the_named_tables() {
     let h = Harness::start().await;
@@ -283,12 +283,11 @@ async fn handle_realtime_pulls_just_the_named_tables() {
 
     let requests = pull_requests(&h.server).await;
     assert_eq!(requests.len(), 1);
+    // Every cursor, not only `deals`: the server visits its whole scope on every pull and reads
+    // a missing cursor as 0, so naming one table is what would drag every other table along.
     let cursors = requests[0]["cursors"].as_object().unwrap();
-    assert_eq!(
-        cursors.keys().collect::<Vec<_>>(),
-        vec!["deals"],
-        "a realtime pull must not drag every table along"
-    );
+    assert_eq!(cursors.len(), GRANTED.len());
+    assert!(cursors.contains_key("deals"));
     assert_eq!(h.row_count(Entity::Deal), 1);
 }
 

@@ -89,7 +89,10 @@ class CompanyService
             ]);
         }
 
-        $this->companies->delete($company);
+        // Sürüm ve `deleted_at` iki ayrı yazımdır (SyncVersionObserver::deleting).
+        // Araya giren bir çekim firmayı canlı görür ve o sürümü geçen cihaz
+        // silmeyi bir daha alamaz; ikisi birlikte commit olmalı.
+        DB::transaction(fn () => $this->companies->delete($company));
     }
 
     /**

@@ -231,12 +231,14 @@ async fn soft_deleted_rows_become_local_tombstones() {
         1
     );
 
+    // Relative to now: retention sweeps tombstones older than the window in this same round.
+    let yesterday = (chrono::Utc::now() - chrono::Duration::days(1)).to_rfc3339();
     mount_pull(
         &h.server,
         pull_body(vec![(
             "companies",
             vec![json!({
-                "id": 44, "name": "Acme", "deleted_at": "2026-08-30T10:00:00Z",
+                "id": 44, "name": "Acme", "deleted_at": yesterday,
                 "sync_version": 30
             })],
             vec![],

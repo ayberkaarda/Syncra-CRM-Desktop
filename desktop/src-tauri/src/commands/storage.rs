@@ -6,7 +6,6 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime, State};
 use tauri_plugin_dialog::DialogExt;
 
-use syncra_sync::db;
 use syncra_sync::keystore::{KeyStore, SystemKeyStore, KEY_DB};
 use syncra_sync::{DesktopSettings, StorageStats, SyncConfig, SyncEngine};
 
@@ -48,47 +47,26 @@ pub fn storage_settings(state: State<'_, AppState>) -> DesktopSettings {
 /// (`docs/DESKTOP-ARCHITECTURE.md` §5.2: "Lokal DB + dosya cache silme").
 ///
 /// This is deliberately not `auth::logout(force: true)`, which also drops the device token.
-/// `SyncEngine` keeps its own `rusqlite::Connection` private (`SYNCDESKTOP.md` §5.2 — the
-/// public API is frozen and has no `clear_local`/`wipe` method), so this opens a **second**,
-/// short-lived connection to the same SQLCipher file with `syncra_sync::db::open` and calls
-/// the crate's public `syncra_sync::db::wipe` on it — exactly the use `db::wipe`'s own doc
-/// comment describes ("Used when a *different* user logs in ... and by `clear_local`").
-/// SQLite's WAL mode (`db::open` sets `journal_mode = WAL`) is what makes a second connection
-/// to the live file safe.
+/// The database half is `SyncEngine::clear_local`, on the engine's own connection: it waits
+/// for a pull on the wire, which a wipe through a second connection could not, and the pull
+/// would otherwise land on the emptied mirror and move the cursors past everything removed.
+/// It also unlinks the blobs `cached_files` names and recomputes the engine's `SyncStatus`.
 ///
-/// Known gap (see the phase report): the live engine's cached `SyncStatus` (`pending`,
-/// `conflicts`) is not recomputed by this call, because `SyncEngine::refresh_status` is
-/// private. It self-heals on the next `mutate`/`sync_now`.
-///
-/// Second known gap, not fixed here: `db::wipe` only clears the `cached_files` *rows* — it has
-/// no filesystem access and cannot touch the blobs those rows pointed at. This command closes
-/// that gap for itself by clearing `state.cache_dir()`'s contents right after (below), but the
-/// crate's *own* internal wipe on a different-user login (§5.5 — inside `SyncEngine::login`,
-/// not reachable from this module) has the identical gap and nothing here calls it: that path
-/// runs entirely inside the engine, with no hook for the shell to clear the cache dir alongside
-/// it. Concretely, user A's cached quote PDFs and queued attachments can still be sitting under
-/// `$APPDATA/syncra/cache` after user B logs in on the same machine. Fixing that needs either a
-/// new engine event this shell can react to, or a crate-side cache-dir hook — an API change,
-/// not a shell-side one, so it is out of scope this turn and is flagged here rather than
-/// silently left unmentioned.
+/// The cache directory is then emptied wholesale (below): it can hold files the ledger never
+/// named, and the engine only ever deletes what it was told about.
 #[tauri::command]
-pub fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
-    let key = SystemKeyStore
-        .get(&state.keychain_service, KEY_DB)
-        .map_err(CommandError::from)?
-        .ok_or_else(|| {
-            CommandError::new("VALIDATION_ERROR", "no local database key in the keychain")
-        })?;
-
-    let conn = db::open(&state.db_path(), &key).map_err(CommandError::from)?;
-    db::wipe(&conn).map_err(CommandError::from)?;
-    drop(conn);
+pub async fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
+    state
+        .engine()
+        .clear_local()
+        .await
+        .map_err(CommandError::from)?;
 
     clear_cache_dir_contents(&state.cache_dir());
 
     // Third half of the wipe, and the one that leaves the machine (defter O107). The jump list
-    // holds up to five record TITLES in two plaintext stores neither `db::wipe` nor the cache
-    // sweep can reach — `<app_data_dir>/syncra/recent.json` and the shell's own
+    // holds up to five record TITLES in two plaintext stores neither the database wipe nor the
+    // cache sweep can reach — `<app_data_dir>/syncra/recent.json` and the shell's own
     // `CustomDestinations` cache. "Clear local data" that leaves the last five record names on
     // the taskbar has not cleared the local data; see `crate::jump_list::clear`.
     crate::jump_list::clear(&state.root_dir());
@@ -98,9 +76,9 @@ pub fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
 
 /// Delete everything **inside** `cache_dir`, without deleting `cache_dir` itself.
 ///
-/// `db::wipe` (above) only clears the `cached_files` ledger rows; this is the other half —
-/// removing the quote PDFs and queued attachments those rows (and the offline attachment queue)
-/// actually point at, so a local wipe empties the disk, not just the database.
+/// The engine's wipe (above) only unlinks the blobs the `cached_files` ledger names; this is the
+/// other half — removing whatever else sits in the cache (the offline attachment queue, a blob
+/// the ledger lost track of), so a local wipe empties the disk, not just the database.
 ///
 /// Best-effort by design, not `Result`-returning: the local database has *already* been wiped
 /// by the time this runs, and there is no way back from that, so a single locked file (say, a

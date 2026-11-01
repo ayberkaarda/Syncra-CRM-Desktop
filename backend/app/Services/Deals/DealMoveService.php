@@ -10,6 +10,7 @@ use App\Models\PipelineStage;
 use App\Models\User;
 use App\Services\Exchange\ExchangeRateService;
 use App\Support\FractionalIndex;
+use App\Sync\SyncCounter;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -128,6 +129,11 @@ class DealMoveService
      */
     private function lockDeal(Deal $deal): void
     {
+        // Önce sayaç, sonra satır: sürüm çeken her yazar bu sırayla kilitler
+        // (SyncCounter). Ters sıra, eşzamanlı bir senkron güncellemeyle
+        // kilitlenmeye (1213) düşer.
+        SyncCounter::lock();
+
         /** @var Deal|null $locked */
         $locked = Deal::query()->whereKey($deal->getKey())->lockForUpdate()->first();
 

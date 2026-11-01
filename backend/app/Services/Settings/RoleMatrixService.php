@@ -6,6 +6,7 @@ use App\Http\Resources\PermissionMatrixResource;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -103,6 +104,18 @@ class RoleMatrixService
                 ['permissions' => ['Bilinmeyen izin: '.implode(', ', $unknown).'.']],
                 ['unknown_permissions' => $unknown],
             );
+        }
+
+        $existingIds = $role->permissions()->pluck('permissions.id')->all();
+
+        foreach ($permissions->whereNotIn('id', $existingIds) as $permission) {
+            if (! Gate::forUser($actor)->allows($permission->name)) {
+                $this->deny(
+                    'Kendi sahip olmadığınız bir izni başka bir role veremezsiniz.',
+                    'PERMISSION_GRANT_FORBIDDEN',
+                    ['permissions' => ['Yalnızca sahip olduğunuz izinleri verebilirsiniz.']],
+                );
+            }
         }
 
         $this->assertActorKeepsSettingsAccess($role, $permissionNames, $actor);

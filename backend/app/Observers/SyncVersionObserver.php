@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Sync\SyncCounter;
+use App\Sync\WriteTrail;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
@@ -82,6 +83,21 @@ class SyncVersionObserver
 
         $model->setAttribute('sync_version', $version);
         $model->syncOriginalAttribute('sync_version');
+    }
+
+    /**
+     * A row that is physically gone takes its `sync_untrailed_writes` record
+     * with it (WriteTrail). After the delete, not before: a delete that fails
+     * keeps the record its row still needs.
+     */
+    public function deleted(Model $model): void
+    {
+        /** @phpstan-ignore-next-line SoftDeletes is confirmed first. */
+        if ($this->usesSoftDeletes($model) && ! $model->isForceDeleting()) {
+            return;
+        }
+
+        WriteTrail::forgetSubject($model);
     }
 
     private function usesSoftDeletes(Model $model): bool

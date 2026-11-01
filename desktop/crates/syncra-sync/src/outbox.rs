@@ -389,6 +389,74 @@ pub fn mark_inflight(tx: &Transaction<'_>, ids: &[Uuid]) -> Result<()> {
     Ok(())
 }
 
+/// Give queued mutations of a just-created row the version it was created at.
+///
+/// The row had no server version when they were enqueued, so they carry a base of 0, and the
+/// server would count the row's own creation against them as a conflict.
+pub fn rebase_on_create(
+    tx: &Transaction<'_>,
+    entity: Entity,
+    client_id: &str,
+    version: i64,
+) -> Result<()> {
+    tx.execute(
+        "UPDATE outbox SET base_sync_version = ?1
+          WHERE entity = ?2 AND client_id = ?3 AND state = 'queued'
+            AND COALESCE(base_sync_version, 0) = 0",
+        rusqlite::params![version, entity.wire_name(), client_id],
+    )?;
+    Ok(())
+}
+
+/// Move queued updates of a row onto the version an earlier update of it was accepted at.
+///
+/// The server's acceptance proves that nobody else wrote `accepted`'s fields between its base
+/// and `version`. An edit confined to those fields can therefore stand on `version` without
+/// hiding anyone's write, and its predecessor stops reading as somebody else's. An edit reaching
+/// any further keeps its base: the acceptance says nothing about the other fields, and raising
+/// the base would turn a real conflict on one of them into a silent overwrite (protocol §5).
+pub fn rebase_on_update(tx: &Transaction<'_>, accepted: &OutboxRow, version: i64) -> Result<()> {
+    let (Some(client_id), Some(base), Some(fields)) = (
+        accepted.client_id.as_deref(),
+        accepted.base_sync_version,
+        accepted.changed_fields.as_deref(),
+    ) else {
+        return Ok(());
+    };
+
+    let queued: Vec<(String, Option<String>)> = {
+        let mut stmt = tx.prepare(
+            "SELECT id, changed_fields FROM outbox
+              WHERE entity = ?1 AND client_id = ?2 AND state = 'queued' AND op = ?3
+                AND base_sync_version >= ?4 AND base_sync_version < ?5",
+        )?;
+        let rows = stmt.query_map(
+            rusqlite::params![
+                accepted.entity.wire_name(),
+                client_id,
+                Op::Update.wire_name(),
+                base,
+                version
+            ],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        rows.collect::<std::result::Result<_, _>>()?
+    };
+
+    for (id, changed) in queued {
+        let Some(changed) = changed else { continue };
+        let changed: Vec<String> = serde_json::from_str(&changed)
+            .map_err(|e| SyncError::Protocol(format!("outbox changed_fields: {e}")))?;
+        if changed.iter().all(|field| fields.contains(field)) {
+            tx.execute(
+                "UPDATE outbox SET base_sync_version = ?1 WHERE id = ?2",
+                rusqlite::params![version, id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Return rows to the queue **without** touching `attempts`.
 ///
 /// This is the protocol §4.3 P10b path: a mutation whose `seq` did not appear in the

@@ -7,6 +7,7 @@ use App\Models\Deal;
 use App\Models\PipelineStage;
 use App\Models\User;
 use App\Support\FractionalIndex;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -280,7 +281,10 @@ class PipelineStageService
             // Kilit, "kaç açık fırsat var" cevabının transaction boyunca
             // geçerli kalmasını sağlar: kilitsizken, sayımı yaptıktan sonra
             // biri panodan bu sütuna yeni bir kart sürükleyebilir ve kart
-            // pasif sütunda görünmez kalırdı.
+            // pasif sütunda görünmez kalırdı. Önce sayaç, sonra satırlar: sürüm
+            // çeken her yazar bu sırayla kilitler (SyncCounter).
+            SyncCounter::lock();
+
             $openDeals = Deal::query()
                 ->where('pipeline_stage_id', $stage->getKey())
                 ->where('status', 'open')

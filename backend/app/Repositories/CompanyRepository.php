@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Contact;
 use App\Models\CustomField;
 use App\Services\Sync\TagSyncService;
+use App\Sync\SyncCounter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -175,20 +176,20 @@ class CompanyRepository
 
     public function create(array $data): Company
     {
-        return Company::create($data);
+        return SyncCounter::atomically(fn () => Company::create($data));
     }
 
     public function update(Company $company, array $data): Company
     {
         $company->fill($data);
-        $company->save();
+        SyncCounter::atomically(fn () => $company->save());
 
         return $company;
     }
 
     public function delete(Company $company): void
     {
-        $company->delete();
+        SyncCounter::atomically(fn () => $company->delete());
     }
 
     /**

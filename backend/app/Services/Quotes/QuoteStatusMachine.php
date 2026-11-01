@@ -4,6 +4,7 @@ namespace App\Services\Quotes;
 
 use App\Models\Quote;
 use App\Services\Exchange\ExchangeRateService;
+use App\Sync\SyncCounter;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
@@ -113,6 +114,11 @@ class QuoteStatusMachine
     public function transition(Quote $quote, string $to): Quote
     {
         return DB::transaction(function () use ($quote, $to) {
+            // Önce sayaç, sonra satır: sürüm çeken her yazar bu sırayla kilitler
+            // (SyncCounter). Ters sıra, eşzamanlı bir senkron güncellemeyle
+            // kilitlenmeye (1213) düşer.
+            SyncCounter::lock();
+
             /** @var Quote|null $locked */
             $locked = Quote::query()->whereKey($quote->getKey())->lockForUpdate()->first();
 

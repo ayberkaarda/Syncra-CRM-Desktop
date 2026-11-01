@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\Models\Quote;
 use App\Models\QuoteItem;
 use App\Services\Quotes\QuoteExpiry;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -99,7 +100,7 @@ class QuoteRepository
     {
         $quote = new Quote;
         $quote->fill($data);
-        $quote->save();
+        SyncCounter::atomically(fn () => $quote->save());
 
         return $quote;
     }
@@ -110,7 +111,7 @@ class QuoteRepository
     public function update(Quote $quote, array $data): Quote
     {
         $quote->fill($data);
-        $quote->save();
+        SyncCounter::atomically(fn () => $quote->save());
 
         return $quote;
     }
@@ -151,7 +152,7 @@ class QuoteRepository
 
     public function delete(Quote $quote): void
     {
-        $quote->delete();
+        SyncCounter::atomically(fn () => $quote->delete());
     }
 
     /**

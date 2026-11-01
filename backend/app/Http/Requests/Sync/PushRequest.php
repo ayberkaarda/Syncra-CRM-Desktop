@@ -89,10 +89,10 @@ class PushRequest extends FormRequest
              * `occurred_at` and `payload` are optional because `op=delete`
              * carries NEITHER (SYNCDESKTOP §4.4's own example:
              * seq/idempotency_key/op/entity/server_id/base_sync_version and
-             * nothing else). `occurred_at` exists solely so ConflictDetector
-             * can compare it against `activity_log.created_at`, which is an
-             * `op=update` question; a delete's conflict decision is the
-             * `base_sync_version` comparison alone. Requiring them would 422
+             * nothing else). `occurred_at` is the client's clock: it is
+             * accepted and validated but decides nothing, since no conflict
+             * window may rest on it (protocol §5). Conflicts are decided by
+             * `base_sync_version` alone. Requiring either field would 422
              * every delete the client sends.
              */
             'mutations.*.occurred_at' => ['sometimes', 'nullable', 'date'],
