@@ -3,13 +3,15 @@
 //! (`docs/DESKTOP-SYNC-PROTOCOL.md` §5, `SYNCDESKTOP.md` §5.2 — not touched from this crate).
 
 use std::path::PathBuf;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use syncra_sync::{sync::SyncScheduler, SyncConfig, SyncEngine, SyncError};
 use tauri::{AppHandle, Manager, Runtime};
 use url::Url;
 
 use crate::data_dir::{self, DataPaths};
+use crate::drop_grants::DropGrants;
+use crate::session_gate::SessionGate;
 
 /// Everything a command handler reaches for through `tauri::State<'_, AppState>`.
 ///
@@ -89,6 +91,14 @@ pub struct AppState {
     /// The lock is only ever held across synchronous work (`abort`, `tokio::spawn`), never
     /// across an `.await`, so a `std::sync::Mutex` is the right one.
     pub scheduler: Mutex<Option<SyncScheduler>>,
+    /// Shell-side session generations (`crate::session_gate`). Login, logout, the local wipe
+    /// and the data directory move run inside a transition; the PDF cache, the attachment
+    /// queue and the upload token read commit through it, so work started under one session
+    /// cannot write into another.
+    pub session_gate: Arc<SessionGate>,
+    /// Paths the native layer produced (drag-drop, native dialogs) and that
+    /// `files::attach_from_paths` may therefore read (`crate::drop_grants`).
+    pub drop_grants: DropGrants,
 }
 
 impl AppState {
@@ -130,6 +140,8 @@ impl AppState {
             // Started in `.setup()` rather than here: the engine event bridge has to exist
             // before the loop can emit anything, or the first `TablesChanged` is lost.
             scheduler: Mutex::new(None),
+            session_gate: SessionGate::new(),
+            drop_grants: DropGrants::new(),
         })
     }
 

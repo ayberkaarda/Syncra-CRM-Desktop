@@ -56,6 +56,10 @@ pub fn storage_settings(state: State<'_, AppState>) -> DesktopSettings {
 /// named, and the engine only ever deletes what it was told about.
 #[tauri::command]
 pub async fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
+    // A session transition (`crate::session_gate`) for the whole wipe: a PDF download or a
+    // staged attachment that started before it can no longer write into the cache or the
+    // ledger after the sweep below has run.
+    let _transition = state.session_gate.begin();
     state
         .engine()
         .clear_local()
@@ -63,6 +67,7 @@ pub async fn clear_local(state: State<'_, AppState>) -> CommandResult<()> {
         .map_err(CommandError::from)?;
 
     clear_cache_dir_contents(&state.cache_dir());
+    state.drop_grants.clear();
 
     // Third half of the wipe, and the one that leaves the machine (defter O107). The jump list
     // holds up to five record TITLES in two plaintext stores neither the database wipe nor the
@@ -265,6 +270,13 @@ pub async fn move_data_dir<R: Runtime>(
         .map_err(|rejection| CommandError::new(rejection.code(), rejection.message()))?;
     let new_paths = DataPaths::for_root(new_root);
 
+    // From here until the reopen below has installed the new engine and paths, the move is a
+    // session transition (`crate::session_gate`). Shell writes that captured the old engine and
+    // the old cache directory (a quote PDF on the wire) are refused instead of recreating the
+    // old root after it was deleted, or recording the old path in the new database. Dropped on
+    // every return path, so a failed move reopens the gate too.
+    let _transition = app.state::<AppState>().session_gate.begin();
+
     // --- 2. The key, while the database is still open ----------------------------------
     let key = {
         let state = app.state::<AppState>();
@@ -345,28 +357,41 @@ fn transfer(
     anchor: &Path,
     key: &str,
 ) -> Result<Option<PathBuf>, CommandError> {
-    if let Err(error) = data_dir::copy_dir_all(source, destination) {
+    // O11: the destination is claimed first — created, or accepted only as an empty
+    // directory — so a directory that already held data (another install's, an earlier move's,
+    // a restored backup with an unsent outbox) is never copied over and never deleted by the
+    // failure paths below, which remove only what this move created.
+    let mut claim = data_dir::claim_destination(destination).map_err(|error| {
+        CommandError::new(
+            "DATA_DIR_MOVE_FAILED",
+            format!("{} cannot be used: {error}", destination.display()),
+        )
+    })?;
+
+    if let Err(error) = claim.copy_from(source) {
         return Err(abandon_partial_copy(
-            destination,
+            &claim,
             format!("copying to {} failed: {error}", destination.display()),
         ));
     }
 
     if let Err(reason) = data_dir::verify_copy(source, destination, key) {
         return Err(abandon_partial_copy(
-            destination,
+            &claim,
             format!("the copy at {} did not verify: {reason}", destination.display()),
         ));
     }
 
     // Before the delete, not after: a pointer written afterwards leaves a window where a crash
     // loses the only record of where data that is no longer at the default now lives.
-    data_dir::store_root(anchor, destination).map_err(|error| {
-        CommandError::new(
-            "DATA_DIR_MOVE_FAILED",
+    if let Err(error) = data_dir::store_root(anchor, destination) {
+        // The old directory is still the one in use; the copy is a second mirror nobody
+        // points at, so it goes.
+        return Err(abandon_partial_copy(
+            &claim,
             format!("the new location could not be recorded: {error}"),
-        )
-    })?;
+        ));
+    }
 
     match data_dir::remove_root(source) {
         Ok(()) => Ok(None),
@@ -390,14 +415,20 @@ fn transfer(
 /// partial mirror on disk, deleting it means the user cannot inspect what went wrong. Deleting
 /// wins for the same reason the old directory is deleted on success — one encrypted mirror, in
 /// one known place — and a delete that itself fails is named in the message rather than hidden.
-fn abandon_partial_copy(destination: &Path, reason: String) -> CommandError {
-    match data_dir::remove_root(destination) {
+///
+/// Only what this move created is removed (`data_dir::release_destination`): a destination
+/// root that existed before the move stays, and so does anything in it the move did not write.
+fn abandon_partial_copy(
+    claim: &data_dir::ClaimedDestination,
+    reason: String,
+) -> CommandError {
+    match data_dir::release_destination(claim) {
         Ok(()) => CommandError::new("DATA_DIR_MOVE_FAILED", reason),
         Err(error) => CommandError::new(
             "DATA_DIR_MOVE_FAILED",
             format!(
                 "{reason}; the incomplete copy at {} could not be removed either ({error})",
-                destination.display()
+                claim.root().display()
             ),
         ),
     }
@@ -601,6 +632,82 @@ mod tests {
             !data_dir::pointer_path(&anchor).exists(),
             "a failed move must not record a new location"
         );
+    }
+
+    /// O11: a destination that already holds a data directory — another install's, with an
+    /// unsent outbox — is neither copied over nor deleted when the move fails. Before the fix
+    /// the copy wrote over it file by file and the failure path removed the whole directory.
+    #[test]
+    fn move_preserves_preexisting_target_on_failure() {
+        let temp = TempDir::new();
+        let anchor = temp.path().join("anchor");
+        let key = "0".repeat(64);
+        let source = seeded_root(&temp.path().join("old"), &key);
+        // A complete data directory that is somebody else's, with a pending outbox row.
+        let destination = seeded_root(&temp.path().join("other-install"), &key);
+        {
+            let conn = db::open(&destination.join(DB_FILE), &key).expect("open other");
+            db::put_setting(&conn, "other-install", "unsent outbox lives here").expect("row");
+            conn.close().expect("close");
+        }
+        let before = data_dir::table_census(&destination.join(DB_FILE), &key).expect("census");
+        let blob_before =
+            std::fs::read(destination.join(CACHE_SUBDIR).join("42-3.pdf")).expect("blob");
+
+        let failure = transfer(&source, &destination, &anchor, &key).expect_err("must fail");
+
+        assert_eq!(failure.code, "DATA_DIR_MOVE_FAILED");
+        assert!(destination.join(DB_FILE).is_file(), "the other install must survive");
+        assert_eq!(
+            data_dir::table_census(&destination.join(DB_FILE), &key).expect("census"),
+            before,
+            "the other install's rows must be untouched"
+        );
+        assert_eq!(
+            std::fs::read(destination.join(CACHE_SUBDIR).join("42-3.pdf")).expect("blob"),
+            blob_before
+        );
+        assert!(source.join(DB_FILE).is_file(), "the old root must survive");
+        assert!(!data_dir::pointer_path(&anchor).exists());
+    }
+
+    /// A copy that fails partway removes what it created and nothing else: a destination root
+    /// the move created goes, an empty one that existed stays (empty), and the old root with
+    /// its outbox is untouched.
+    #[cfg(windows)]
+    #[test]
+    fn a_failed_copy_removes_only_what_it_created() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let temp = TempDir::new();
+        let anchor = temp.path().join("anchor");
+        let key = "0".repeat(64);
+        let source = seeded_root(&temp.path().join("old"), &key);
+        let census = data_dir::table_census(&source.join(DB_FILE), &key).expect("census");
+        // A source file nobody else may read makes the copy fail partway.
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(source.join(CACHE_SUBDIR).join("42-3.pdf"))
+            .expect("hold a blob exclusively");
+
+        let created = temp.path().join("new").join(DEFAULT_SUBDIR);
+        assert!(transfer(&source, &created, &anchor, &key).is_err());
+        assert!(!created.exists(), "a root the move created is removed");
+
+        let existing = temp.path().join("existing").join(DEFAULT_SUBDIR);
+        std::fs::create_dir_all(&existing).expect("empty existing root");
+        assert!(transfer(&source, &existing, &anchor, &key).is_err());
+        assert!(existing.is_dir(), "an existing root stays");
+        assert_eq!(std::fs::read_dir(&existing).expect("read").count(), 0);
+
+        drop(held);
+        assert_eq!(
+            data_dir::table_census(&source.join(DB_FILE), &key).expect("census"),
+            census,
+            "the old root and its rows are untouched"
+        );
+        assert!(!data_dir::pointer_path(&anchor).exists());
     }
 
     /// An undeletable old directory is a SUCCESS with a report, not a failure: the data is

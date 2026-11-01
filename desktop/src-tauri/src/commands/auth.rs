@@ -31,14 +31,41 @@ const DEVICE_FINGERPRINT_KEY: &str = "device-fingerprint";
 const FINGERPRINT_HEX_LEN: usize = 64;
 
 /// Exchange credentials for a device token.
+///
+/// ## A session boundary for the shell, too
+///
+/// The engine wipes its own database when another user signs in; the shell's own state is not
+/// in that database. So the whole login runs inside a session transition
+/// (`crate::session_gate`): a PDF download or an attachment that started before it can no
+/// longer write into the cache, the queue or the ledger, or read the new token. When the user
+/// is not the one who was signed in before, the previous user's staged attachments, pending
+/// drop grants and jump list are removed as well (B8: the jump list kept the previous user's
+/// record names across an account switch, because only `logout` cleared it).
 #[tauri::command]
 pub async fn login(state: State<'_, AppState>, email: String, password: String) -> CommandResult<Session> {
     let engine = state.engine();
     let device = device_info(&state.keychain_service)?;
-    engine
+    let previous_user = engine.session().map(|session| session.user_id);
+
+    let _transition = state.session_gate.begin();
+    let session = engine
         .login(&email, &password, device)
         .await
-        .map_err(CommandError::from)
+        .map_err(CommandError::from)?;
+
+    if previous_user != Some(session.user_id) {
+        forget_previous_user(&state, Some(session.user_id));
+    }
+    Ok(session)
+}
+
+/// Remove what the shell keeps outside the engine's database for the user who just left:
+/// staged attachments, unspent drop grants, and the jump list unless it already belongs to
+/// `next_user`. Runs inside the session transition of the caller.
+fn forget_previous_user(state: &AppState, next_user: Option<i64>) {
+    crate::commands::files::purge_staging(&state.cache_dir());
+    state.drop_grants.clear();
+    crate::jump_list::forget_unless_owned_by(&state.root_dir(), next_user);
 }
 
 /// Resume a stored session from the keychain token.
@@ -70,10 +97,15 @@ pub async fn restore(state: State<'_, AppState>) -> CommandResult<Option<Session
 #[tauri::command]
 pub async fn logout(state: State<'_, AppState>, force: bool) -> CommandResult<LogoutOutcome> {
     let engine = state.engine();
+    // A transition even when the logout turns out to be a refusal: the generation moving for
+    // nothing only costs an in-flight PDF a retry, while a logout outside a transition would let
+    // a download that started before it write into the wiped cache after it.
+    let _transition = state.session_gate.begin();
     let outcome = engine.logout(force).await.map_err(CommandError::from)?;
 
     if !matches!(outcome, LogoutOutcome::PendingMutations(_)) {
         crate::jump_list::clear(&state.root_dir());
+        forget_previous_user(&state, None);
     }
 
     Ok(outcome)
@@ -108,6 +140,17 @@ pub struct SessionSnapshot {
 /// Handing the token to the webview does not weaken K9: the token is stored **only** in the OS
 /// keychain and is already sent on the wire by the engine on every request. What must not
 /// happen is it being written to disk or a log — `logging.rs` (§9/9) masks the log side.
+///
+/// ## Why the token is still returned (security review, item 6)
+///
+/// Checked against `desktop/src`: `platform/auth.ts` passes `snapshot.token` to
+/// `setDeviceToken`, and `platform/http.ts` hands it to the shared axios client as
+/// `getBearerToken`, which is how every request the mirror cannot answer (the §8 online-only
+/// endpoints, `/api/broadcasting/auth` for the realtime channel, `/api/password/change`) is
+/// authenticated. The webview keeps it in memory only. Not returning it would need every one of
+/// those calls to be proxied through Rust, which is a separate change; until then the token
+/// stays in this response and the exposure is the one the review describes — script running in
+/// the webview can read it.
 #[tauri::command]
 pub fn session(state: State<'_, AppState>) -> CommandResult<SessionSnapshot> {
     let Some(session) = state.engine().session() else {

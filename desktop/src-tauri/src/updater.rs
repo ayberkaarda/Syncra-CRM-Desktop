@@ -33,6 +33,29 @@
 //!   [`tests::an_updater_configuration_without_a_pubkey_is_rejected`] measures it against the
 //!   plugin's real deserializer.
 //!
+//! ## Downgrades (`tauri-plugin-updater` 2.14.1, the version `Cargo.lock` resolves)
+//!
+//! Read out of `~/.cargo/registry/src/*/tauri-plugin-updater-2.14.1/` (security review,
+//! item 8). The line numbers above were taken from 2.10.1; these are from the locked version.
+//!
+//! * `src/updater.rs:712-715` — `update_from_release` decides with the configured comparator
+//!   if there is one, and otherwise with `release.version > self.current_version`. A manifest
+//!   that advertises the running version or an older one is "no update" (`Ok(None)`, `:718`),
+//!   before any download URL is read.
+//! * `src/lib.rs:99-104` — the only other comparator the plugin installs by itself is
+//!   `update.version != current`, and only when the application set none and the
+//!   `allowDowngrades` configuration flag is on. `src/config.rs:140-148` documents the flag
+//!   as off by default and as the only guard against a validly signed OLD release, because the
+//!   signature covers the artifact and not the version the manifest advertises.
+//! * This app sets neither: `lib.rs` builds the plugin with `Builder::new().build()` and no
+//!   `default_version_comparator`, and `tauri.conf.json` has no `allowDowngrades`.
+//!   [`tests::downgrades_are_refused_by_the_shipped_configuration`] pins both.
+//!
+//! So an older (or the same) signed release offered through `latest.json` is not installed.
+//! What this does NOT stop is a freeze: whoever controls the manifest can keep serving the
+//! current version and withhold a newer one; the plugin has no notion of a minimum or an
+//! expiry for the manifest. Not measured end to end, for the reason below.
+//!
 //! ## What is NOT measured here, and will not be until the first signed release
 //!
 //! There is no end-to-end run: producing a `latest.json` that this build would *accept*
@@ -237,6 +260,37 @@ mod tests {
         assert_ne!(
             tampered_id, EXPECTED_KEY_ID,
             "the key-id check does not discriminate — it would accept a key it should not"
+        );
+    }
+
+    /// Downgrades stay refused (security review, item 8): the shipped configuration leaves the
+    /// plugin's `allowDowngrades` off, and `lib.rs` installs no comparator of its own, so the
+    /// plugin's default `release.version > current_version` decides (module docs).
+    #[test]
+    fn downgrades_are_refused_by_the_shipped_configuration() {
+        let config: Config = serde_json::from_value(shipped_updater_json()).expect("config");
+        assert!(
+            !config.allow_downgrades,
+            "allowDowngrades lets a validly signed OLD release replace the running one"
+        );
+
+        // Negative control: the flag is read from this block, so turning it on is visible.
+        let mut json = shipped_updater_json();
+        json["allowDowngrades"] = serde_json::Value::Bool(true);
+        let permissive: Config = serde_json::from_value(json).expect("config");
+        assert!(permissive.allow_downgrades);
+
+        let lib: String = include_str!("lib.rs")
+            .lines()
+            .map(|line| match line.find("//") {
+                Some(at) => &line[..at],
+                None => line,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !lib.contains("version_comparator"),
+            "a custom version comparator replaces the plugin's `>` check and the flag above"
         );
     }
 

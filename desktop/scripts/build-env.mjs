@@ -147,6 +147,37 @@ export function hostReason(urlLike) {
 }
 
 /**
+ * Schemes a published package may use to reach a host that is not this machine. Everything the
+ * binary talks to is decided at build time (API base, CSP `connect-src`/`img-src`), so a plain
+ * `http://` or `ws://` origin there means every user's token and data cross the network in
+ * clear text, with nothing at run time able to upgrade it.
+ */
+export const SECURE_SCHEMES = ['https:', 'wss:']
+
+/**
+ * Is this URL/origin a non-loopback host reached over a clear-text scheme? Returns
+ * `{host, reason}` or `null`.
+ *
+ * Loopback hosts are not this function's concern: development builds use them on purpose, and
+ * a release refuses them outright through `hostReason`. Everything else has to be `https:` or
+ * `wss:`.
+ */
+export function insecureSchemeReason(urlLike) {
+  let url
+  try {
+    url = new URL(urlLike)
+  } catch {
+    return null // `hostReason` already reports an unparseable value
+  }
+  if (loopbackReason(url.hostname)) return null
+  if (SECURE_SCHEMES.includes(url.protocol)) return null
+  return {
+    host: url.hostname,
+    reason: `clear-text scheme ${url.protocol.replace(/:$/, '')}:// for a non-loopback host (https/wss required)`,
+  }
+}
+
+/**
  * Everything a release gate needs to decide, computed from one env snapshot:
  * the values that will be injected, plus every reason this configuration is not shippable.
  */
@@ -164,7 +195,7 @@ export function inspectReleaseTarget(env = resolveEnv()) {
       reason: `unset — the build would fall back to ${FALLBACK_API_ORIGIN}`,
     })
   } else {
-    const bad = hostReason(env.VITE_API_URL)
+    const bad = hostReason(env.VITE_API_URL) ?? insecureSchemeReason(env.VITE_API_URL)
     if (bad) violations.push({ field: 'VITE_API_URL', value: env.VITE_API_URL, reason: bad.reason })
   }
 
@@ -175,6 +206,15 @@ export function inspectReleaseTarget(env = resolveEnv()) {
       value: env.VITE_REVERB_HOST ? reverbOrigin : `${reverbOrigin} (VITE_REVERB_HOST unset)`,
       reason: reverbBad.reason,
     })
+  } else {
+    const plain = insecureSchemeReason(reverbOrigin)
+    if (plain) {
+      violations.push({
+        field: 'VITE_REVERB_SCHEME',
+        value: `${env.VITE_REVERB_SCHEME ?? '(unset -> ws)'} -> ${reverbOrigin}`,
+        reason: plain.reason,
+      })
+    }
   }
 
   // Belt and braces: `buildCsp` may grow new sources later. Anything in the emitted policy
@@ -183,7 +223,7 @@ export function inspectReleaseTarget(env = resolveEnv()) {
   for (const token of csp.split(/[;\s]+/).filter(Boolean)) {
     if (!token.includes('://')) continue
     if (CSP_INTERNAL_SOURCES.includes(token)) continue
-    const bad = hostReason(token)
+    const bad = hostReason(token) ?? insecureSchemeReason(token)
     if (bad && !violations.some((v) => v.value.includes(bad.host))) {
       violations.push({ field: 'csp source', value: token, reason: bad.reason })
     }
