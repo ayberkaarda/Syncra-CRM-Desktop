@@ -37,6 +37,17 @@ use Spatie\Activitylog\Traits\LogsActivity;
  *       what a reviewer looks at; the definition (CustomField) IS audited,
  *       which is where the risky changes live.
  *
+ * Written EXPLICITLY under the same log name (not through this trait), for
+ * decisions that are not an attribute change on an audited model:
+ *   ExchangeRate manual entry - `exchange_rates.manual`, old and new value
+ *       (ExchangeRateService::storeManualRate). The daily automatic fetch is
+ *       not logged; a manual entry can overwrite it and feeds every frozen
+ *       deal/quote amount.
+ *   Device token revocation - `devices.revoked` on the user
+ *       (Me\DeviceController::destroy). The token row is deleted, so there
+ *       is nothing left for a model audit to hang off; the token value is
+ *       never written.
+ *
  * ---------------------------------------------------------------------------
  * EVENT NAMING: ENGLISH IN THE DATABASE, TURKISH IN THE UI
  * ---------------------------------------------------------------------------

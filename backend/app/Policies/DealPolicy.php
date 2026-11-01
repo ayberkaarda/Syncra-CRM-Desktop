@@ -33,6 +33,13 @@ class DealPolicy
      * Yatay yazma izolasyonu: `deals.update` izni TEK BAŞINA yetmez —
      * kullanıcı deal'in sahibi olmalı, deal sahipsiz olmalı ya da kullanıcı
      * `deals.assign` taşımalıdır (gerekçe: ChecksRecordOwnership).
+     *
+     * Kapanmış (`won`/`lost`) fırsatta `amount`/`currency` değişikliği BURADA
+     * reddedilmez — Policy istek gövdesini görmez ve kapanmış kartta başlık,
+     * not, etiket düzenlemek meşrudur. O kural DealService::assertAmountEditable()
+     * içinde, kilitli satır üzerinde 422 DEAL_CLOSED_AMOUNT_LOCKED olarak
+     * uygulanır; web ve senkron yolu aynı servisten geçtiği için ikisini de
+     * kapsar.
      */
     public function update(User $user, Deal $deal): bool
     {

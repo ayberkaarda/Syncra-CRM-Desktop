@@ -16,8 +16,9 @@ use Illuminate\Support\Facades\DB;
  * kullanıcı ardışık id'leri deneyerek başkasının dosyasını isteyebilir.
  * Bu Policy tek başına gerçek koruma katmanıdır:
  *
- *  - Ek henüz bir mesaja bağlanmamışsa (`attachable_id` NULL): yalnızca
- *    yükleyen (`uploaded_by`) erişebilir.
+ *  - Ek polimorfik olarak bağlanmamışsa (`attachable_id` NULL): yükleyen
+ *    (`uploaded_by`) ve eki `messages.attachment_id` ile taşıyan silinmemiş
+ *    bir mesajın konuşma üyeleri erişebilir (bkz. sharedInMemberConversation).
  *  - Bir mesaja bağlıysa: yalnızca o mesajın konuşmasının ÜYELERİ erişebilir
  *    — üyelik `conversation_user` pivotundan kontrol edilir (Conversation
  *    modelinin `users()` ilişkisiyle aynı tablo, doğrudan DB sorgusu N+1'i
@@ -43,8 +44,12 @@ class AttachmentPolicy
     public function view(User $user, Attachment $attachment): bool
     {
         if ($attachment->attachable_id === null) {
-            return $attachment->uploaded_by !== null
-                && (int) $attachment->uploaded_by === (int) $user->id;
+            if ($attachment->uploaded_by !== null
+                && (int) $attachment->uploaded_by === (int) $user->id) {
+                return true;
+            }
+
+            return $this->sharedInMemberConversation($user, $attachment);
         }
 
         // Bu fazda tek geçerli hedef Message'dır. Başka bir morph hedefi
@@ -65,6 +70,30 @@ class AttachmentPolicy
         return DB::table('conversation_user')
             ->where('conversation_id', $message->conversation_id)
             ->where('user_id', $user->id)
+            ->exists();
+    }
+
+    /**
+     * SOHBET EKİ: BAĞ `messages.attachment_id` ÜZERİNDEN KURULUR.
+     *
+     * MessageService::create() eki mesaja `messages.attachment_id` ile bağlar
+     * ve `attachable_*`'a HİÇ yazmaz (PruneOrphanAttachments bu sözleşmeye
+     * dayanır). Yalnızca `attachable_id`'ye bakan bir kural, gönderilmiş her
+     * sohbet ekini "yükleyenin taslağı" sayıp ALICIYA 404 döndürüyordu.
+     *
+     * Erişim: eki taşıyan, SİLİNMEMİŞ bir mesajın konuşmasına üye olmak.
+     * Mesaj silinince (mezar taşı) ek yalnızca yükleyene kalır — içeriği
+     * maskelenmiş bir mesajın dosyası indirilebilir kalmamalıdır. Başkasının
+     * dosyasını kendi sohbetine iliştirerek erişim kazanmak mümkün değildir:
+     * StoreMessageRequest yalnızca isteği yapanın yüklediği eki kabul eder.
+     */
+    protected function sharedInMemberConversation(User $user, Attachment $attachment): bool
+    {
+        return DB::table('messages')
+            ->join('conversation_user', 'conversation_user.conversation_id', '=', 'messages.conversation_id')
+            ->where('messages.attachment_id', $attachment->getKey())
+            ->whereNull('messages.deleted_at')
+            ->where('conversation_user.user_id', $user->id)
             ->exists();
     }
 }

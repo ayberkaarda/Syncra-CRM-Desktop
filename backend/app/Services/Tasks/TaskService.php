@@ -5,8 +5,12 @@ namespace App\Services\Tasks;
 use App\Models\Task;
 use App\Repositories\TaskRepository;
 use App\Support\MorphTargets;
+use App\Sync\SyncCounter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class TaskService
 {
@@ -70,15 +74,54 @@ class TaskService
      */
     public function update(Task $task, array $data): Task
     {
-        $data = $this->resolveTaskableType($data);
+        // İptal edilmiş görev bu uçtan da TAMAMLANAMAZ: CompleteTaskRequest
+        // `/complete`'te reddettiği geçişi, `status` alanını kabul eden genel
+        // PATCH sessizce yapabiliyordu. Kural burada — FormRequest'te değil —
+        // çünkü senkron uygulayıcı UpdateTaskRequest'i route'a bağlı görev
+        // olmadan çalıştırır; tek ortak nokta bu servistir. Yeniden açmak
+        // (`cancelled` → `pending`/`in_progress`) açık bir geçiştir ve serbesttir.
+        //
+        // Durum KİLİTLİ SATIRDAN okunur: `$task` transaction dışında okunmuş
+        // kopyadır; arada başka bir istek görevi iptal edip commit ederse eski
+        // kopyadaki `pending` kontrolü geçer ve `completed` iptalin üzerine
+        // yazılırdı. Sıra her sürüm çeken yazarla aynı: önce sayaç, sonra satır.
+        return DB::transaction(function () use ($task, $data) {
+            $task = $this->lockTask($task);
 
-        if (! empty($data)) {
-            $this->tasks->update($task, $data);
+            if (($data['status'] ?? null) === 'completed' && $task->status === 'cancelled') {
+                throw ValidationException::withMessages([
+                    'status' => 'İptal edilmiş bir görev tamamlanamaz.',
+                ]);
+            }
+
+            $data = $this->resolveTaskableType($data);
+
+            if (! empty($data)) {
+                $this->tasks->update($task, $data);
+            }
+
+            $task->load(['assignee', 'creator', 'taskable']);
+
+            return $task;
+        });
+    }
+
+    /**
+     * Satırı transaction içinde sayaç kilidinden SONRA kilitleyip taze haliyle
+     * döner. Çağıran bir DB::transaction içinde olmalıdır.
+     */
+    protected function lockTask(Task $task): Task
+    {
+        SyncCounter::lock();
+
+        /** @var Task|null $locked */
+        $locked = Task::query()->whereKey($task->getKey())->lockForUpdate()->first();
+
+        if ($locked === null) {
+            throw new NotFoundHttpException;
         }
 
-        $task->load(['assignee', 'creator', 'taskable']);
-
-        return $task;
+        return $locked;
     }
 
     public function delete(Task $task): void
@@ -111,28 +154,42 @@ class TaskService
      * yetki reddi (403) değildir; proje genelinde bu ayrım DealPolicy'nin
      * (403, yetki) `move`/`delete` kısıtlarından BİLİNÇLİ olarak farklı
      * tutuluyor çünkü buradaki kısıtlama "kim" değil "hangi durumda" sorusu.
+     * Aynı kural, eşzamanlı bir iptale karşı kilitli satır üzerinde burada da
+     * (aynı 422 biçimiyle) yeniden doğrulanır.
      */
     public function complete(Task $task, bool $completed): Task
     {
-        if ($completed) {
-            if ($task->status !== 'completed') {
-                $this->tasks->update($task, [
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                ]);
-            }
-        } else {
-            if ($task->status !== 'pending' || $task->completed_at !== null) {
-                $this->tasks->update($task, [
-                    'status' => 'pending',
-                    'completed_at' => null,
-                ]);
-            }
-        }
+        return DB::transaction(function () use ($task, $completed) {
+            // CompleteTaskRequest'in kontrolü route binding'in eski kopyasına
+            // bakar; arada gelen bir iptal ancak kilitli satırda görülür.
+            $task = $this->lockTask($task);
 
-        $task->load(['assignee', 'creator', 'taskable']);
+            if ($completed) {
+                if ($task->status === 'cancelled') {
+                    throw ValidationException::withMessages([
+                        'completed' => 'İptal edilmiş bir görev tamamlanamaz.',
+                    ]);
+                }
 
-        return $task;
+                if ($task->status !== 'completed') {
+                    $this->tasks->update($task, [
+                        'status' => 'completed',
+                        'completed_at' => now(),
+                    ]);
+                }
+            } else {
+                if ($task->status !== 'pending' || $task->completed_at !== null) {
+                    $this->tasks->update($task, [
+                        'status' => 'pending',
+                        'completed_at' => null,
+                    ]);
+                }
+            }
+
+            $task->load(['assignee', 'creator', 'taskable']);
+
+            return $task;
+        });
     }
 
     /**

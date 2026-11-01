@@ -4,8 +4,10 @@ namespace App\Services\Tickets;
 
 use App\Models\Ticket;
 use App\Repositories\TicketRepository;
+use App\Sync\SyncCounter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Ticket iş mantığı. Controller ince kalır; SLA hesabı SlaService'e, durum
@@ -113,13 +115,34 @@ class TicketService
      *
      * ÖNCELİK DEĞİŞİMİ tek istisnadır: `priority` bu uçtan değiştirilebilir
      * ve §5.2 gereği `sla_due_at` YENİDEN HESAPLANIR. Yükseltme ticket'ı
-     * anında ihlale düşürebilir; bu istenen davranıştır.
+     * anında ihlale düşürebilir; bu istenen davranıştır. Düşürme ise hedefi
+     * İLERİ ALMAZ (SlaService::recalculateForPriority()).
      *
      * @param  array<string, mixed>  $data  'tag_ids' ve 'custom_fields' anahtarları içerebilir.
      */
     public function update(Ticket $ticket, array $data): Ticket
     {
         return DB::transaction(function () use ($ticket, $data) {
+            // Karar KİLİTLİ SATIR üzerinde verilir: `$ticket` route model
+            // binding'in (ya da senkron uygulayıcının) transaction DIŞINDA
+            // okuduğu kopyadır. Arada başka bir istek önceliği yükseltip
+            // commit ederse, SlaService::recalculateForPriority()'nin "hedef
+            // yalnızca öne çekilir" karşılaştırması o eski kopyanın
+            // `sla_due_at`'ine bakar ve hedefi GERİ alırdı (urgent 4 sa
+            // yazıldıktan sonra eski 48 sa'e göre high 24 sa). Sıra
+            // TicketStatusMachine::transition() ile aynıdır: önce sayaç, sonra
+            // satır.
+            SyncCounter::lock();
+
+            /** @var Ticket|null $locked */
+            $locked = Ticket::query()->whereKey($ticket->getKey())->lockForUpdate()->first();
+
+            if ($locked === null) {
+                throw new NotFoundHttpException;
+            }
+
+            $ticket = $locked;
+
             $hasTagIds = array_key_exists('tag_ids', $data);
             $tagIds = $data['tag_ids'] ?? [];
             $hasCustomFields = array_key_exists('custom_fields', $data);

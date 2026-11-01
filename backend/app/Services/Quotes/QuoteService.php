@@ -6,11 +6,13 @@ use App\Models\Product;
 use App\Models\Quote;
 use App\Models\Setting;
 use App\Repositories\QuoteRepository;
+use App\Sync\SyncCounter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
 /**
@@ -45,11 +47,38 @@ class QuoteService
      * uzatmak günlük bir satış hareketidir ve tutarı değiştirmez);
      * `deal_id` idari bir bağdır, belgenin içeriği değildir.
      *
+     * `terms` ve `valid_until` için bu serbestlik YALNIZCA `sent` içindir —
+     * sonuçlanmış tekliflerde (bkz. TERMINAL_LOCKED_FIELDS) onlar da kilitlidir.
+     *
      * @var array<int, string>
      */
     protected const AMOUNT_LOCKED_FIELDS = [
         'items', 'discount_type', 'discount_value', 'currency', 'company_id', 'contact_id',
     ];
+
+    /**
+     * Teklif SONUÇLANDIĞINDA (`accepted`/`rejected`/`expired`) tutar alanlarına
+     * EK OLARAK kilitlenen alanlar.
+     *
+     * `sent` bir teklifte `valid_until` uzatmak ve koşul metnini düzeltmek
+     * pazarlığın parçasıdır. Kabul edilmiş bir teklifte ise `terms` müşterinin
+     * onayladığı ödeme/teslim koşullarıdır ve `valid_until` kabulün geçerlilik
+     * süresi içinde verildiğinin kaydıdır: ikisini sonradan değiştirmek, tutarı
+     * değiştirmekle aynı ölçüde onaylanmış belgeyi yeniden yazmaktır. Ret ve
+     * süre dolumu da terminaldir (QuoteStatusMachine); onlarda bu alanları
+     * düzenlemek hiçbir geçişi geri getirmez, yalnızca kaydı bozar.
+     *
+     * @var array<int, string>
+     */
+    protected const TERMINAL_LOCKED_FIELDS = ['terms', 'valid_until'];
+
+    /**
+     * Sonuçlanmış durumlar — QuoteStatusMachine::TRANSITIONS'ta çıkışı
+     * olmayanlar.
+     *
+     * @var array<int, string>
+     */
+    protected const TERMINAL_STATUSES = ['accepted', 'rejected', 'expired'];
 
     /**
      * `quote_items` tablosunda gerçekten kolonu olan alanlar.
@@ -142,13 +171,34 @@ class QuoteService
      * `status` ve toplam alanları buraya HİÇ ULAŞMAZ — UpdateQuoteRequest
      * onları `missing` kuralıyla 422'ye çevirir.
      *
+     * KİLİT KARARI KİLİTLİ SATIR ÜZERİNDE VERİLİR: `$quote` route model
+     * binding'in (ya da senkron uygulayıcının) transaction DIŞINDA okuduğu
+     * kopyadır. O okuma ile yazma arasında `POST /send` teklifi `sent`'e
+     * geçirebilir; kontrol o kopyaya bakarsa tutar, müşteriye GÖNDERİLDİKTEN
+     * SONRA değişir. Bu yüzden satır QuoteStatusMachine::transition() ile
+     * AYNI sırayla (önce sayaç, sonra satır) kilitlenir ve durum oradan
+     * okunur: gönderim önce kilidi aldıysa bu istek onun commit'ini bekler ve
+     * `sent` görür; bu istek önce aldıysa gönderim düzenlemenin bitmesini
+     * bekler.
+     *
      * @param  array<string, mixed>  $data  'items' anahtarı içerebilir.
      */
     public function update(Quote $quote, array $data): Quote
     {
-        $this->assertAmountsEditable($quote, $data);
-
         return DB::transaction(function () use ($quote, $data) {
+            SyncCounter::lock();
+
+            /** @var Quote|null $locked */
+            $locked = Quote::query()->whereKey($quote->getKey())->lockForUpdate()->first();
+
+            if ($locked === null) {
+                throw new NotFoundHttpException;
+            }
+
+            $quote = $locked;
+
+            $this->assertAmountsEditable($quote, $data);
+
             $hasItems = array_key_exists('items', $data);
             $items = $data['items'] ?? [];
             unset($data['items']);
@@ -621,7 +671,13 @@ class QuoteService
             return;
         }
 
-        $attempted = array_values(array_intersect(self::AMOUNT_LOCKED_FIELDS, array_keys($data)));
+        $locked = self::AMOUNT_LOCKED_FIELDS;
+
+        if (in_array($quote->status, self::TERMINAL_STATUSES, true)) {
+            $locked = array_merge($locked, self::TERMINAL_LOCKED_FIELDS);
+        }
+
+        $attempted = array_values(array_intersect($locked, array_keys($data)));
 
         if ($attempted === []) {
             return;

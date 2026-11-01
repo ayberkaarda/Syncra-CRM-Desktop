@@ -20,6 +20,9 @@ use Illuminate\Database\Eloquent\Builder;
  * çıkışta eklenir ve `sla_due_at` aynı anda o kadar ileri kaydırılır, böylece
  * invariant tekrar sağlanır.)
  *
+ * Öncelik DÜŞÜRÜLMÜŞ bir ticket'ta eşitlik `<=` olur: düşürme hedefi ileri
+ * almaz (bkz. recalculateForPriority()).
+ *
  * -----------------------------------------------------------------------------
  * İHLAL NEDEN KALICI BİR BAYRAK DEĞİL (§5.3)
  * -----------------------------------------------------------------------------
@@ -162,8 +165,28 @@ class SlaService
      * aynen uygulanır; o duraklama çıkışta yine `sla_due_at`'e eklenir —
      * dolayısıyla iki kez sayılmaz.
      *
-     * Her iki bildirim damgası da null'a çekilir: yeni hedefe göre uyarı ve
-     * ihlal bildirimleri yeniden kurulmalıdır (kabul kriteri 6).
+     * -------------------------------------------------------------------
+     * ÖNCELİK DEĞİŞİMİ HEDEFİ ASLA İLERİ ALMAZ
+     * -------------------------------------------------------------------
+     * Formül yalnızca hedefi ÖNE çekebilir; yeni değer mevcut `sla_due_at`'ten
+     * sonraysa mevcut değer korunur. `urgent → low` düşürmesi 4 saatlik
+     * taahhüdü 72 saate çıkarıp ihlaldeki bir ticket'ı "ihlalde değil"e
+     * çevirebiliyordu: `tickets.update` izni olan biri ihlali tek bir alanla
+     * silebiliyor, ardından önceliği geri yükseltip damgaları sıfırlayarak
+     * aynı ihlal için ikinci bildirim üretebiliyordu. Müşteriye verilen söz
+     * öncelik etiketi değişti diye uzamaz; süre YALNIZCA duraklama
+     * (`pending`) ve yeniden açma ile, ikisi de zaman damgalı durum
+     * geçişleriyle ilerler.
+     *
+     * Bu yüzden §5 invariant'ı düşürmeden sonra `<=` olarak okunur:
+     * `sla_due_at <= created_at + hedef_saat(priority) + sla_paused_seconds`.
+     * totalSeconds() paydayı zaten satırın kendi `sla_due_at`'inden türettiği
+     * için ilerleme çubuğu korunan taahhüdü gösterir.
+     *
+     * Bildirim damgaları YALNIZCA hedef gerçekten değiştiğinde (öne
+     * çekildiğinde) null'a çekilir: yeni hedefe göre uyarı ve ihlal yeniden
+     * kurulmalıdır (kabul kriteri 6). Hedef değişmediyse damgalar kalır —
+     * aynı ihlal ikinci kez bildirilmez.
      */
     public function recalculateForPriority(Ticket $ticket): void
     {
@@ -171,9 +194,17 @@ class SlaService
             return;
         }
 
-        $ticket->sla_due_at = $ticket->created_at->copy()
+        $candidate = $ticket->created_at->copy()
             ->addHours($this->targetHours($ticket->priority))
             ->addSeconds((int) $ticket->sla_paused_seconds);
+
+        $current = $ticket->sla_due_at;
+
+        if ($current !== null && $candidate->getTimestamp() >= $current->getTimestamp()) {
+            return;
+        }
+
+        $ticket->sla_due_at = $candidate;
 
         $ticket->sla_warning_notified_at = null;
         $ticket->sla_breach_notified_at = null;
@@ -184,6 +215,16 @@ class SlaService
      *
      * `sla_due_at` burada DEĞİŞMEZ; donmuş kalan süre `sla_due_at -
      * sla_paused_at` olarak okunur (bkz. remainingSeconds()).
+     *
+     * DURAKLAMA İÇİN ÜST SINIR YOK — BİLİNÇLİ: `pending` "müşteriden yanıt
+     * bekleniyor" demektir ve o bekleme ne kadar sürerse sürsün temsilcinin
+     * süresinden düşülmemelidir (§3). Bir üst sınır, yanıt vermeyen müşterinin
+     * ticket'ını temsilci hiçbir şey yapamazken ihlale düşürürdü. Kötüye
+     * kullanım (yanıt beklenmediği hâlde `pending`'de park etmek) bu sınıfın
+     * değil süreç denetiminin konusudur ve görünürdür: her `pending` geçişi
+     * durum makinesinden geçer, audit izine düşer ve birikmiş süre
+     * `sla_paused_seconds` olarak ticket'ın üzerinde raporlanır. Duraklamaya
+     * zaten ihlaldeyken girilirse ihlal iyileşmez (isBreached(), kriter 5).
      */
     public function pause(Ticket $ticket): void
     {

@@ -191,7 +191,10 @@ class SyncPushService
      * Has this exact mutation already been applied?
      *
      * The ledger is keyed by `idempotency_key` AND scoped to the user, so a key
-     * captured from one account can never replay a result into another.
+     * captured from one account can never replay a result into another. The
+     * primary key is the same pair (migration 2026_11_02_100001), so the
+     * write side is scoped too: another account having used the same key
+     * neither blocks this user's ledger row nor is visible here.
      */
     private function replayOf(User $user, Mutation $mutation): ?MutationResult
     {

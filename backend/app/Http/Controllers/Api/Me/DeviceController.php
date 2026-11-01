@@ -71,10 +71,47 @@ class DeviceController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $deleted = $user->tokens()->whereKey($token)->delete();
+        /** @var PersonalAccessToken|null $device */
+        $device = $user->tokens()->whereKey($token)->first();
 
+        abort_if($device === null, Response::HTTP_NOT_FOUND);
+
+        $deleted = $user->tokens()->whereKey($device->getKey())->delete();
+
+        // A concurrent revoke of the same row already removed it: same answer
+        // as an unknown id, and no second audit row for one revocation.
         abort_if($deleted === 0, Response::HTTP_NOT_FOUND);
 
+        $this->auditRevocation($request, $user, $device);
+
         return response()->json(null, Response::HTTP_NO_CONTENT);
+    }
+
+    /**
+     * A revoked device is a security event - "was this laptop signed out, and
+     * by whom, from where?" is exactly what an incident review asks - but a
+     * token row is not a LogsCrmActivity model and disappears on revoke, so no
+     * audit row was ever written. The entry goes to the same `crm` log as the
+     * model audit rows (LogsCrmActivity::AUDIT_LOG_NAME) with the user as the
+     * subject, because the token row it described no longer exists. The token
+     * itself is NEVER logged - only its id and the metadata the device list
+     * already shows.
+     */
+    private function auditRevocation(Request $request, User $user, PersonalAccessToken $device): void
+    {
+        $current = $user->currentAccessToken();
+
+        activity('crm')
+            ->performedOn($user)
+            ->causedBy($user)
+            ->withProperties([
+                'token_id' => $device->getKey(),
+                'name' => (string) $device->name,
+                'platform' => $device->device_platform,
+                'last_used_at' => $device->last_used_at?->toIso8601String(),
+                'self_revoked' => $current instanceof PersonalAccessToken && $current->getKey() === $device->getKey(),
+                'ip' => $request->ip(),
+            ])
+            ->log('devices.revoked');
     }
 }
