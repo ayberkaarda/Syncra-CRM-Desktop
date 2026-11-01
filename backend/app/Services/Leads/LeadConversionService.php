@@ -17,8 +17,10 @@ use App\Services\Sync\TagSyncService;
 use App\Support\FractionalIndex;
 use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -54,9 +56,13 @@ use Illuminate\Validation\ValidationException;
  * ---------------------------------------------------------------------------
  * YETKİ
  * ---------------------------------------------------------------------------
- * Bu serviste yetki kontrolü YOKTUR — Policy/Gate kontrolü controller'ın işi.
- * `$actor` yalnızca sahipsiz lead'lerde owner ataması için kullanılır (audit
- * causer'ını spatie zaten oturumdan çözer).
+ * Dönüşümün kendisi (`leads.convert` + sahiplik) controller'da Policy ile
+ * yetkilendirilir. Tek istisna, dönüşümün BAŞKA bir kaydı değiştirdiği
+ * yerdir: mevcut bir kişiyi başka firmaya taşımak ContactPolicy::update()
+ * ister ve bu karar ancak taşımanın gerçekten olacağı anda verilebildiği
+ * için burada, `$actor` ile alınır (bkz. resolveContact()). `$actor` ayrıca
+ * sahipsiz lead'lerde owner ataması için kullanılır (audit causer'ını
+ * spatie zaten oturumdan çözer).
  */
 class LeadConversionService
 {
@@ -214,6 +220,16 @@ class LeadConversionService
             }
 
             if ($company !== null && $contact->company_id !== $company->getKey()) {
+                // Mevcut bir müşteri kaydını başka firmaya taşımak bir KİŞİ
+                // güncellemesidir: `leads.convert` bunu tek başına
+                // yetkilendirmez, ContactPolicy::update() de geçmelidir.
+                // Bağlanma (taşımasız) ve firması BOŞ kişiye firma yazmak
+                // (duplicate akışının "firması eksik" durumu) serbest kalır:
+                // ikisi de kişiyi başka bir müşteriden koparmaz.
+                if ($contact->company_id !== null && Gate::forUser($actor)->denies('update', $contact)) {
+                    throw new AuthorizationException('Seçilen kişiyi başka bir firmaya taşıma yetkiniz yok.');
+                }
+
                 $contact->company_id = $company->getKey();
                 $contact->save();
             }

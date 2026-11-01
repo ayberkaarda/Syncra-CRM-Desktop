@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Tickets;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * `PATCH /api/tickets/{ticket}/assign` — Yetkilendirme
@@ -31,7 +32,9 @@ class AssignTicketRequest extends FormRequest
             // null olabilir. Sadece `nullable` olsaydı boş bir gövde de
             // "atamayı kaldır" sayılırdı ve kazara gönderilen boş bir PATCH
             // sessizce ticket'ı sahipsiz bırakırdı.
-            'assigned_to' => ['present', 'nullable', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'assigned_to' => ['present', 'nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
         ];
     }
 

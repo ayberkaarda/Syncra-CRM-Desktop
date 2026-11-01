@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Contacts;
 
+use App\Models\Contact;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * NOT (Faz 13 / F8): `owner_id` bu uçta BİLEREK yazılabilir kaldı.
@@ -27,6 +29,24 @@ class UpdateContactRequest extends FormRequest
     }
 
     /**
+     * Formun tamamını geri gönderen istemci mevcut sahibi DEĞİŞTİRMEDEN
+     * yollar. Sahip sonradan devre dışı kaldıysa bu değer aşağıdaki "aktif
+     * kullanıcı" kuralına takılır ve kişi hiç düzenlenemez hâle gelirdi.
+     * Değişmeyen değer zaten bir no-op olduğu için girdiden düşürülür; yeni
+     * bir sahip seçmek ise kuralın tamamından geçer.
+     */
+    protected function prepareForValidation(): void
+    {
+        $contact = $this->route('contact');
+        $ownerId = $this->input('owner_id');
+
+        if ($contact instanceof Contact && is_scalar($ownerId) && $contact->owner_id !== null
+            && (string) $ownerId === (string) $contact->owner_id) {
+            $this->getInputSource()->remove('owner_id');
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
@@ -39,7 +59,9 @@ class UpdateContactRequest extends FormRequest
             'mobile' => ['sometimes', 'nullable', 'string', 'max:50'],
             'position' => ['sometimes', 'nullable', 'string', 'max:255'],
             'company_id' => ['sometimes', 'nullable', 'integer', 'exists:companies,id'],
-            'owner_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'owner_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
             'is_primary' => ['sometimes', 'boolean'],
             'address' => ['sometimes', 'nullable', 'string'],
             'city' => ['sometimes', 'nullable', 'string', 'max:255'],

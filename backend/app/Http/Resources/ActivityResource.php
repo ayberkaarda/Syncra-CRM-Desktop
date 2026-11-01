@@ -25,6 +25,12 @@ class ActivityResource extends JsonResource
 
         $shortType = MorphTargets::shortName($activity->activityable_type);
 
+        // Bağlı kaydın kimliği ve etiketi yalnızca o kaydı görebilene gider:
+        // `activities.view` aktiviteyi açar, hedef modülü (ör. ticket) değil.
+        $target = $activity->relationLoaded('activityable') ? $activity->activityable : null;
+        $showTarget = $target !== null && $shortType !== null
+            && ($request->user()?->can('view', $target) ?? false);
+
         return [
             'id' => $activity->id,
             'type' => $activity->type,
@@ -36,12 +42,13 @@ class ActivityResource extends JsonResource
             'user' => $activity->relationLoaded('user') && $activity->user
                 ? ['id' => $activity->user->id, 'name' => $activity->user->name]
                 : null,
-            // Hedef silinmişse (soft/hard) MorphTo null döner -> null.
-            'activityable' => $activity->relationLoaded('activityable') && $activity->activityable !== null && $shortType !== null
+            // Hedef silinmişse (soft/hard) MorphTo null döner -> null. Hedefi
+            // görme izni yoksa da null.
+            'activityable' => $showTarget
                 ? [
                     'type' => $shortType,
                     'id' => $activity->activityable_id,
-                    'label' => MorphTargets::label($shortType, $activity->activityable),
+                    'label' => MorphTargets::label($shortType, $target),
                 ]
                 : null,
             'created_at' => $activity->created_at?->toIso8601String(),

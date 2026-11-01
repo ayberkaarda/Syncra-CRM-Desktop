@@ -60,6 +60,28 @@ class LeadCsvParser
     ];
 
     /**
+     * Sütun başına azami karakter sayısı — `StoreLeadRequest` kurallarıyla
+     * aynı (formdan reddedilen değer CSV'den de girmemeli). `leads`
+     * tablosunda bu sütunlar VARCHAR(255); sınır aşılırsa katı moddaki
+     * MariaDB tüm içe aktarmayı "Data too long" ile yarıda keserdi.
+     *
+     * @var array<string, int>
+     */
+    private const MAX_LENGTHS = [
+        'first_name' => 255,
+        'last_name' => 255,
+        'email' => 255,
+        'phone' => 50,
+        'company_name' => 255,
+        'position' => 255,
+    ];
+
+    /**
+     * `notes` bir TEXT sütunu: sınır karakter değil BAYT (65.535).
+     */
+    private const NOTES_MAX_BYTES = 65535;
+
+    /**
      * normalize edilmiş sütun adı => CSV'deki sütun indeksi.
      *
      * @var array<string, int>
@@ -179,18 +201,50 @@ class LeadCsvParser
                 return null;
             }
 
-            $value = trim((string) $fields[$index]);
+            // Geçersiz bayt dizileri buradan dışarı çıkmaz (bkz. aşağıdaki
+            // kodlama kontrolü): değer hata mesajlarına da gömülüyor ve tek
+            // bozuk bayt tüm rapor yanıtının JSON'a çevrilmesini bozardı.
+            $value = trim(mb_scrub((string) $fields[$index], 'UTF-8'));
 
             return $value === '' ? null : $value;
         };
 
         $raw = [];
+        $badEncoding = [];
         foreach ($this->columnIndex as $name => $index) {
-            $raw[$name] = $fields[$index] ?? null;
+            $cell = $fields[$index] ?? null;
+
+            if (is_string($cell) && ! mb_check_encoding($cell, 'UTF-8')) {
+                $badEncoding[] = $name;
+                $cell = mb_scrub($cell, 'UTF-8');
+            }
+
+            $raw[$name] = $cell;
         }
 
         $errors = [];
         $warnings = [];
+
+        // Geçersiz UTF-8 satır hatasıdır, sessizce saklanmaz: utf8mb4 katı
+        // modda satırı reddeder, gevşek modda bozuk metin listeye girer ve
+        // listeleme yanıtı JSON'a çevrilemez hâle gelir. Tipik kaynak,
+        // Excel'in "CSV (virgülle ayrılmış)" ile Windows-1254 kaydetmesidir.
+        foreach ($badEncoding as $column) {
+            $errors[] = "\"{$column}\" sütununda geçersiz UTF-8 karakter var; dosyayı \"CSV UTF-8\" olarak kaydedin.";
+        }
+
+        foreach (self::MAX_LENGTHS as $column => $max) {
+            $value = $get($column);
+
+            if ($value !== null && mb_strlen($value, 'UTF-8') > $max) {
+                $errors[] = "\"{$column}\" en fazla {$max} karakter olabilir.";
+            }
+        }
+
+        $notes = $get('notes');
+        if ($notes !== null && strlen($notes) > self::NOTES_MAX_BYTES) {
+            $errors[] = '"notes" çok uzun (en fazla '.self::NOTES_MAX_BYTES.' bayt).';
+        }
 
         $firstName = $get('first_name');
         $lastName = $get('last_name');
@@ -215,8 +269,10 @@ class LeadCsvParser
         }
         $source ??= 'other';
 
+        // `converted` burada da yazılamaz (StoreLeadRequest::WRITABLE_STATUSES):
+        // dönüşüm yalnızca dönüşüm servisinden geçer.
         $status = $get('status');
-        if ($status !== null && ! in_array($status, StoreLeadRequest::STATUSES, true)) {
+        if ($status !== null && ! in_array($status, StoreLeadRequest::WRITABLE_STATUSES, true)) {
             $warnings[] = "Bilinmeyen durum (\"{$status}\"), \"new\" olarak ayarlandı.";
             $status = null;
         }
@@ -260,7 +316,7 @@ class LeadCsvParser
 
     private function normalizeColumn(?string $name): string
     {
-        $name = (string) $name;
+        $name = mb_scrub((string) $name, 'UTF-8');
 
         // Excel'in "CSV UTF-8" export'u başlık hücresinin önüne BOM koyar.
         $name = preg_replace('/^\xEF\xBB\xBF/', '', $name) ?? $name;

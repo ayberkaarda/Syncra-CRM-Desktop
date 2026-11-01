@@ -36,7 +36,13 @@ class DateRangeResolver
      */
     private const MAX_WINDOW_DAYS = 366;
 
-    public function resolve(?string $from, ?string $to): DateRange
+    /**
+     * `mixed`, `?string` DEĞİL: çağıranlar ham sorgu dizesini (`$request->
+     * query('from')`) olduğu gibi verir ve `?from[]=x` bir DİZİ üretir.
+     * Tipli imza bunu TypeError'a, yani 500'e çeviriyordu; biçim kararı
+     * parseBoundary()'de tek yerde verilir ve dizi de 422 alır.
+     */
+    public function resolve(mixed $from, mixed $to): DateRange
     {
         $toDate = $this->parseBoundary('to', $to)?->endOfDay()
             ?? CarbonImmutable::now()->endOfDay();
@@ -76,10 +82,16 @@ class DateRangeResolver
      * biçimleri (ör. "2026/08/24", "24 Ağustos") de kabul eder, ama
      * sözleşme yalnızca `Y-m-d`.
      */
-    private function parseBoundary(string $field, ?string $value): ?CarbonImmutable
+    private function parseBoundary(string $field, mixed $value): ?CarbonImmutable
     {
         if ($value === null || $value === '') {
             return null;
+        }
+
+        if (! is_string($value)) {
+            throw ValidationException::withMessages([
+                $field => ['Tarih Y-m-d biçiminde olmalıdır (ör. 2026-08-24).'],
+            ]);
         }
 
         // Carbon 3, ham PHP DateTime::createFromFormat'ın aksine geçersiz

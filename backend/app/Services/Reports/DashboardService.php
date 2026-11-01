@@ -14,6 +14,7 @@ use App\Services\Reports\Support\ReportCurrencyContext;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /**
@@ -297,7 +298,10 @@ class DashboardService
                     'id' => (int) $activity->user->id,
                     'name' => $activity->user->name,
                 ],
-                'related' => $activity->activityable === null ? null : [
+                // `dashboard.view` aktivitenin kendisini açar, bağlı kaydı
+                // DEĞİL: hedefin kimliği/başlığı yalnızca o kaydı görebilen
+                // kullanıcıya gösterilir (ör. destek temsilcisine fırsat adı yok).
+                'related' => $activity->activityable === null || Gate::denies('view', $activity->activityable) ? null : [
                     'type' => $this->shortSubjectType($activity->activityable_type),
                     'id' => (int) $activity->activityable_id,
                     'label' => $this->relatedLabel($activity->activityable),

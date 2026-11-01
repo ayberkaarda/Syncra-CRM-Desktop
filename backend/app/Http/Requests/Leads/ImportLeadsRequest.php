@@ -54,7 +54,9 @@ class ImportLeadsRequest extends FormRequest
             // beklemek bu dosyaları haksız yere reddederdi.
             'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120', 'mimetypes:text/csv,text/plain,application/csv'],
             'duplicate_mode' => ['nullable', 'string', Rule::in(self::DUPLICATE_MODES)],
-            'owner_id' => ['nullable', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'owner_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
         ];
     }
 

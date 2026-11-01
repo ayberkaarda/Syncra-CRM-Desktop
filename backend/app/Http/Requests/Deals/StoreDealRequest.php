@@ -4,6 +4,7 @@ namespace App\Http\Requests\Deals;
 
 use App\Http\Requests\Concerns\ForcesRecordOwnerOnCreate;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * `POST /api/deals` — Yetkilendirme DealController::store() içinde Policy
@@ -49,7 +50,9 @@ class StoreDealRequest extends FormRequest
             'expected_close_date' => ['nullable', 'date'],
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'contact_id' => ['nullable', 'integer', 'exists:contacts,id'],
-            'owner_id' => ['nullable', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'owner_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
             'tag_ids' => ['nullable', 'array'],
             'tag_ids.*' => ['integer', 'exists:tags,id'],
             'custom_fields' => ['nullable', 'array'],

@@ -226,7 +226,10 @@ class LeadImportTest extends TestCase
 
     public function test_duplicate_mode_update_updates_existing_lead(): void
     {
-        $actor = $this->actorWithPermissions(['leads.import']);
+        // `leads.update` gerekli: import izni tek başına mevcut bir lead'i
+        // güncelleme yetkisi vermez (LeadPolicy::update, bkz.
+        // Security\LeadImportAuthorizationTest).
+        $actor = $this->actorWithPermissions(['leads.import', 'leads.update']);
         $existing = Lead::factory()->create(['email' => 'mevcut@example.com', 'first_name' => 'Eski']);
 
         $content = $this->csvContent($this->defaultHeader(), [

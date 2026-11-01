@@ -41,9 +41,15 @@ class StoreLeadRequest extends FormRequest
             'company_name' => ['nullable', 'string', 'max:255'],
             'position' => ['nullable', 'string', 'max:255'],
             'source' => ['required', Rule::in(self::SOURCES)],
-            'status' => ['nullable', Rule::in(self::STATUSES)],
+            // 'converted' kabul edilmez: dönüşüm yalnızca dönüşüm servisinden
+            // geçer (kişi/firma/fırsat üretir, lead'i kilitler). Doğrudan
+            // `converted` oluşturulan lead hem bu izi atlar hem de
+            // LeadPolicy'nin "dönüşmüş lead düzenlenemez" kilidine anında girer.
+            'status' => ['nullable', Rule::in(self::WRITABLE_STATUSES)],
             'score' => ['nullable', 'integer', 'between:0,100'],
-            'owner_id' => ['nullable', 'integer', 'exists:users,id'],
+            // Yalnızca aktif ve silinmemiş bir kullanıcıya atanabilir: düz
+            // `exists:users,id` devre dışı/silinmiş hesabı da kabul ediyordu.
+            'owner_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->withoutTrashed()],
             'notes' => ['nullable', 'string'],
             'tag_ids' => ['nullable', 'array'],
             'tag_ids.*' => ['integer', 'exists:tags,id'],
@@ -63,5 +69,15 @@ class StoreLeadRequest extends FormRequest
      */
     public const STATUSES = [
         'new', 'contacted', 'qualified', 'unqualified', 'converted',
+    ];
+
+    /**
+     * Bir istemcinin (form, CSV, senkron) doğrudan yazabileceği durumlar.
+     * STATUSES filtreleme sözlüğü olarak `converted`'ı içermeye devam eder.
+     *
+     * @var array<int, string>
+     */
+    public const WRITABLE_STATUSES = [
+        'new', 'contacted', 'qualified', 'unqualified',
     ];
 }

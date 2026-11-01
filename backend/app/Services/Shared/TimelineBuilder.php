@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 use Spatie\Activitylog\Models\Activity as AuditLogEntry;
 
 /**
@@ -94,18 +95,30 @@ class TimelineBuilder
         $perPage = min(self::MAX_PER_PAGE, max(1, (int) ($filters['per_page'] ?? self::DEFAULT_PER_PAGE)));
         $limit = $page * $perPage;
 
-        $sources = [
-            $this->activityEntries($subject, $limit),
-            $this->taskEntries($subject, $limit),
-            $this->ticketEntries($subject, $limit),
-            $this->dealCreationEntries($subject, $limit),
-            $this->dealStageChangeEntries($subject, $limit),
-            $this->attachmentEntries($subject, $limit),
-        ];
+        $visible = $this->visibleSources();
 
-        if ($subject instanceof Company) {
-            // Firma kartında tüm iletişim görünmeli: bağlı kişilerin aktiviteleri de dahil.
-            $sources[] = $this->relatedContactActivityEntries($subject, $limit);
+        $sources = [$this->attachmentEntries($subject, $limit)];
+
+        if ($visible['activity']) {
+            $sources[] = $this->activityEntries($subject, $limit);
+
+            if ($subject instanceof Company) {
+                // Firma kartında tüm iletişim görünmeli: bağlı kişilerin aktiviteleri de dahil.
+                $sources[] = $this->relatedContactActivityEntries($subject, $limit, $visible['contact']);
+            }
+        }
+
+        if ($visible['task']) {
+            $sources[] = $this->taskEntries($subject, $limit);
+        }
+
+        if ($visible['ticket']) {
+            $sources[] = $this->ticketEntries($subject, $limit);
+        }
+
+        if ($visible['deal']) {
+            $sources[] = $this->dealCreationEntries($subject, $limit);
+            $sources[] = $this->dealStageChangeEntries($subject, $limit);
         }
 
         $merged = collect($sources)
@@ -132,7 +145,30 @@ class TimelineBuilder
             ->values()
             ->all();
 
-        return new LengthAwarePaginator($items, $this->countAll($subject), $perPage, $page);
+        return new LengthAwarePaginator($items, $this->countAll($subject, $visible), $perPage, $page);
+    }
+
+    /**
+     * Üst kaydın (kişi/firma) görüntüleme izni yalnızca o kaydı açar; ilişkili
+     * her kaynak KENDİ modülünün `viewAny` Policy'sinden geçmelidir (firma
+     * detayındaki "ilişkili kayıtlar" paneliyle aynı desen). Aksi halde
+     * `companies.view` taşıyan bir destek temsilcisi fırsat tutarlarını, bir
+     * satış temsilcisi ticket açıklamalarını buradan okuyabilirdi.
+     *
+     * Ekler kaynağı kapıdan geçmez: yalnızca üst kaydın kendisine bağlı
+     * eklerin adı/boyutu listelenir, ayrı bir modül izni yoktur.
+     *
+     * @return array{activity: bool, task: bool, ticket: bool, deal: bool, contact: bool}
+     */
+    protected function visibleSources(): array
+    {
+        return [
+            'activity' => Gate::allows('viewAny', Activity::class),
+            'task' => Gate::allows('viewAny', Task::class),
+            'ticket' => Gate::allows('viewAny', Ticket::class),
+            'deal' => Gate::allows('viewAny', Deal::class),
+            'contact' => Gate::allows('viewAny', Contact::class),
+        ];
     }
 
     /**
@@ -171,7 +207,7 @@ class TimelineBuilder
      *
      * @return Collection<int, array<string, mixed>>
      */
-    protected function relatedContactActivityEntries(Company $company, int $limit): Collection
+    protected function relatedContactActivityEntries(Company $company, int $limit, bool $showContact = true): Collection
     {
         $contactIds = Contact::query()->where('company_id', $company->getKey())->pluck('id');
 
@@ -199,7 +235,8 @@ class TimelineBuilder
                     'activity_type' => $activity->type,
                     'duration_minutes' => $activity->duration_minutes,
                     'outcome' => $activity->outcome,
-                    'via_contact' => $activity->activityable ? [
+                    // Kişi adı yalnızca `contacts.view` taşıyana gösterilir.
+                    'via_contact' => $showContact && $activity->activityable ? [
                         'id' => $activity->activityable->id,
                         'name' => $activity->activityable->full_name,
                     ] : null,
@@ -389,44 +426,58 @@ class TimelineBuilder
      * Sayfalama meta'sının `total`/`last_page` alanları burada tam doğrudur;
      * yalnızca satırların KENDİSİ (yukarıdaki top-K akışlar) sınırlanır.
      */
-    protected function countAll(Model $subject): int
+    /**
+     * @param  array{activity: bool, task: bool, ticket: bool, deal: bool, contact: bool}  $visible
+     */
+    protected function countAll(Model $subject, array $visible): int
     {
         $foreignKey = $this->foreignKeyFor($subject);
+        $count = 0;
 
-        $count = Activity::query()
-            ->where('activityable_type', $subject->getMorphClass())
-            ->where('activityable_id', $subject->getKey())
-            ->count();
+        // Yalnızca görünen kaynaklar sayılır: kapalı bir modülün kayıt sayısı
+        // da `total` üzerinden sızmamalı.
+        if ($visible['activity']) {
+            $count += Activity::query()
+                ->where('activityable_type', $subject->getMorphClass())
+                ->where('activityable_id', $subject->getKey())
+                ->count();
 
-        if ($subject instanceof Company) {
-            $contactIds = Contact::query()->where('company_id', $subject->getKey())->pluck('id');
+            if ($subject instanceof Company) {
+                $contactIds = Contact::query()->where('company_id', $subject->getKey())->pluck('id');
 
-            if ($contactIds->isNotEmpty()) {
-                $count += Activity::query()
-                    ->where('activityable_type', Contact::class)
-                    ->whereIn('activityable_id', $contactIds)
-                    ->count();
+                if ($contactIds->isNotEmpty()) {
+                    $count += Activity::query()
+                        ->where('activityable_type', Contact::class)
+                        ->whereIn('activityable_id', $contactIds)
+                        ->count();
+                }
             }
         }
 
-        $count += Task::query()
-            ->where('taskable_type', $subject->getMorphClass())
-            ->where('taskable_id', $subject->getKey())
-            ->count();
-
-        $count += Ticket::query()->where($foreignKey, $subject->getKey())->count();
-
-        $dealIds = Deal::query()->where($foreignKey, $subject->getKey())->pluck('id');
-        $count += $dealIds->count();
-
-        if ($dealIds->isNotEmpty()) {
-            $count += AuditLogEntry::query()
-                ->where('log_name', Deal::AUDIT_LOG_NAME)
-                ->where('subject_type', Deal::class)
-                ->whereIn('subject_id', $dealIds)
-                ->where('event', 'updated')
-                ->whereNotNull('properties->attributes->pipeline_stage_id')
+        if ($visible['task']) {
+            $count += Task::query()
+                ->where('taskable_type', $subject->getMorphClass())
+                ->where('taskable_id', $subject->getKey())
                 ->count();
+        }
+
+        if ($visible['ticket']) {
+            $count += Ticket::query()->where($foreignKey, $subject->getKey())->count();
+        }
+
+        if ($visible['deal']) {
+            $dealIds = Deal::query()->where($foreignKey, $subject->getKey())->pluck('id');
+            $count += $dealIds->count();
+
+            if ($dealIds->isNotEmpty()) {
+                $count += AuditLogEntry::query()
+                    ->where('log_name', Deal::AUDIT_LOG_NAME)
+                    ->where('subject_type', Deal::class)
+                    ->whereIn('subject_id', $dealIds)
+                    ->where('event', 'updated')
+                    ->whereNotNull('properties->attributes->pipeline_stage_id')
+                    ->count();
+            }
         }
 
         $count += Attachment::query()
