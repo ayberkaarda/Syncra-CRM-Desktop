@@ -32,7 +32,8 @@ use Illuminate\Support\Facades\DB;
  *   - NO audit row. LeadConversionService's own docblock (:330) argues that
  *     replacing its bulk update with a 50-model loop would bury the single
  *     meaningful "converted" entry under 50 mechanical ones. Bumping through
- *     Eloquent would do exactly what that decision rejects.
+ *     Eloquent would do exactly what that decision rejects. WriteTrail keeps
+ *     the one fact the conflict window needs instead.
  *   - ONE version PER ROW. Protocol §2.5/K-C: the pull cursor is a single
  *     scalar, so if `LIMIT` ever falls between two rows sharing a version, the
  *     second one is never returned again. `bumpRows()` therefore issues one
@@ -54,6 +55,8 @@ final class SyncVersionBumper
             ->where($model->getKeyName(), $model->getKey())
             ->update(['sync_version' => $version]);
 
+        WriteTrail::recordUntrailed($model->getTable(), $model->getKey(), $version);
+
         $model->setAttribute('sync_version', $version);
         $model->syncOriginalAttribute('sync_version');
 
@@ -74,6 +77,8 @@ final class SyncVersionBumper
             $version = SyncCounter::next();
 
             DB::table($table)->where($keyName, $key)->update(['sync_version' => $version]);
+
+            WriteTrail::recordUntrailed($table, $key, $version);
 
             $versions[$key] = $version;
         }

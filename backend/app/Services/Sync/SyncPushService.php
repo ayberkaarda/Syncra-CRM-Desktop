@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Sync\Mutation;
 use App\Sync\MutationResult;
 use App\Sync\SyncActivityContext;
+use Illuminate\Database\DeadlockException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -142,7 +143,7 @@ class SyncPushService
                 return SyncActivityContext::within(['batch_id' => $batchId], fn (): MutationResult => DB::transaction(
                     fn (): MutationResult => $this->applier->apply($mutation, $user, $clientIdMap)
                 ));
-            } catch (QueryException $e) {
+            } catch (QueryException|DeadlockException $e) {
                 if (! $this->isRetryable($e)) {
                     throw $e;
                 }
@@ -158,14 +159,21 @@ class SyncPushService
         return null;
     }
 
-    private function isRetryable(QueryException $e): bool
+    private function isRetryable(QueryException|DeadlockException $e): bool
     {
         // errorInfo[1] is the DRIVER code (1205/1213); errorInfo[0] is the
         // SQLSTATE, which lumps both under the same 'HY000'/'40001' buckets and
         // would therefore also match unrelated failures.
-        $driverCode = $e->errorInfo[1] ?? null;
+        // Nested transactions may wrap the driver exception more than once.
+        do {
+            if ($e instanceof \PDOException
+                && in_array($e->errorInfo[1] ?? null, self::RETRYABLE, true)) {
+                return true;
+            }
+            $e = $e->getPrevious();
+        } while ($e !== null);
 
-        return is_int($driverCode) && in_array($driverCode, self::RETRYABLE, true);
+        return false;
     }
 
     private function backoffMicroseconds(int $attempt): int

@@ -124,6 +124,11 @@ struct Inner {
     manifest: Mutex<Option<(Instant, Manifest)>>,
     /// Serialises sync rounds; a trigger arriving mid-round coalesces into the next one.
     round: tokio::sync::Mutex<()>,
+    /// Serialises pulls, whoever starts them: a round, a realtime event, a bootstrap, an
+    /// archive download. A response is only meaningful against the cursors it was requested
+    /// with, so one must land before the next is requested, and none may be on the wire across
+    /// an archive's cursor reset. Always taken after `round`, never before it.
+    pulling: tokio::sync::Mutex<()>,
     /// Set once the server reports a protocol version this build cannot speak.
     halted: AtomicBool,
     /// Signalled by the triggers of §5.5 so the background loop wakes early.
@@ -257,6 +262,7 @@ impl SyncEngine {
             token: RwLock::new(token),
             manifest: Mutex::new(None),
             round: tokio::sync::Mutex::new(()),
+            pulling: tokio::sync::Mutex::new(()),
             halted: AtomicBool::new(false),
             wake: tokio::sync::Notify::new(),
             stopping: AtomicBool::new(false),
@@ -390,6 +396,9 @@ impl SyncEngine {
             _ => None,
         };
 
+        // Same reason as `clear_local`: a pull on the wire would write the departing user's
+        // rows and cursors back into the wiped mirror.
+        let pulling = self.inner.pulling.lock().await;
         let service = self.inner.cfg.read().unwrap().keychain_service.clone();
         self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
         {
@@ -398,14 +407,33 @@ impl SyncEngine {
             db::put_setting(&conn, SETTING_USER_ID, "")?;
             db::put_setting(&conn, SETTING_SESSION, "")?;
         }
+        // Released only once the token is gone, so a pull queued behind the lock finds no
+        // session to pull for.
         *self.inner.token.write().unwrap() = None;
         *self.inner.session.write().unwrap() = None;
         *self.inner.manifest.lock().unwrap() = None;
+        drop(pulling);
         self.refresh_status()?;
         Ok(match revocation {
             Some(reason) => LogoutOutcome::WipedLocalOnly(reason),
             None => LogoutOutcome::Wiped,
         })
+    }
+
+    /// Empty the mirror, the outbox, the cursors and the cached blobs, **keeping the session**:
+    /// the "clear local data" action (`docs/DESKTOP-ARCHITECTURE.md` §5.2).
+    ///
+    /// The wipe waits for any pull on the wire. A response requested before it and applied
+    /// after it would put its rows and its cursors back: the next delta then starts above
+    /// everything the wipe removed, and none of that ever comes down again.
+    pub async fn clear_local(&self) -> Result<()> {
+        let _pulling = self.inner.pulling.lock().await;
+        {
+            let conn = self.db()?;
+            wipe_local(&conn)?;
+        }
+        self.refresh_status()?;
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -566,9 +594,24 @@ impl SyncEngine {
         window_days: Option<u32>,
         progress: Option<&(dyn Fn(BootstrapProgress) + Send + Sync)>,
     ) -> Result<pull::PullOutcome> {
+        let _pulling = self.inner.pulling.lock().await;
+        self.drain(manifest, entities, window_days, progress).await
+    }
+
+    /// The pull loop. Callers hold `Inner::pulling`.
+    async fn drain(
+        &self,
+        manifest: &Manifest,
+        entities: &[Entity],
+        window_days: Option<u32>,
+        progress: Option<&(dyn Fn(BootstrapProgress) + Send + Sync)>,
+    ) -> Result<pull::PullOutcome> {
         let token = self.token().ok_or(SyncError::Auth)?;
         let limit = manifest.policy.pull_limit_max.clamp(1, 500);
         let mut total = pull::PullOutcome::default();
+        // `entities` says which tables this call waits for; every request still carries every
+        // granted cursor (see `pull::build_request`).
+        let granted = pull::granted_entities(manifest);
         let mut pending: Vec<Entity> = entities.to_vec();
         let mut guard = 0u32;
 
@@ -582,7 +625,7 @@ impl SyncEngine {
 
             let request = {
                 let conn = self.db()?;
-                pull::build_request(&conn, &pending, limit, window_days)?
+                pull::build_request(&conn, &granted, limit, window_days)?
             };
             let response = match self.inner.transport.pull(&token, &request).await {
                 Ok(response) => response,
@@ -615,7 +658,7 @@ impl SyncEngine {
                 });
             }
 
-            pending = outcome.incomplete;
+            pending = pull::still_owed(entities, &response, &outcome);
         }
 
         total.tables_changed.sort();
@@ -635,6 +678,11 @@ impl SyncEngine {
         }
         .min(manifest.policy.retention_days_max);
 
+        // Held from before the reset: a pull already on the wire finishes first, and one
+        // landing after the reset would otherwise put the old cursors back, moving the next
+        // page of this download past everything between them.
+        let pulling = self.inner.pulling.lock().await;
+
         {
             let conn = self.db()?;
             for entity in &entities {
@@ -646,14 +694,14 @@ impl SyncEngine {
         // window is genuinely applied and genuinely validated by the server (U3).
         let window = window.clamp(1, manifest.policy.retention_days_max.max(1));
 
-        self.pull_until_drained(&manifest, &entities, Some(window), None)
-            .await?;
+        self.drain(&manifest, &entities, Some(window), None).await?;
+        drop(pulling);
         self.refresh_status()?;
         self.emit(EngineEvent::TablesChanged { entities });
         Ok(())
     }
 
-    /// Reverb told us something changed; pull just those tables.
+    /// Reverb told us something changed; pull until those tables are drained.
     pub async fn handle_realtime(&self, event: RealtimeEvent) {
         self.inner.wake.notify_one();
         if event.entities.is_empty() || !self.status().online {

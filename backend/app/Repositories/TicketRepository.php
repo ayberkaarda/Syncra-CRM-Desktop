@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Services\Sync\TagSyncService;
 use App\Services\Tickets\SlaService;
 use App\Services\Tickets\TicketStatusMachine;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -101,7 +102,7 @@ class TicketRepository
             $ticket->updated_at = $data['created_at'];
         }
 
-        $ticket->save();
+        SyncCounter::atomically(fn () => $ticket->save());
 
         return $ticket;
     }
@@ -112,14 +113,14 @@ class TicketRepository
     public function update(Ticket $ticket, array $data): Ticket
     {
         $ticket->fill($data);
-        $ticket->save();
+        SyncCounter::atomically(fn () => $ticket->save());
 
         return $ticket;
     }
 
     public function delete(Ticket $ticket): void
     {
-        $ticket->delete();
+        SyncCounter::atomically(fn () => $ticket->delete());
     }
 
     /**

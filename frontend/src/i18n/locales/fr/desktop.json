@@ -18,6 +18,7 @@
     "FIELD_CONFLICT": "Cet enregistrement contient des modifications en conflit avec le serveur.",
     "RECORD_DELETED": "Cet enregistrement a été supprimé sur le serveur.",
     "INVALID_MUTATION": "Cette modification a été rejetée par le serveur.",
+    "FORBIDDEN": "Vous n'avez pas l'autorisation d'effectuer cette action.",
     "PROTOCOL_VERSION_MISMATCH": "Votre version du protocole de synchronisation n'est pas compatible avec le serveur. Veuillez mettre à jour l'application.",
     "ABILITY_REQUIRED": "Vous n'avez pas les droits nécessaires pour effectuer cette action.",
     "LOCKED_OUT": "Votre compte est temporairement verrouillé suite à trop de tentatives échouées.",

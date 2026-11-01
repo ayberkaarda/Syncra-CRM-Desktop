@@ -2,14 +2,14 @@
 name = "syncra-desktop"
 version = "0.1.0"
 edition = "2021"
-# Measured, not guessed: `cargo metadata --locked` over the 703 packages this workspace
-# resolves reports 513 declared `rust-version`s, and the highest is 1.89.0 (`notify-rust
-# 4.18.0`, pulled in by `tauri-plugin-notification`). The next tier down is 1.88.0
-# (`image 0.25.10`, `time 0.3.55`, `plist 1.10.0`, `darling 0.23.0`). The previous "1.80"
-# here was a declaration that no toolchain could honour — the lock has not been buildable on
-# 1.80 for a long time; CI only survives it because it installs `stable`. Re-measure this
-# number (same command, sort by rust_version) whenever `Cargo.lock` moves.
-rust-version = "1.89"
+# Deliberately the latest stable, not the dependency floor. `cargo metadata --locked` over the
+# 696 packages this workspace resolves reports 515 declared `rust-version`s, and the highest is
+# 1.90 (`tauri 2.12`, `muda`, `tauri-plugin-updater 2.14` and eight more); `notify-rust 4.18.0`
+# needs 1.89.0 and the `darling`/`image` tier 1.88.0. Anything between 1.90 and the pin below
+# is a choice, made so the whole workspace is built and tested on the same toolchain as CI,
+# which installs `stable`. Re-measure the floor (same command, sort by rust_version) whenever
+# `Cargo.lock` moves, and raise this pin when a newer stable becomes the toolchain in use.
+rust-version = "1.99"
 description = "Syncra CRM desktop shell (Tauri 2)"
 license = "MIT"
 publish = false

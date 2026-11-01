@@ -188,6 +188,18 @@ fn settle(tx: &rusqlite::Transaction<'_>, row: &OutboxRow, result: &PushResult) 
             result.server_id,
             result.sync_version,
         )?;
+        // An edit queued while this mutation was on the wire was anchored to the row as it was
+        // before it. After a create the row had no server version yet, and it was born at this
+        // one; after an update see `outbox::rebase_on_update`.
+        if let Some(version) = result.sync_version {
+            match row.op {
+                crate::types::Op::Create => {
+                    outbox::rebase_on_create(tx, row.entity, client_id, version)?;
+                }
+                crate::types::Op::Update => outbox::rebase_on_update(tx, row, version)?,
+                _ => {}
+            }
+        }
         // A delete that the server accepted stays a tombstone locally until retention
         // sweeps it; everything else becomes clean.
         let state = if row.op == crate::types::Op::Delete {

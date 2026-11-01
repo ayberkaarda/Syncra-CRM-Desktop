@@ -18,6 +18,7 @@
     "FIELD_CONFLICT": "This record has changes that conflict with the server.",
     "RECORD_DELETED": "This record has been deleted on the server.",
     "INVALID_MUTATION": "This change was rejected by the server.",
+    "FORBIDDEN": "You do not have permission to perform this action.",
     "PROTOCOL_VERSION_MISMATCH": "Your sync protocol version is incompatible with the server. Please update the app.",
     "ABILITY_REQUIRED": "You don't have permission to perform this action.",
     "LOCKED_OUT": "Your account is temporarily locked due to too many failed attempts.",

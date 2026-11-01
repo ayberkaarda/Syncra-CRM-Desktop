@@ -17,7 +17,7 @@ pub struct PullOutcome {
     pub rows: u64,
     /// Server rows parked because the local row still had unpushed edits.
     pub shadowed: u64,
-    /// Tombstones applied.
+    /// Tombstones applied; one this build had to skip is not among them.
     pub deletions: u64,
     /// Tables whose contents moved.
     pub tables_changed: Vec<Entity>,
@@ -26,6 +26,10 @@ pub struct PullOutcome {
 }
 
 /// Build the request for the tables the manifest granted.
+///
+/// `entities` has to be **every** granted table, not just the ones still draining: the server
+/// visits its whole scope on every pull and reads a cursor missing from the body as 0, so
+/// leaving a finished table out sends it again from the start (protocol §4.2).
 ///
 /// `window_days` is only meaningful while a cursor is 0: `SYNCDESKTOP.md` §4.4 applies the
 /// retention window to bootstrap and no filter at all to deltas, and K12 is what keeps a
@@ -82,18 +86,26 @@ pub fn apply(conn: &Connection, response: &PullResponse) -> Result<PullOutcome> 
             match upsert::upsert_row(&tx, spec, row, &mut id_map, cols)? {
                 upsert::UpsertOutcome::Written => outcome.rows += 1,
                 upsert::UpsertOutcome::Shadowed => outcome.shadowed += 1,
+                upsert::UpsertOutcome::Stale => continue,
             }
             changed.insert(spec.entity);
         }
 
         for deletion in &table.deletions {
-            upsert::apply_deletion(&tx, spec.entity, &deletion.row_key)?;
-            outcome.deletions += 1;
+            match upsert::apply_deletion(&tx, spec.entity, &deletion.row_key)? {
+                upsert::TombstoneOutcome::Applied => outcome.deletions += 1,
+                upsert::TombstoneOutcome::Skipped => continue,
+            }
             changed.insert(spec.entity);
         }
 
+        // Forward only: a lower cursor can only come from a server restored from a backup or
+        // one reading a cursor as missing. [`SyncEngine::download_archive`] is the one
+        // deliberate reset, and it goes through `db::set_cursor` itself.
         if let Some(next) = table.next_cursor {
-            db::set_cursor(&tx, spec.entity, next)?;
+            if next > db::get_cursor(&tx, spec.entity)? {
+                db::set_cursor(&tx, spec.entity, next)?;
+            }
         }
         if table.has_more {
             outcome.incomplete.push(spec.entity);
@@ -106,6 +118,29 @@ pub fn apply(conn: &Connection, response: &PullResponse) -> Result<PullOutcome> 
     tables.sort();
     outcome.tables_changed = tables;
     Ok(outcome)
+}
+
+/// Which of `wanted` the next request still has to serve.
+///
+/// A table with `has_more` is the obvious case. The other is a table missing from a response
+/// that says more is coming: the byte budget ran out before the server reached it, and the only
+/// flag raised is on the table it visited last, which may be one nobody here is waiting for
+/// (protocol §4.2). `has_more` is read off the response rather than [`PullOutcome::incomplete`]
+/// because that last table may be one this build does not mirror.
+pub fn still_owed(
+    wanted: &[Entity],
+    response: &PullResponse,
+    outcome: &PullOutcome,
+) -> Vec<Entity> {
+    let cut_short = response.tables.values().any(|table| table.has_more);
+    wanted
+        .iter()
+        .copied()
+        .filter(|entity| {
+            outcome.incomplete.contains(entity)
+                || (cut_short && !response.tables.contains_key(entity.table()))
+        })
+        .collect()
 }
 
 /// Tables the manifest granted, in pull order.

@@ -134,14 +134,9 @@ class PrivilegeEscalationTest extends TestCase
     // A2.6
     // -------------------------------------------------------------------
 
-    public function test_settings_manage_holder_can_add_a_previously_unheld_permission_to_their_own_role(): void
+    public function test_settings_manage_holder_cannot_add_a_previously_unheld_permission_to_their_own_role(): void
     {
-        // GERÇEK DAVRANIŞ (RoleMatrixService::syncPermissions() okunarak
-        // doğrulandı): kendi rolüne yeni bir izin EKLEMEK
-        // assertActorKeepsSettingsAccess() tarafından ENGELLENMEZ — o kural
-        // yalnızca settings.manage'in KALDIRILMASINI engeller. Bu, bilinçli
-        // bir tasarım: settings.manage zaten matrisin tamamını değiştirme
-        // yetkisidir.
+        // Matris erişimi, aktörün sahip olmadığı bir izni vermesine izin vermez.
         $actor = $this->actorWithRole('Admin');
         $this->assertFalse($actor->hasPermissionTo('users.manage_roles'));
 
@@ -154,10 +149,10 @@ class PrivilegeEscalationTest extends TestCase
             ['permissions' => array_values(array_unique([...$currentPermissions, 'users.manage_roles']))],
         );
 
-        $response->assertStatus(200);
+        $response->assertStatus(422)->assertJsonPath('errors.code', 'PERMISSION_GRANT_FORBIDDEN');
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
-        $this->assertTrue($adminRole->fresh()->permissions->contains('name', 'users.manage_roles'));
+        $this->assertFalse($adminRole->fresh()->permissions->contains('name', 'users.manage_roles'));
     }
 
     public function test_settings_manage_holder_cannot_strip_settings_manage_from_their_own_sole_role(): void

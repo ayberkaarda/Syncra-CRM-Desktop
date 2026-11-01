@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Models\PriceList;
 use App\Models\PriceListItem;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -93,13 +94,13 @@ class PriceListRepository
 
     public function create(array $data): PriceList
     {
-        return PriceList::create($data);
+        return SyncCounter::atomically(fn () => PriceList::create($data));
     }
 
     public function update(PriceList $priceList, array $data): PriceList
     {
         $priceList->fill($data);
-        $priceList->save();
+        SyncCounter::atomically(fn () => $priceList->save());
 
         return $priceList;
     }
@@ -115,7 +116,7 @@ class PriceListRepository
         // davranıştır. Projede aynı desen: quotes (softDeletes) →
         // quote_items (cascadeOnDelete), conversations (softDeletes) →
         // messages (cascadeOnDelete) — ikisinde de kalemler elle silinmez.
-        $priceList->delete();
+        SyncCounter::atomically(fn () => $priceList->delete());
     }
 
     /**

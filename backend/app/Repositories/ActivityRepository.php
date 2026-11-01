@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Models\Activity;
 use App\Support\MorphTargets;
+use App\Sync\SyncCounter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -55,7 +56,7 @@ class ActivityRepository
      */
     public function create(array $data): Activity
     {
-        return Activity::create($data);
+        return SyncCounter::atomically(fn () => Activity::create($data));
     }
 
     /**
@@ -64,14 +65,14 @@ class ActivityRepository
     public function update(Activity $activity, array $data): Activity
     {
         $activity->fill($data);
-        $activity->save();
+        SyncCounter::atomically(fn () => $activity->save());
 
         return $activity;
     }
 
     public function delete(Activity $activity): void
     {
-        $activity->delete();
+        SyncCounter::atomically(fn () => $activity->delete());
     }
 
     /**

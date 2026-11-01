@@ -5,16 +5,20 @@ namespace App\Services\Users;
 use App\Events\UserDeactivated;
 use App\Models\User;
 use App\Repositories\UserRepository;
+use App\Services\Settings\DeniesSettingsChange;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 
 class UserService
 {
+    use DeniesSettingsChange;
+
     /**
      * Yetkisi veritabanındaki izinlerden DEĞİL, `Gate::before`'dan gelen rol
      * (bkz. AppServiceProvider::registerSuperAdminGate). İzin kümesi BOŞ
@@ -55,7 +59,7 @@ class UserService
     public function create(array $data): User
     {
         return DB::transaction(function () use ($data) {
-            $role = $data['role'] ?? null;
+            $role = isset($data['role']) ? $this->resolveRole($data['role']) : null;
             unset($data['role']);
 
             // Kapalı devre erişim modeli: geçici şifreyle giriş yapıp değiştirmek zorunda.
@@ -65,7 +69,7 @@ class UserService
                 // Kullanıcı satırı YAZILMADAN önce: reddedilen istek geride
                 // yarım kayıt bırakmasın (transaction geri alsa bile
                 // auto-increment ve olay dinleyicileri boşuna tetiklenir).
-                $this->assertActorMayGrantRole((string) $role);
+                $this->assertActorMayGrantRole($role);
             }
 
             $user = $this->users->create($data);
@@ -84,17 +88,39 @@ class UserService
     public function update(User $user, array $data): User
     {
         return DB::transaction(function () use ($user, $data) {
-            $role = array_key_exists('role', $data) ? $data['role'] : null;
+            $role = isset($data['role']) ? $this->resolveRole($data['role']) : null;
             unset($data['role']);
+
+            $roleChanged = $role !== null
+                && ! ($user->roles()->count() === 1 && $user->roles()->whereKey($role->getKey())->exists());
+
+            if ($roleChanged) {
+                Gate::authorize('manageRoles', $user);
+                $this->assertActorMayGrantRole($role);
+
+                // Aynı kilit kümesi eşzamanlı son yönetici düşürmelerini de sıralar.
+                $superAdmins = User::role(self::SUPER_ADMIN_ROLE)
+                    ->where('is_active', true)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($role->name !== self::SUPER_ADMIN_ROLE
+                    && $superAdmins->contains('id', $user->getKey())
+                    && $superAdmins->count() <= 1) {
+                    $this->deny(
+                        'Son aktif Super Admin rolü kaldırılamaz.',
+                        'LAST_SUPER_ADMIN',
+                        ['role' => ['En az bir aktif Super Admin kalmalıdır.']],
+                    );
+                }
+            }
 
             if (! empty($data)) {
                 $this->users->update($user, $data);
             }
 
-            if ($role !== null) {
-                // Rol değişimi yalnızca users.manage_roles iznine sahip aktörler içindir.
-                Gate::authorize('manageRoles', $user);
-
+            if ($roleChanged) {
                 $user->syncRoles([$role]);
             }
 
@@ -102,13 +128,25 @@ class UserService
         });
     }
 
+    protected function resolveRole(string $name): Role
+    {
+        $role = Role::query()->where('name', $name)->where('guard_name', 'web')->first();
+
+        if ($role === null) {
+            throw ValidationException::withMessages(['role' => ['Seçilen rol geçersiz.']]);
+        }
+
+        return $role;
+    }
+
     /**
      * =========================================================================
      * KARAR: kimse KENDİNDEN FAZLASINI VEREMEZ ("rol tavanı")
      * =========================================================================
-     * `users.manage_roles` taşıyan aktör her rolü atayabilir (değişmedi).
-     * Taşımayan aktör YALNIZCA izin kümesi KENDİ izin kümesinin ALT KÜMESİ
-     * olan bir rol atayabilir; `Super Admin` ise her hâlükârda yasaktır.
+     * Super Admin her rolü atayabilir. Diğer aktörler, `users.manage_roles`
+     * taşısalar da yalnızca kendi yetkileriyle karşılanan izinleri verebilir;
+     * `Super Admin` rolünü yalnızca başka bir Super Admin atayabilir.
+     * Denetim ve atama, önce veritabanından çözümlenen aynı rolü kullanır.
      * Aksi hâlde `AuthorizationException` -> HTTP 403.
      *
      * GEREKÇE (neden 403, 422 değil): istek biçimsel olarak geçerlidir — rol
@@ -137,7 +175,7 @@ class UserService
      * `users.manage_roles` ister. Orası bu düzeltmeden önce de sıkı çalışıyordu
      * ve bir güvenlik düzeltmesi kapsamında GEVŞETİLMEDİ.
      */
-    protected function assertActorMayGrantRole(string $roleName): void
+    protected function assertActorMayGrantRole(Role $role): void
     {
         $actor = Auth::user();
 
@@ -146,28 +184,19 @@ class UserService
             return;
         }
 
-        if ($actor->can('users.manage_roles')) {
+        if ($actor->hasRole(self::SUPER_ADMIN_ROLE)) {
             return;
         }
 
-        if ($roleName === self::SUPER_ADMIN_ROLE) {
+        if ($role->name === self::SUPER_ADMIN_ROLE) {
             throw new AuthorizationException(
-                'Super Admin rolü atamak için users.manage_roles izni gerekir.'
+                'Super Admin rolünü yalnızca Super Admin atayabilir.'
             );
         }
 
-        $role = Role::query()->where('name', $roleName)->first();
+        $excess = $role->permissions->reject(fn ($permission): bool => $actor->can($permission->name));
 
-        if ($role === null) {
-            return; // `exists:roles,name` zaten doğruladı; savunmacı dal.
-        }
-
-        $excess = array_diff(
-            $role->permissions->pluck('name')->all(),
-            $actor->getAllPermissions()->pluck('name')->all()
-        );
-
-        if ($excess !== []) {
+        if ($excess->isNotEmpty()) {
             throw new AuthorizationException(
                 'Kendi sahip olmadığınız izinleri içeren bir rol atayamazsınız.'
             );

@@ -82,7 +82,7 @@ A Storage settings screen lets you see and adjust how much local disk this app i
 | Layer | Technology | Version / Note |
 | --- | --- | --- |
 | Shell | Tauri | 2 (`tauri = "2"`, `@tauri-apps/cli` 2.11.4, `@tauri-apps/api` ^2.11.0) |
-| Shell | Rust | `rustc 1.98.0` (`rust-version = "1.80"` MSRV in both crates) |
+| Shell | Rust | `rustc 1.99.1` (`rust-version = "1.99"` in both crates) |
 | Sync engine | `rusqlite` | 0.32, `bundled-sqlcipher-vendored-openssl` feature — the local encrypted SQLite mirror, plus `functions`/`backup` |
 | Sync engine | `reqwest` | 0.12, `rustls-tls` — the pull/push HTTP client |
 | Sync engine | `tokio` | 1, `rt-multi-thread` — async runtime for the sync scheduler |

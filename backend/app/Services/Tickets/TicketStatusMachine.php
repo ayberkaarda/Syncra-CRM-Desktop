@@ -3,6 +3,7 @@
 namespace App\Services\Tickets;
 
 use App\Models\Ticket;
+use App\Sync\SyncCounter;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -90,6 +91,11 @@ class TicketStatusMachine
     public function transition(Ticket $ticket, string $to): Ticket
     {
         return DB::transaction(function () use ($ticket, $to) {
+            // Önce sayaç, sonra satır: sürüm çeken her yazar bu sırayla kilitler
+            // (SyncCounter). Ters sıra, eşzamanlı bir senkron güncellemeyle
+            // kilitlenmeye (1213) düşer.
+            SyncCounter::lock();
+
             /** @var Ticket|null $locked */
             $locked = Ticket::query()->whereKey($ticket->getKey())->lockForUpdate()->first();
 

@@ -6,6 +6,7 @@ use App\Events\ActivityLogged;
 use App\Support\ActivityLogging\ActivityFormatter;
 use App\Support\ActivityLogging\PropertyTruncator;
 use App\Sync\SyncActivityContext;
+use App\Sync\WriteTrail;
 use Spatie\Activitylog\Models\Activity;
 use Throwable;
 
@@ -71,6 +72,8 @@ class ActivityLogObserver
         }
 
         $activity->properties = $properties;
+
+        WriteTrail::stamp($activity);
     }
 
     /**

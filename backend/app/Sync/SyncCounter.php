@@ -40,9 +40,56 @@ use Illuminate\Support\Facades\DB;
  * `PDO::lastInsertId()` returns for the INSERT that follows. It does not: the
  * AUTO_INCREMENT assignment happens later and overwrites the session value, so
  * `Model::create()` still receives the real primary key.
+ *
+ * ------------------------------------------------------------------------
+ * WHAT A READER MAY CONCLUDE FROM THE VALUE (protocol §4.2)
+ * ------------------------------------------------------------------------
+ * The row lock is held to the end of the writer's transaction, and the value
+ * only becomes visible with its commit. So a plain read of `value` returning N
+ * means every version up to N is already committed, and N is the last point
+ * two later queries can both be complete up to. That is what `current()` gives
+ * SyncPullService.
+ *
+ * It holds for a writer whose draw and row write share a transaction. A draw
+ * outside one commits at once, ahead of its row, and no reader can see that gap.
+ * `atomically()` is how a write that may be called without a transaction gets
+ * one.
+ *
+ * ------------------------------------------------------------------------
+ * LOCK ORDER: THE COUNTER, THEN THE ROW
+ * ------------------------------------------------------------------------
+ * An Eloquent save draws in `saving`, before it touches its row, and a sync
+ * update takes the counter before it re-reads its row (MutationApplier). A
+ * transaction that locks a row first and draws later deadlocks against either.
+ * Such a transaction calls `lock()` before its first row lock.
  */
 final class SyncCounter
 {
+    /**
+     * Run `$write` so that every version it draws commits with its row.
+     *
+     * Inside a caller's transaction it is only a savepoint: that transaction
+     * already holds the draw and the row together until it commits.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $write
+     * @return T
+     */
+    public static function atomically(callable $write): mixed
+    {
+        return DB::transaction(fn () => $write());
+    }
+
+    /**
+     * Take the counter's row lock without drawing, for a transaction about to
+     * lock an entity row and draw afterwards. Held until that transaction ends.
+     */
+    public static function lock(): void
+    {
+        DB::table('sync_counter')->where('id', 1)->lockForUpdate()->first();
+    }
+
     /**
      * Reserve and return the next version.
      */
@@ -57,8 +104,8 @@ final class SyncCounter
     }
 
     /**
-     * Current value without advancing it. Read-only callers only (tests,
-     * diagnostics) - never use this to derive a version.
+     * Current value without advancing it. Read-only callers only (the pull's
+     * upper bound, tests, diagnostics) - never use this to derive a version.
      */
     public static function current(): int
     {

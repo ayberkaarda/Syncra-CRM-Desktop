@@ -15,6 +15,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Sync\TagSyncService;
 use App\Support\FractionalIndex;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,11 @@ class LeadConversionService
      */
     private function lockLead(Lead $lead): void
     {
+        // Önce sayaç, sonra satır: sürüm çeken her yazar bu sırayla kilitler
+        // (SyncCounter). Ters sıra, eşzamanlı bir senkron güncellemeyle
+        // kilitlenmeye (1213) düşer.
+        SyncCounter::lock();
+
         /** @var Lead|null $locked */
         $locked = Lead::query()->whereKey($lead->getKey())->lockForUpdate()->first();
 

@@ -26,6 +26,17 @@ pub enum UpsertOutcome {
     Written,
     /// The local row has unpushed edits; the server row went to `pending_shadows`.
     Shadowed,
+    /// The mirror already holds a newer version of this row; nothing was written.
+    Stale,
+}
+
+/// Outcome of one `sync_deletions` tombstone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TombstoneOutcome {
+    /// The row is gone from the mirror, or was never in it.
+    Applied,
+    /// This build cannot tell which row the tombstone means; nothing was removed.
+    Skipped,
 }
 
 /// Local identity of a pulled server row.
@@ -123,15 +134,24 @@ pub fn upsert_row(
         .and_then(|v| v.as_i64())
         .unwrap_or_default();
 
-    // §5.5: never clobber unpushed local edits.
-    if let Some(state) = current_state(tx, entity, &client_id)? {
+    // The cursor only moves forward, so a version given up here is never offered again. A
+    // response can land out of order (a push settling while a pull is on the wire), and a row
+    // older than the one stored must not replace it. Equal versions go through: re-delivery by
+    // a closure or an archive pass is idempotent.
+    if let Some((state, stored_version)) = current_state(tx, entity, &client_id)? {
+        if server_version < stored_version {
+            return Ok(UpsertOutcome::Stale);
+        }
+
+        // §5.5: never clobber unpushed local edits.
         if state == "pending" || state == "conflict" {
             tx.execute(
                 "INSERT INTO pending_shadows(entity, client_id, row_json, server_sync_version)
                  VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT(entity, client_id) DO UPDATE SET
                    row_json = excluded.row_json,
-                   server_sync_version = excluded.server_sync_version",
+                   server_sync_version = excluded.server_sync_version
+                 WHERE excluded.server_sync_version >= pending_shadows.server_sync_version",
                 rusqlite::params![
                     entity.wire_name(),
                     &client_id,
@@ -233,66 +253,83 @@ pub fn upsert_row(
     Ok(UpsertOutcome::Written)
 }
 
-fn current_state(tx: &Transaction<'_>, entity: Entity, client_id: &str) -> Result<Option<String>> {
+/// `(sync_state, server_sync_version)` of a mirror row, if it exists.
+fn current_state(
+    tx: &Transaction<'_>,
+    entity: Entity,
+    client_id: &str,
+) -> Result<Option<(String, i64)>> {
     let sql = format!(
-        "SELECT sync_state FROM {} WHERE client_id = ?1",
+        "SELECT sync_state, server_sync_version FROM {} WHERE client_id = ?1",
         entity.table()
     );
     let mut stmt = tx.prepare_cached(&sql)?;
     let mut rows = stmt.query([client_id])?;
     match rows.next()? {
-        Some(row) => Ok(Some(row.get(0)?)),
+        Some(row) => Ok(Some((row.get(0)?, row.get(1)?))),
         None => Ok(None),
     }
 }
 
 /// Apply one `sync_deletions` tombstone.
 ///
-/// Protocol §2.7 narrows the tombstone surface to exactly three tables. `tags` and
-/// `notifications` are addressed by their primary key; `conversation_user` is addressed by
-/// the logical key `conversation_id:user_id`, because a member who leaves and rejoins gets
-/// a fresh surrogate id.
-pub fn apply_deletion(tx: &Transaction<'_>, entity: Entity, row_key: &str) -> Result<bool> {
-    let affected = match entity {
-        Entity::ConversationUser => {
-            let (conversation_id, user_id) = row_key.split_once(':').ok_or_else(|| {
-                SyncError::Protocol(format!(
-                    "conversation_user row_key must be conversation_id:user_id, got {row_key:?}"
-                ))
-            })?;
-            let conversation_id: i64 = conversation_id.parse().map_err(|_| {
-                SyncError::Protocol(format!("bad conversation_id in row_key {row_key:?}"))
-            })?;
-            let user_id: i64 = user_id
-                .parse()
-                .map_err(|_| SyncError::Protocol(format!("bad user_id in row_key {row_key:?}")))?;
-            tx.execute(
+/// Protocol §2.7 and P19 name four tables. `tags` and `price_list_items` are addressed by
+/// their server id, `notifications` by its UUID, and `conversation_user` by the logical key
+/// `conversation_id:user_id`, because a member who leaves and rejoins gets a fresh surrogate
+/// id.
+///
+/// A tombstone this build cannot place — a table it does not know to be a tombstone table, a
+/// key that does not parse — is logged and skipped rather than failing: the error would roll
+/// back the whole response, and since the cursor then stays put, the same tombstone would fail
+/// every pull on this device until the server prunes it. One stale mirror row is the smaller
+/// loss, and it is a lasting one: the cursor moves past the tombstone, so it is not offered
+/// again. A failing statement is a different matter and still fails the pull.
+pub fn apply_deletion(
+    tx: &Transaction<'_>,
+    entity: Entity,
+    row_key: &str,
+) -> Result<TombstoneOutcome> {
+    match entity {
+        Entity::ConversationUser => match parse_membership_key(row_key) {
+            Some((conversation_id, user_id)) => tx.execute(
                 "DELETE FROM conversation_user WHERE conversation_id = ?1 AND user_id = ?2",
                 rusqlite::params![conversation_id, user_id],
-            )?
-        }
+            )?,
+            None => return Ok(skip_tombstone(entity, row_key)),
+        },
         Entity::Notification => tx.execute(
             "DELETE FROM notifications WHERE client_id = ?1",
             [row_key],
         )?,
-        Entity::Tag => {
-            let server_id: i64 = row_key
-                .parse()
-                .map_err(|_| SyncError::Protocol(format!("bad tag row_key {row_key:?}")))?;
-            tx.execute("DELETE FROM tags WHERE server_id = ?1", [server_id])?
+        Entity::Tag | Entity::PriceListItem => {
+            let Ok(server_id) = row_key.parse::<i64>() else {
+                return Ok(skip_tombstone(entity, row_key));
+            };
+            let sql = format!("DELETE FROM {} WHERE server_id = ?1", entity.table());
+            tx.execute(&sql, [server_id])?
         }
-        other => {
-            return Err(SyncError::Protocol(format!(
-                "sync_deletions carries no tombstones for {other} (protocol §2.7)"
-            )))
-        }
+        _ => return Ok(skip_tombstone(entity, row_key)),
     };
-    Ok(affected > 0)
+    Ok(TombstoneOutcome::Applied)
 }
 
-/// Tables that may appear in `sync_deletions` (protocol §2.7).
-pub const TOMBSTONE_ENTITIES: &[Entity] =
-    &[Entity::Tag, Entity::Notification, Entity::ConversationUser];
+fn parse_membership_key(row_key: &str) -> Option<(i64, i64)> {
+    let (conversation_id, user_id) = row_key.split_once(':')?;
+    Some((conversation_id.parse().ok()?, user_id.parse().ok()?))
+}
+
+fn skip_tombstone(entity: Entity, row_key: &str) -> TombstoneOutcome {
+    tracing::warn!(%entity, row_key, "skipping a tombstone this build cannot apply");
+    TombstoneOutcome::Skipped
+}
+
+/// Tables that may appear in `sync_deletions` (protocol §2.7, P19).
+pub const TOMBSTONE_ENTITIES: &[Entity] = &[
+    Entity::Tag,
+    Entity::Notification,
+    Entity::ConversationUser,
+    Entity::PriceListItem,
+];
 
 /// Cached column list per table, so an upsert loop does not re-run `PRAGMA table_info`.
 #[derive(Debug, Default)]
@@ -331,6 +368,53 @@ mod tests {
         let path = dir.path().join("test.db");
         let conn = open(&path, &"a".repeat(64)).unwrap();
         (dir, conn)
+    }
+
+    /// Counts warning-level events, the one thing a skipped tombstone leaves behind.
+    #[derive(Clone, Default)]
+    struct WarnCounter(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+    impl tracing::Subscriber for WarnCounter {
+        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            if *event.metadata().level() == tracing::Level::WARN {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        fn enter(&self, _: &tracing::span::Id) {}
+        fn exit(&self, _: &tracing::span::Id) {}
+    }
+
+    #[test]
+    fn a_skipped_tombstone_is_reported_and_warned_about() {
+        let (_dir, conn) = temp_conn();
+        let tx = conn.unchecked_transaction().unwrap();
+        let warnings = WarnCounter::default();
+
+        tracing::subscriber::with_default(warnings.clone(), || {
+            assert_eq!(
+                apply_deletion(&tx, Entity::Tag, "not-a-number").unwrap(),
+                TombstoneOutcome::Skipped
+            );
+            assert_eq!(
+                apply_deletion(&tx, Entity::PipelineStage, "7").unwrap(),
+                TombstoneOutcome::Skipped
+            );
+            assert_eq!(
+                apply_deletion(&tx, Entity::Tag, "7").unwrap(),
+                TombstoneOutcome::Applied,
+                "a row this device never had is not a failure"
+            );
+        });
+
+        assert_eq!(warnings.0.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
 
     /// The transport test (defter O2/O35, KARAR A26). Before migration

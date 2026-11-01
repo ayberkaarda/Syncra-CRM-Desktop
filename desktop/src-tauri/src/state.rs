@@ -160,11 +160,6 @@ impl AppState {
             .clone()
     }
 
-    /// `<root>/syncra.db` — the SQLCipher database.
-    pub fn db_path(&self) -> PathBuf {
-        self.paths().db
-    }
-
     /// The data root: the parent of everything below, and where `crate::jump_list` keeps its
     /// plaintext `recent.json`.
     pub fn root_dir(&self) -> PathBuf {

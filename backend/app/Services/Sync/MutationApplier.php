@@ -55,6 +55,7 @@ use App\Sync\SyncableRegistry;
 use App\Sync\SyncCounter;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Notifications\DatabaseNotification;
@@ -153,13 +154,26 @@ class MutationApplier
     public function apply(Mutation $mutation, User $actor, array &$clientIdMap): MutationResult
     {
         try {
-            return match ($mutation->op) {
-                'create' => $this->applyCreate($mutation, $actor, $clientIdMap),
-                'update' => $this->applyUpdate($mutation, $actor, $clientIdMap),
-                'delete' => $this->applyDelete($mutation, $actor, $clientIdMap),
-                'action' => $this->applyAction($mutation, $actor, $clientIdMap),
-                default => MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'Unknown op: '.$mutation->op),
-            };
+            // Roll back before converting exceptions into wire results.
+            $pendingMap = $clientIdMap;
+            $result = DB::transaction(function () use ($mutation, $actor, &$pendingMap) {
+                // Match the allocator's lock order: counter, then entity row.
+                // The surrounding mutation holds both locks through commit.
+                if ($mutation->op === 'update') {
+                    DB::table('sync_counter')->where('id', 1)->lockForUpdate()->first();
+                }
+
+                return match ($mutation->op) {
+                    'create' => $this->applyCreate($mutation, $actor, $pendingMap),
+                    'update' => $this->applyUpdate($mutation, $actor, $pendingMap),
+                    'delete' => $this->applyDelete($mutation, $actor, $pendingMap),
+                    'action' => $this->applyAction($mutation, $actor, $pendingMap),
+                    default => MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'Unknown op: '.$mutation->op),
+                };
+            });
+            $clientIdMap = $pendingMap;
+
+            return $result;
         } catch (ValidationException $e) {
             return MutationResult::rejected(
                 $mutation->seq,
@@ -208,12 +222,27 @@ class MutationApplier
         $existing = DB::table($table)->where('client_id', $mutation->clientId)->first(['id', 'sync_version']);
 
         if ($existing !== null) {
+            $modelClass = $definition['model'];
+            $query = $modelClass::query();
+            if (in_array(SoftDeletes::class, class_uses_recursive($modelClass), true)) {
+                $query->withTrashed();
+            }
+            $model = $query->find($existing->id);
+            if ($this->visibleTarget($model, $actor) === null
+                && ($model === null || ! $this->mayReplayOwnCreate($model, $mutation->entity, $actor))) {
+                $model = null;
+            }
+
+            if ($model === null) {
+                return MutationResult::rejected($mutation->seq, 'FORBIDDEN');
+            }
+
             $clientIdMap[$mutation->clientId] = (int) $existing->id;
 
             return MutationResult::duplicate($mutation->seq, (int) $existing->id, (int) $existing->sync_version);
         }
 
-        $payload = $this->resolveReferences($mutation->payload, $clientIdMap);
+        $payload = $this->resolveReferences($mutation->payload, $clientIdMap, $actor);
 
         if ($payload === null) {
             return MutationResult::rejected($mutation->seq, 'UNRESOLVED_REFERENCE');
@@ -241,7 +270,9 @@ class MutationApplier
         };
 
         if ($model === null) {
-            return MutationResult::rejected($mutation->seq, 'ONLINE_ONLY', 'This entity cannot be created offline: '.$mutation->entity);
+            return $mutation->entity === 'message'
+                ? MutationResult::rejected($mutation->seq, 'RECORD_DELETED')
+                : MutationResult::rejected($mutation->seq, 'ONLINE_ONLY', 'This entity cannot be created offline: '.$mutation->entity);
         }
 
         $version = $this->stampClientId($model, $table, $mutation->clientId);
@@ -274,7 +305,11 @@ class MutationApplier
      */
     private function createMessage(array $payload, User $actor): ?Model
     {
-        $conversation = Conversation::query()->find($payload['conversation_id'] ?? null);
+        $conversationId = $payload['conversation_id'] ?? null;
+        if ($conversationId !== null && ! is_scalar($conversationId)) {
+            throw new AuthorizationException;
+        }
+        $conversation = $this->visibleTarget(Conversation::query()->find($conversationId), $actor);
 
         if ($conversation === null) {
             return null;
@@ -300,11 +335,23 @@ class MutationApplier
             return MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'update requires server_id or client_id');
         }
 
-        $model = $this->resolveTarget($mutation, $clientIdMap);
+        $model = $this->resolveTarget($mutation, $clientIdMap, $actor);
+
+        if ($model !== null) {
+            // A locking read sees the current committed row, including under
+            // REPEATABLE READ. Never decide conflicts on the earlier snapshot.
+            $model = $this->visibleTarget(
+                $model->newQuery()->whereKey($model->getKey())->lockForUpdate()->first(),
+                $actor,
+                'update',
+            );
+        }
 
         if ($model === null) {
             return MutationResult::rejected($mutation->seq, $this->unresolvedCode($mutation));
         }
+
+        Gate::forUser($actor)->authorize('update', $model);
 
         /*
          * `changed_fields` is the contract, not a hint (SYNCDESKTOP §4.4):
@@ -338,11 +385,10 @@ class MutationApplier
             );
         }
 
-        Gate::forUser($actor)->authorize('update', $model);
-
         $payload = $this->resolveReferences(
             array_intersect_key($mutation->payload, array_flip($mutation->changedFields)),
             $clientIdMap,
+            $actor,
         );
 
         if ($payload === null) {
@@ -394,7 +440,7 @@ class MutationApplier
             return MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'delete requires server_id or client_id');
         }
 
-        $model = $this->resolveTarget($mutation, $clientIdMap);
+        $model = $this->resolveTarget($mutation, $clientIdMap, $actor);
 
         if ($model === null) {
             /*
@@ -502,7 +548,7 @@ class MutationApplier
             return MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'action requires server_id or client_id');
         }
 
-        $model = $this->resolveTarget($mutation, $clientIdMap);
+        $model = $this->resolveTarget($mutation, $clientIdMap, $actor);
 
         if ($model === null) {
             return MutationResult::rejected($mutation->seq, $this->unresolvedCode($mutation));
@@ -597,13 +643,7 @@ class MutationApplier
     private function notificationRead(Mutation $mutation, Model $model, User $actor): MutationResult
     {
         /** @var DatabaseNotification $model */
-        if ($model->notifiable_type !== $actor->getMorphClass() || (int) $model->notifiable_id !== (int) $actor->getKey()) {
-            // Somebody else's notification. 404-equivalent: the client is told
-            // the row is gone rather than that it exists and is forbidden -
-            // the same existence-hiding rule NotificationController applies.
-            return MutationResult::rejected($mutation->seq, 'RECORD_DELETED');
-        }
-
+        // resolveTarget has already checked notification ownership.
         $this->notifications->markRead($model);
 
         return MutationResult::applied($mutation->seq, null, $this->currentVersion($model));
@@ -637,7 +677,7 @@ class MutationApplier
      *
      * @param  array<string, int>  $clientIdMap
      */
-    private function resolveTarget(Mutation $mutation, array &$clientIdMap): ?Model
+    private function resolveTarget(Mutation $mutation, array &$clientIdMap, User $actor): ?Model
     {
         $definition = SyncableRegistry::entity($mutation->entity);
 
@@ -648,11 +688,21 @@ class MutationApplier
         /** @var class-string<Model> $modelClass */
         $modelClass = $definition['model'];
         $table = (string) SyncableRegistry::tableForEntity($mutation->entity);
+        $ability = match ($mutation->op) {
+            'update' => 'update',
+            'delete' => 'delete',
+            'action' => match ($mutation->action) {
+                'read', 'delivered' => 'participate',
+                'status' => 'update',
+                default => $mutation->action,
+            },
+            default => null,
+        };
 
         if (! in_array($table, SyncableRegistry::clientIdTables(), true)) {
             $key = $mutation->clientId ?? $mutation->serverId;
 
-            return $key === null ? null : $modelClass::query()->find($key);
+            return $this->visibleTarget($key === null ? null : $modelClass::query()->find($key), $actor, $ability);
         }
 
         $id = $mutation->serverId;
@@ -666,7 +716,53 @@ class MutationApplier
             return null;
         }
 
-        return $modelClass::query()->find($id);
+        return $this->visibleTarget($modelClass::query()->find($id), $actor, $ability);
+    }
+
+    private function mayReplayOwnCreate(Model $model, string $entity, User $actor): bool
+    {
+        if (! in_array($entity, ['company', 'contact', 'lead', 'deal', 'task', 'activity', 'ticket', 'quote'], true)
+            || ! Gate::forUser($actor)->allows('create', $model)) {
+            return false;
+        }
+
+        // Ownership is mutable; only the creation audit proves authorship.
+        // Missing or expired evidence fails closed.
+        return DB::table(config('activitylog.table_name', 'activity_log'))
+            ->where('subject_type', $model->getMorphClass())
+            ->where('subject_id', $model->getKey())
+            ->where('event', 'created')
+            ->where('causer_type', $actor->getMorphClass())
+            ->where('causer_id', $actor->getKey())
+            ->exists();
+    }
+
+    private function visibleTarget(?Model $model, User $actor, ?string $ability = null): ?Model
+    {
+        if ($model === null) {
+            return null;
+        }
+
+        // Notifications have no policy; their visibility is strictly personal.
+        if ($model instanceof DatabaseNotification) {
+            return $model->notifiable_type === $actor->getMorphClass()
+                && (int) $model->notifiable_id === (int) $actor->getKey() ? $model : null;
+        }
+
+        // Hidden and missing targets must have the same wire result.
+        $gate = Gate::forUser($actor);
+
+        // State denials must reach authorize() and remain FORBIDDEN. For
+        // visibility only, neutralise terminal state but retain ownership.
+        $visibilityModel = clone $model;
+        if (($model instanceof Deal || $model instanceof Ticket) && $ability === 'delete') {
+            $visibilityModel->setAttribute('status', 'open');
+        } elseif ($model instanceof Lead && in_array($ability, ['update', 'delete'], true)) {
+            $visibilityModel->setAttribute('status', 'new');
+        }
+
+        return $gate->allows('view', $model)
+            || ($ability !== null && $gate->allows($ability, $visibilityModel)) ? $model : null;
     }
 
     /**
@@ -703,7 +799,7 @@ class MutationApplier
      * @param  array<string, int>  $clientIdMap
      * @return array<string, mixed>|null null means UNRESOLVED_REFERENCE
      */
-    private function resolveReferences(array $payload, array $clientIdMap): ?array
+    private function resolveReferences(array $payload, array $clientIdMap, User $actor): ?array
     {
         foreach ($payload as $key => $value) {
             if (! str_ends_with($key, '_client_id')) {
@@ -723,10 +819,23 @@ class MutationApplier
                 return null;
             }
 
-            $serverId = $clientIdMap[(string) $value]
+            if (! is_string($value)) {
+                return null;
+            }
+
+            $serverId = $clientIdMap[$value]
                 ?? DB::table($table)->where('client_id', $value)->value('id');
 
             if ($serverId === null) {
+                return null;
+            }
+
+            $definition = SyncableRegistry::entity($entity);
+            $modelClass = $definition['model'] ?? null;
+
+            $model = $modelClass === null ? null : $modelClass::query()->find($serverId);
+            if ($model === null || ($this->visibleTarget($model, $actor) === null
+                && ! $this->mayReplayOwnCreate($model, $entity, $actor))) {
                 return null;
             }
 
@@ -855,6 +964,7 @@ class MutationApplier
     {
         $row = DB::table($model->getTable())
             ->where($model->getKeyName(), $model->getKey())
+            ->lockForUpdate()
             ->first();
 
         return $row === null ? [] : (array) $row;

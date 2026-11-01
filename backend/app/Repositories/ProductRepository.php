@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\Product;
+use App\Sync\SyncCounter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -129,20 +130,20 @@ class ProductRepository
 
     public function create(array $data): Product
     {
-        return Product::create($data);
+        return SyncCounter::atomically(fn () => Product::create($data));
     }
 
     public function update(Product $product, array $data): Product
     {
         $product->fill($data);
-        $product->save();
+        SyncCounter::atomically(fn () => $product->save());
 
         return $product;
     }
 
     public function delete(Product $product): void
     {
-        $product->delete();
+        SyncCounter::atomically(fn () => $product->delete());
     }
 
     /**

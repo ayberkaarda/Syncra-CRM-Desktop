@@ -6,6 +6,7 @@ use App\Models\CustomField;
 use App\Models\CustomFieldValue;
 use App\Models\Lead;
 use App\Services\Sync\TagSyncService;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -138,7 +139,7 @@ class LeadRepository
      */
     public function create(array $data): Lead
     {
-        return Lead::create($data);
+        return SyncCounter::atomically(fn () => Lead::create($data));
     }
 
     /**
@@ -147,14 +148,14 @@ class LeadRepository
     public function update(Lead $lead, array $data): Lead
     {
         $lead->fill($data);
-        $lead->save();
+        SyncCounter::atomically(fn () => $lead->save());
 
         return $lead;
     }
 
     public function delete(Lead $lead): void
     {
-        $lead->delete();
+        SyncCounter::atomically(fn () => $lead->delete());
     }
 
     /**

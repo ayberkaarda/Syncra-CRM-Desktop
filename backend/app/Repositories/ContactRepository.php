@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\Models\Contact;
 use App\Models\CustomField;
 use App\Services\Sync\TagSyncService;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -132,20 +133,20 @@ class ContactRepository
 
     public function create(array $data): Contact
     {
-        return Contact::create($data);
+        return SyncCounter::atomically(fn () => Contact::create($data));
     }
 
     public function update(Contact $contact, array $data): Contact
     {
         $contact->fill($data);
-        $contact->save();
+        SyncCounter::atomically(fn () => $contact->save());
 
         return $contact;
     }
 
     public function delete(Contact $contact): void
     {
-        $contact->delete();
+        SyncCounter::atomically(fn () => $contact->delete());
     }
 
     /**

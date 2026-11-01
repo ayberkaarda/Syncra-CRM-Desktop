@@ -7,6 +7,7 @@ use App\Models\CustomFieldValue;
 use App\Models\Deal;
 use App\Models\PipelineStage;
 use App\Services\Sync\TagSyncService;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -216,7 +217,7 @@ class DealRepository
      */
     public function create(array $data): Deal
     {
-        return Deal::create($data);
+        return SyncCounter::atomically(fn () => Deal::create($data));
     }
 
     /**
@@ -225,14 +226,14 @@ class DealRepository
     public function update(Deal $deal, array $data): Deal
     {
         $deal->fill($data);
-        $deal->save();
+        SyncCounter::atomically(fn () => $deal->save());
 
         return $deal;
     }
 
     public function delete(Deal $deal): void
     {
-        $deal->delete();
+        SyncCounter::atomically(fn () => $deal->delete());
     }
 
     /**
