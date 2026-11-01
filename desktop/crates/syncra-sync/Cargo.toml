@@ -1,6 +1,6 @@
 [package]
 name = "syncra-sync"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 # Kept identical to `desktop/src-tauri/Cargo.toml` on purpose: the two crates share one
 # `Cargo.lock` and one `target/`, so the effective floor is the workspace-wide maximum
