@@ -82,7 +82,7 @@ Bir Storage ayarları ekranı, bu uygulamanın ne kadar yerel disk kullanmasına
 | Katman | Teknoloji | Sürüm / Not |
 | --- | --- | --- |
 | Kabuk | Tauri | 2 (`tauri = "2"`, `@tauri-apps/cli` 2.11.4, `@tauri-apps/api` ^2.11.0) |
-| Kabuk | Rust | `rustc 1.98.0` (her iki crate'te `rust-version = "1.80"` MSRV) |
+| Kabuk | Rust | `rustc 1.99.1` (her iki crate'te `rust-version = "1.99"`) |
 | Senkron motoru | `rusqlite` | 0.32, `bundled-sqlcipher-vendored-openssl` özelliği — yerel şifreli SQLite aynası, artı `functions`/`backup` |
 | Senkron motoru | `reqwest` | 0.12, `rustls-tls` — pull/push HTTP istemcisi |
 | Senkron motoru | `tokio` | 1, `rt-multi-thread` — senkron zamanlayıcısı için async runtime |
