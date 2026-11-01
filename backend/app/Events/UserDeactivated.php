@@ -67,6 +67,12 @@ class UserDeactivated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    /**
+     * Queued only once the outermost transaction commits, and dropped if it
+     * rolls back: a rolled-back write must leave no broadcast behind.
+     */
+    public bool $afterCommit = true;
+
     public function __construct(
         public readonly int $userId,
         public readonly ?string $message = null,

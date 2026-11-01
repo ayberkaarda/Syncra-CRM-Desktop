@@ -173,6 +173,11 @@ class ContactRepository
             return;
         }
 
+        // The counter before the demoted rows: bumpRows() below draws one
+        // version per row, and a desktop update holds the counter while it
+        // locks one of these rows (SyncCounter).
+        SyncCounter::lock();
+
         Contact::query()
             ->whereIn('id', $demoted)
             ->update(['is_primary' => false]);

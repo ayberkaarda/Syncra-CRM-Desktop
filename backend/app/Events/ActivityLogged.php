@@ -49,6 +49,12 @@ class ActivityLogged implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
+     * Queued only once the outermost transaction commits, and dropped if it
+     * rolls back: a rolled-back write must leave no broadcast behind.
+     */
+    public bool $afterCommit = true;
+
+    /**
      * @param  array<string, mixed>  $payload  see ActivityFormatter::broadcastPayload()
      */
     public function __construct(public readonly array $payload) {}

@@ -5,6 +5,7 @@ namespace App\Services\Companies;
 use App\Models\Company;
 use App\Models\CustomFieldValue;
 use App\Repositories\CompanyRepository;
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -104,6 +105,11 @@ class CompanyService
     protected function syncCustomFields(Company $company, array $values): void
     {
         $definitions = $this->companies->customFieldDefinitions();
+
+        // The counter before the child rows: the bump below draws a version,
+        // and a desktop update holds the counter while it writes these same
+        // rows. Child rows first would close a cycle with it (SyncCounter).
+        SyncCounter::lock();
 
         $changed = false;
 

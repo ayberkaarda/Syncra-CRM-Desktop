@@ -236,6 +236,11 @@ class PipelineStageService
         }
 
         DB::transaction(function () use ($orderedIds): void {
+            // Önce sayaç, sonra aşama satırları: her satır güncellemesinin
+            // ardından sürüm çekiliyor ve deactivate() sayacı tutarken aşama
+            // satırını kaydediyor. Ters sıra 1213 ile düşer (SyncCounter).
+            SyncCounter::lock();
+
             foreach ($orderedIds as $index => $id) {
                 PipelineStage::query()->whereKey($id)->update(['position' => $index + 1]);
 

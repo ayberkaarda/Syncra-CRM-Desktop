@@ -25,6 +25,12 @@ class MessageDeleted implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    /**
+     * Yayın, en dıştaki transaction commit olduktan sonra kuyruğa girer;
+     * geri alınırsa hiç gönderilmez. Geri alınan bir yazım yayın bırakmaz.
+     */
+    public bool $afterCommit = true;
+
     public function __construct(
         public readonly int $conversationId,
         public readonly int $messageId,

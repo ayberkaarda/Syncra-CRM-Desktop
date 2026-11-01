@@ -2,6 +2,7 @@
 
 namespace App\Services\Sync;
 
+use App\Sync\SyncCounter;
 use App\Sync\SyncVersionBumper;
 use Illuminate\Database\Eloquent\Model;
 
@@ -44,6 +45,11 @@ final class TagSyncService
      */
     public static function apply(Model $owner, array $tagIds): void
     {
+        // The counter before the pivot rows: the bump below draws a version, and
+        // a desktop update holds the counter while it syncs these same rows. A
+        // tag-only edit leaves the owner clean, so nothing took it earlier.
+        SyncCounter::lock();
+
         /** @phpstan-ignore-next-line every caller passes a model with a tags() relation. */
         $owner->tags()->sync($tagIds);
 
