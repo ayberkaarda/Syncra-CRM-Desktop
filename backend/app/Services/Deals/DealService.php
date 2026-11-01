@@ -8,9 +8,12 @@ use App\Models\Deal;
 use App\Models\PipelineStage;
 use App\Repositories\DealRepository;
 use App\Support\FractionalIndex;
+use App\Sync\SyncCounter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class DealService
 {
@@ -112,6 +115,21 @@ class DealService
     public function update(Deal $deal, array $data): Deal
     {
         return DB::transaction(function () use ($deal, $data) {
+            if (array_key_exists('amount', $data) || array_key_exists('currency', $data)) {
+                // Karar kilitli satır üzerinde verilir (DealMoveService ile
+                // aynı sıra: önce sayaç, sonra satır): aynı anda gelen bir
+                // `move` fırsatı kapatıp tutarı dondurabilir.
+                SyncCounter::lock();
+
+                $locked = Deal::query()->whereKey($deal->getKey())->lockForUpdate()->first();
+
+                if ($locked === null) {
+                    throw new NotFoundHttpException;
+                }
+
+                $this->assertAmountEditable($locked, $data);
+            }
+
             $hasTagIds = array_key_exists('tag_ids', $data);
             $tagIds = $data['tag_ids'] ?? [];
             $hasCustomFields = array_key_exists('custom_fields', $data);
@@ -139,6 +157,77 @@ class DealService
     public function delete(Deal $deal): void
     {
         $this->deals->delete($deal);
+    }
+
+    /**
+     * -------------------------------------------------------------------
+     * KAPANMIŞ (won/lost) FIRSATIN TUTARI VE PARA BİRİMİ DEĞİŞTİRİLEMEZ
+     * -------------------------------------------------------------------
+     * Kapanış anında DealMoveService::freezeBaseAmount() `base_amount`,
+     * `base_rate` ve `base_rate_date`'i dondurur ve raporlar
+     * (DashboardService, ReportCurrencyContext) kapanmış iş için o donmuş
+     * değeri okur. Kapanmış bir kartta `amount`/`currency` serbestçe
+     * düzenlenebilseydi, ekranda görünen tutar ile raporun saydığı tutar
+     * sessizce ayrışırdı — üstelik bir kazanılmış işi geriye dönük büyütmenin
+     * ya da para birimini değiştirmenin kaydı da kalmazdı.
+     *
+     * Kural DealPolicy'de DEĞİL burada uygulanır: Policy gövdeyi görmez, ama
+     * kapanmış fırsatta başlık/not/etiket gibi düzenlemeler meşrudur ve
+     * reddedilmemelidir. Yalnızca DEĞİŞEN değer reddedilir: tam kaydı geri
+     * gönderen bir istemci (aynı tutar, aynı para birimi) etkilenmez.
+     *
+     * Tutar düzeltilecekse doğru yol fırsatı `move` ile yeniden açmaktır;
+     * DealMoveService yeniden açışta donmuş değeri temizler ve bir sonraki
+     * kapanışta yenisini dondurur.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws HttpResponseException 422 DEAL_CLOSED_AMOUNT_LOCKED
+     */
+    protected function assertAmountEditable(Deal $deal, array $data): void
+    {
+        if (! in_array($deal->status, ['won', 'lost'], true)) {
+            return;
+        }
+
+        $attempted = [];
+
+        if (array_key_exists('amount', $data)
+            && $this->normaliseAmount($data['amount']) !== $this->normaliseAmount($deal->amount)) {
+            $attempted[] = 'amount';
+        }
+
+        if (array_key_exists('currency', $data)
+            && strtoupper((string) $data['currency']) !== strtoupper((string) $deal->currency)) {
+            $attempted[] = 'currency';
+        }
+
+        if ($attempted === []) {
+            return;
+        }
+
+        throw new HttpResponseException(response()->json([
+            'errors' => [
+                'message' => 'Kapanmış bir fırsatın tutarı ve para birimi değiştirilemez.',
+                'code' => 'DEAL_CLOSED_AMOUNT_LOCKED',
+                'fields' => array_fill_keys($attempted, [
+                    'Bu fırsat "'.$deal->status.'" durumunda; tutarı düzeltmek için önce fırsatı yeniden açın.',
+                ]),
+            ],
+        ], 422));
+    }
+
+    /**
+     * `amount` decimal(…,2) kolonudur; "1500", 1500.0 ve "1500.00" aynı
+     * değerdir ve "değişti" sayılmamalıdır.
+     */
+    private function normaliseAmount(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return number_format((float) $value, 2, '.', '');
     }
 
     public function assign(Deal $deal, int $ownerId): Deal

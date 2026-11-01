@@ -3,6 +3,7 @@
 namespace App\Services\Exchange;
 
 use App\Models\ExchangeRate;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -306,10 +307,71 @@ class ExchangeRateService
 
         $this->assertReasonableRate($rate);
 
-        return ExchangeRate::query()->updateOrCreate(
-            ['currency' => $currency, 'rate_date' => $date->toDateString()],
-            ['rate' => $rate, 'unit' => 1, 'source' => 'manual', 'entered_by' => $enteredBy],
-        );
+        return DB::transaction(function () use ($currency, $rate, $date, $enteredBy): ExchangeRate {
+            $previous = ExchangeRate::query()
+                ->forCurrency($currency)
+                ->where('rate_date', $date->toDateString())
+                ->lockForUpdate()
+                ->first();
+
+            $before = $previous === null ? null : [
+                'rate' => (string) $previous->rate,
+                'unit' => (int) $previous->unit,
+                'source' => $previous->source,
+                'entered_by' => $previous->entered_by,
+            ];
+
+            $stored = ExchangeRate::query()->updateOrCreate(
+                ['currency' => $currency, 'rate_date' => $date->toDateString()],
+                ['rate' => $rate, 'unit' => 1, 'source' => 'manual', 'entered_by' => $enteredBy],
+            );
+
+            $this->auditManualRate($stored, $before, $enteredBy);
+
+            return $stored;
+        });
+    }
+
+    /**
+     * ELLE KUR GİRİŞİ DENETİM İZİNE YAZILIR.
+     *
+     * `ExchangeRate` bir LogsCrmActivity modeli değildir (günlük TCMB çekmesi
+     * her gün satır yazar; otomatik yazımı loglamak izi gürültüye boğardı).
+     * Ama elle giriş bir YÖNETİCİ KARARIDIR: kapanan fırsatların ve gönderilen
+     * tekliflerin donmuş tutarı bu satırdan hesaplanır (resolveForFreeze), ve
+     * otomatik bir kurun üzerine yazabilir. "Kur kim tarafından, neyden neye
+     * değiştirildi?" sorusunun cevabı `entered_by` kolonunda değil — o yalnız
+     * SON yazanı tutar — burada, eski ve yeni değerle birlikte kalır.
+     *
+     * Log adı LogsCrmActivity::AUDIT_LOG_NAME ile aynıdır ('crm'), böylece
+     * satır Loglar ekranının "kayıt değişiklikleri" görünümünde, model audit
+     * satırlarının yanında çıkar.
+     *
+     * @param  array{rate: string, unit: int, source: string|null, entered_by: int|null}|null  $before
+     */
+    private function auditManualRate(ExchangeRate $rate, ?array $before, ?int $enteredBy): void
+    {
+        $logger = activity('crm')
+            ->performedOn($rate)
+            ->event($before === null ? 'created' : 'updated')
+            ->withProperties([
+                'attributes' => [
+                    'currency' => $rate->currency,
+                    'rate_date' => $rate->rate_date?->toDateString(),
+                    'rate' => (string) $rate->rate,
+                    'unit' => (int) $rate->unit,
+                    'source' => $rate->source,
+                ],
+                'old' => $before,
+            ]);
+
+        $causer = $enteredBy === null ? null : User::query()->find($enteredBy);
+
+        if ($causer !== null) {
+            $logger->causedBy($causer);
+        }
+
+        $logger->log('exchange_rates.manual');
     }
 
     /**

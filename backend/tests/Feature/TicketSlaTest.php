@@ -272,24 +272,52 @@ class TicketSlaTest extends TestCase
         $this->assertNull($fresh->sla_breach_notified_at, 'Öncelik değişiminde ihlal damgası sıfırlanmalı.');
     }
 
-    public function test_lowering_priority_extends_the_target_with_the_same_formula(): void
+    /**
+     * Önceden bu test düşürmenin hedefi 72 saate UZATTIĞINI sabitliyordu —
+     * yani ihlalin tek alanla silinebildiğini. Kural tersine çevrildi:
+     * öncelik değişimi hedefi asla ileri almaz.
+     */
+    public function test_lowering_priority_never_moves_the_target_later(): void
     {
         $actor = $this->actor();
         $this->travelTo(now()->startOfHour());
 
         $ticket = $this->createTicket($actor, 'urgent'); // 4 saat
+        $originalDue = $ticket->sla_due_at->toDateTimeString();
+        $ticket->forceFill(['sla_breach_notified_at' => now()->addHours(4)])->save();
         $this->travel(5)->hours(); // ihlalde
 
         $this->actingAs($actor)->patchJson("/api/tickets/{$ticket->id}", ['priority' => 'low'])
             ->assertStatus(200)
-            // 72 saatlik hedefe geçti -> artık ihlalde değil.
-            ->assertJsonPath('data.sla_breached', false);
+            ->assertJsonPath('data.priority', 'low')
+            // Hedef 4 saatte kaldı -> hâlâ ihlalde.
+            ->assertJsonPath('data.sla_breached', true);
 
         $fresh = $ticket->fresh();
-        $this->assertSame(
-            $fresh->created_at->copy()->addHours(72)->toDateTimeString(),
-            $fresh->sla_due_at->toDateTimeString()
-        );
+        $this->assertSame($originalDue, $fresh->sla_due_at->toDateTimeString());
+        $this->assertNotNull($fresh->sla_breach_notified_at, 'Hedef değişmediyse ihlal damgası korunmalı.');
+    }
+
+    /**
+     * Baypas denemesi: duraklama sırasında düşürme de hedefi ileri almaz;
+     * duraklama süresi ise çıkışta normal şekilde eklenir.
+     */
+    public function test_lowering_priority_while_paused_keeps_the_target_and_resume_still_shifts_it(): void
+    {
+        $actor = $this->actor();
+        $this->travelTo(now()->startOfHour());
+
+        $ticket = $this->createTicket($actor, 'urgent');
+        $due = $ticket->sla_due_at->copy();
+
+        $this->changeStatus($actor, $ticket, 'pending')->assertStatus(200);
+        $this->actingAs($actor)->patchJson("/api/tickets/{$ticket->id}", ['priority' => 'low'])->assertStatus(200);
+        $this->assertSame($due->toDateTimeString(), $ticket->fresh()->sla_due_at->toDateTimeString());
+
+        $this->travel(2)->hours();
+        $this->changeStatus($actor, $ticket, 'in_progress')->assertStatus(200);
+
+        $this->assertSame($due->copy()->addHours(2)->toDateTimeString(), $ticket->fresh()->sla_due_at->toDateTimeString());
     }
 
     // =================================================================
@@ -679,10 +707,36 @@ class TicketSlaTest extends TestCase
     }
 
     /**
-     * Öncelik değişimi damgaları sıfırladığı için tarayıcı YENİ hedefe göre
-     * bir kez daha olay üretebilmelidir (§5.2 ile §5.5'in birlikte çalışması).
+     * Hedefi gerçekten öne çeken bir öncelik değişimi damgaları sıfırlar ve
+     * tarayıcı YENİ hedefe göre bir kez daha olay üretebilir (§5.2 ile §5.5'in
+     * birlikte çalışması).
      */
-    public function test_scanner_fires_again_after_a_priority_change_resets_the_stamps(): void
+    public function test_scanner_fires_again_after_a_priority_raise_resets_the_stamps(): void
+    {
+        Event::fake([TicketSlaBreached::class]);
+        $actor = $this->actor();
+        $this->travelTo(now()->startOfHour());
+
+        $ticket = $this->createTicket($actor, 'normal'); // 48 saat
+        $this->travel(30)->hours();
+        $this->actingAs($actor)->patchJson("/api/tickets/{$ticket->id}", ['priority' => 'high'])->assertStatus(200); // 24 saat -> ihlal
+
+        $this->artisan('tickets:scan-sla')->assertSuccessful();
+        Event::assertDispatchedTimes(TicketSlaBreached::class, 1);
+
+        $this->actingAs($actor)->patchJson("/api/tickets/{$ticket->id}", ['priority' => 'urgent'])->assertStatus(200); // 4 saat
+        $this->assertNull($ticket->fresh()->sla_breach_notified_at);
+
+        $this->artisan('tickets:scan-sla')->assertSuccessful();
+        Event::assertDispatchedTimes(TicketSlaBreached::class, 2);
+    }
+
+    /**
+     * Önceden bu test "düşür + geri yükselt" ile damgaların sıfırlanıp AYNI
+     * ihlal için ikinci olay üretildiğini sabitliyordu. Kural tersine
+     * çevrildi: hedef değişmeyen bir gidiş-dönüş damgaya dokunmaz.
+     */
+    public function test_lowering_and_raising_back_does_not_renotify_the_same_breach(): void
     {
         Event::fake([TicketSlaBreached::class]);
         $actor = $this->actor();
@@ -694,14 +748,13 @@ class TicketSlaTest extends TestCase
         $this->artisan('tickets:scan-sla')->assertSuccessful();
         Event::assertDispatchedTimes(TicketSlaBreached::class, 1);
 
-        // Önceliği düşür (hedef uzar, damgalar sıfırlanır), sonra tekrar yükselt.
         $this->actingAs($actor)->patchJson("/api/tickets/{$ticket->id}", ['priority' => 'low'])->assertStatus(200);
-        $this->assertNull($ticket->fresh()->sla_breach_notified_at);
+        $this->assertNotNull($ticket->fresh()->sla_breach_notified_at);
 
         $this->actingAs($actor)->patchJson("/api/tickets/{$ticket->id}", ['priority' => 'urgent'])->assertStatus(200);
 
         $this->artisan('tickets:scan-sla')->assertSuccessful();
-        Event::assertDispatchedTimes(TicketSlaBreached::class, 2);
+        Event::assertDispatchedTimes(TicketSlaBreached::class, 1);
     }
 
     // =================================================================

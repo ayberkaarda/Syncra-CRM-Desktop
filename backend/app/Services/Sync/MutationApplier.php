@@ -143,6 +143,17 @@ class MutationApplier
      */
     public const ONLINE_ONLY_ACTIONS = ['lead.convert', 'quote.send', 'quote.revise'];
 
+    /**
+     * Entities a `delete` mutation may target. Anything else - a conversation
+     * among them: archiving a group is an online action with its own
+     * broadcast - is refused with INVALID_MUTATION before any policy runs.
+     *
+     * @var array<int, string>
+     */
+    public const DELETABLE_ENTITIES = [
+        'company', 'contact', 'lead', 'deal', 'task', 'activity', 'ticket', 'quote', 'message', 'notification',
+    ];
+
     public function __construct(
         private readonly ConflictDetector $conflicts,
         private readonly NotificationReadService $notifications,
@@ -458,7 +469,24 @@ class MutationApplier
                 : MutationResult::duplicate($mutation->seq, $mutation->serverId);
         }
 
-        Gate::forUser($actor)->authorize('delete', $model);
+        /*
+         * Deletability is decided BEFORE authorisation and as a wire result.
+         * A policy that allows `delete` (a group owner archiving their
+         * conversation) used to fall through to an unmatched branch and throw,
+         * which no handler in apply() converts - the whole push answered 500
+         * and every later mutation in the batch was lost with it. An entity
+         * without an offline delete path is a terminal refusal of THIS
+         * mutation, nothing more.
+         */
+        if (! in_array($mutation->entity, self::DELETABLE_ENTITIES, true)) {
+            return MutationResult::rejected($mutation->seq, 'INVALID_MUTATION', 'Entity is not deletable: '.$mutation->entity);
+        }
+
+        if ($model instanceof DatabaseNotification) {
+            $this->authorizeNotificationDelete($model, $actor);
+        } else {
+            Gate::forUser($actor)->authorize('delete', $model);
+        }
 
         match ($mutation->entity) {
             'company' => app(CompanyService::class)->delete($model),
@@ -471,7 +499,6 @@ class MutationApplier
             'quote' => app(QuoteService::class)->delete($model),
             'message' => app(MessageService::class)->delete($model),
             'notification' => $model->delete(),
-            default => throw new \RuntimeException('Entity is not deletable: '.$mutation->entity),
         };
 
         return MutationResult::applied(
@@ -638,6 +665,26 @@ class MutationApplier
             ->value('sync_version');
 
         return MutationResult::applied($mutation->seq, (int) $model->getKey(), (int) $version);
+    }
+
+    /**
+     * Notifications have no policy class, so `Gate::authorize('delete')`
+     * denied every non-super-admin and let a super admin through on
+     * `Gate::before` alone. The rule is the web surface's
+     * (NotificationController::destroy): the `notifications.view` module gate,
+     * then ownership - a user deletes their own notifications and nobody
+     * else's, super admin included. resolveTarget() already hides a foreign
+     * notification; the ownership check is repeated here so the decision does
+     * not rest on how the row happened to be found.
+     */
+    private function authorizeNotificationDelete(DatabaseNotification $notification, User $actor): void
+    {
+        $owns = $notification->notifiable_type === $actor->getMorphClass()
+            && (int) $notification->notifiable_id === (int) $actor->getKey();
+
+        if (! $owns || ! $actor->can('notifications.view')) {
+            throw new AuthorizationException;
+        }
     }
 
     private function notificationRead(Mutation $mutation, Model $model, User $actor): MutationResult
