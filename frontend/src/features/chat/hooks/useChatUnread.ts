@@ -16,7 +16,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getEcho, onConnectionStateChange } from '../../../lib/echo'
 import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
-import { useAuthStore } from '../../auth/store'
+import { usePersonalChannelUserId } from '../../auth/personalChannel'
 import { chatKeys } from '../api'
 import { bumpConversationPreview, hasConversationInLists } from './chatCache'
 import { useChatStore } from '../store'
@@ -42,7 +42,7 @@ export type UseChatUnreadResult = {
 
 export function useChatUnread(): UseChatUnreadResult {
   const queryClient = useQueryClient()
-  const userId = useAuthStore((state) => state.user?.id)
+  const userId = usePersonalChannelUserId()
   const totalUnread = useChatStore((state) => state.totalUnread)
   const perConversation = useChatStore((state) => state.perConversation)
   const setSnapshot = useChatStore((state) => state.setSnapshot)

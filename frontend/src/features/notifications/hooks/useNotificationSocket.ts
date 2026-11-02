@@ -27,7 +27,7 @@ import type { EchoConnectionState } from '../../../lib/echo'
 import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { toast } from '../../../components/ui'
 import i18n from '../../../i18n'
-import { useAuthStore } from '../../auth/store'
+import { usePersonalChannelUserId } from '../../auth/personalChannel'
 import { notificationsKeys } from './useNotifications'
 import { useNotificationStore } from '../store'
 import type { NotificationCreatedEvent } from '../types'
@@ -47,7 +47,7 @@ export function useNotificationSocket(): UseNotificationSocketResult {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const setUnreadCount = useNotificationStore((state) => state.setUnreadCount)
-  const userId = useAuthStore((state) => state.user?.id)
+  const userId = usePersonalChannelUserId()
 
   const [connectionState, setConnectionState] = useState<EchoConnectionState>('unavailable')
   const [echoAvailable, setEchoAvailable] = useState<boolean>(() => getEcho() !== null)

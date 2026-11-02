@@ -739,7 +739,7 @@ const routes: Record<string, RouteHandler> = {
   // The engine is the authority on "who is signed in" here, not the network: answering this
   // from the session keeps the app usable offline, which a real `GET /api/me` cannot do. The
   // document is refreshed from the server on every successful `restore` (the manifest carries
-  // `user`) and by `useChangePassword`, which writes the fresh user straight into this cache.
+  // `user`) and by a password change (`adoptChangedPasswordUser`, wired in `installDesktopAuth`).
   'get /api/me': (config) => {
     if (currentSession === null) {
       return reject(config, 401, 'AUTH_REQUIRED', errorMessage(translate, 'AUTH_REQUIRED'))
@@ -777,5 +777,43 @@ export function installDesktopAuth(): void {
       config.adapter = (forwarded) => handler(forwarded as RequestConfig)
     }
     return config
+  })
+
+  // `POST /api/password/change` goes to the network (it has no offline path), but its answer
+  // has to reach the session copies too — see {@link adoptChangedPasswordUser}. Runs before the
+  // mutation's `onSuccess`, so `/api/me` is already fresh when the store flips.
+  api.interceptors.response.use((response) => {
+    if (routeKey(response.config as RequestConfig) === 'post /api/password/change') {
+      const user = (response.data as { data?: User } | undefined)?.data
+      if (user) adoptChangedPasswordUser(user)
+    }
+    return response
+  })
+}
+
+/**
+ * A password change succeeded: write the user document the server returned into the session.
+ *
+ * `GET /api/me` is answered from {@link currentSession} (see the route above), and
+ * {@link sessionUser} lets the session's top-level `must_change_password` win over the
+ * document. Updating only the auth store and the `me` cache — which is all the shared
+ * `completePasswordChange` can do — let the next `/api/me` refetch, or the re-adoption after a
+ * cancelled logout, bring the forced flag back, close the personal realtime channel and bounce
+ * the user to `/change-password` again.
+ *
+ * The engine holds a persisted copy of the same session. `restore` re-reads
+ * `/api/sync/manifest`, whose `user` is the fresh `/api/me` document, and since the flag now
+ * follows that document (`syncra_sync::SyncEngine::restore_session`) it writes the cleared flag
+ * to disk. Its answer is NOT adopted here: a superseded or offline `restore` answers with the
+ * engine's old copy, which is exactly the document this function replaces.
+ */
+export function adoptChangedPasswordUser(user: User): void {
+  const session = currentSession
+  if (session === null || user.id !== session.user_id) return
+  currentSession = { ...session, user, must_change_password: user.must_change_password }
+  void invokeRestore().catch((error: unknown) => {
+    // Offline or overtaken: the webview copy is already right for this run, and the next
+    // successful `restore` (every start) persists the same document.
+    console.info('[desktop] could not persist the password change into the engine session', error)
   })
 }
