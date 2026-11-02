@@ -9,6 +9,7 @@ import { disconnectEcho } from '../../../lib/echo'
 import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { toast } from '../../../components/ui'
 import { useAuthStore } from '../store'
+import { usePersonalChannelUserId } from '../personalChannel'
 import { router } from '../../../router'
 import i18n from '../../../i18n'
 
@@ -35,7 +36,7 @@ type UserDeactivatedPayload = {
  * bu diğer abonelerin dinleyicilerini de düşürürdü.
  */
 export function useRealtimeSession() {
-  const userId = useAuthStore((state) => state.user?.id)
+  const userId = usePersonalChannelUserId()
 
   useEffect(() => {
     if (!userId) return
@@ -57,6 +58,7 @@ export function useRealtimeSession() {
       channel.stopListening('.user.deactivated', handleDeactivated)
       releaseChannel(channelName)
     }
-    // Kullanıcı değişince (logout/login) abonelik temizlenip yeniden kurulur.
+    // Kullanıcı değişince (logout/login) ya da zorunlu şifre değişimi tamamlanınca
+    // (`usePersonalChannelUserId` undefined -> id) abonelik temizlenip yeniden kurulur.
   }, [userId])
 }

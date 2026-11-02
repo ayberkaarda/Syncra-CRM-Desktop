@@ -244,6 +244,17 @@ impl std::fmt::Debug for SyncEngine {
     }
 }
 
+/// Take `must_change_password` from the session's user document when the document carries it.
+fn sync_password_flag(session: &mut Session) {
+    if let Some(flag) = session
+        .user
+        .get("must_change_password")
+        .and_then(|v| v.as_bool())
+    {
+        session.must_change_password = flag;
+    }
+}
+
 impl SyncEngine {
     /// Open the local database (creating and migrating it if needed) using the OS keychain
     /// for the SQLCipher key and the device token (`SYNCDESKTOP.md` K9).
@@ -394,6 +405,10 @@ impl SyncEngine {
             if let Some(ref mut s) = session {
                 if !manifest.user.is_null() {
                     s.user = manifest.user.clone();
+                    // The top-level flag is what the webview gates `/change-password` on, and
+                    // it otherwise only ever came from the login response: refreshing the user
+                    // document without it left a completed password change forced again.
+                    sync_password_flag(s);
                 }
                 db::put_setting(&conn, SETTING_SESSION, &serde_json::to_string(s)?)?;
             }

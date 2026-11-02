@@ -142,6 +142,17 @@ export function useForgotPassword() {
 }
 
 /**
+ * Başarılı şifre değişimi. Sunucu bayrağı temizlemiş `User`'ı döner; store'a yazılması
+ * `must_change_password`'ü `false`'a çevirir ve kişisel kanalı dinleyen kancalar
+ * (`personalChannel.ts` -> `usePersonalChannelUserId`) sayfa yenilemeden abone olur.
+ * Aynı kullanıcı olduğu için oturum dönemi ilerlemez (bkz. `store.ts`).
+ */
+export function completePasswordChange(queryClient: QueryClient, updatedUser: User): void {
+  useAuthStore.getState().setUser(updatedUser)
+  queryClient.setQueryData(ME_QUERY_KEY, updatedUser)
+}
+
+/**
  * Zorunlu (ve gelecekte gönüllü) şifre değişimi — `ChangePasswordPage` bunu
  * kullanır. Başarı gövdesi zaten güncel `User`'ı taşıdığı için ek bir
  * `/api/me` çağrısı yapılmaz: store doğrudan güncellenir ve `me` query
@@ -149,14 +160,10 @@ export function useForgotPassword() {
  */
 export function useChangePassword() {
   const queryClient = useQueryClient()
-  const setUser = useAuthStore((state) => state.setUser)
 
   return useMutation({
     mutationFn: changePassword,
-    onSuccess: (updatedUser) => {
-      setUser(updatedUser)
-      queryClient.setQueryData(ME_QUERY_KEY, updatedUser)
-    },
+    onSuccess: (updatedUser) => completePasswordChange(queryClient, updatedUser),
   })
 }
 

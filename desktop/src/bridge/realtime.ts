@@ -38,7 +38,9 @@
 // `UNMAPPED_CHANNELS` with that reason rather than left out.
 import { getEcho, onConnectionStateChange } from '@/lib/echo'
 import type { SyncraEcho } from '@/lib/echo'
+import { acquireChannel, releaseChannel } from '@/lib/channelRegistry'
 import { useAuthStore } from '@/features/auth/store'
+import { personalChannelUserId } from '@/features/auth/personalChannel'
 import type { RealtimeChannel } from '@/platform/types'
 
 import type { EntityName } from '../platform/data/engine'
@@ -355,6 +357,9 @@ interface Attachment {
    *  `stopListening(event)` with no callback unbinds every handler on that event, including
    *  the web hooks' — the bridge would be tearing down features it does not own. */
   handlers: Array<[string, CallableFunction]>
+  /** Registry name this attachment holds (`acquireChannel`), released with it. `attach`-mode
+   *  attachments hold nothing: they bind to a room the chat registry owns. */
+  held?: string
 }
 
 /** Concrete wire name -> what this module bound on it. */
@@ -365,14 +370,14 @@ let stopConnectionListener: (() => void) | null = null
 let stopAuthListener: (() => void) | null = null
 let reconcileTimer: ReturnType<typeof setInterval> | null = null
 
-function bind(channel: ListenableChannel, template: string, wireName: string): void {
+function bind(channel: ListenableChannel, template: string, wireName: string, held?: string): void {
   const handlers: Array<[string, CallableFunction]> = []
   for (const binding of BINDINGS_BY_CHANNEL.get(template) ?? []) {
     const handler = () => route(binding.entities)
     channel.listen(binding.event, handler)
     handlers.push([binding.event, handler])
   }
-  attachments.set(wireName, { channel, template, handlers })
+  attachments.set(wireName, { channel, template, handlers, held })
 }
 
 /** Unbind this module's handlers from one attachment, leaving every other listener alone. */
@@ -382,6 +387,9 @@ function unbind(wireName: string): void {
   for (const [event, handler] of attachment.handlers) {
     attachment.channel.stopListening(event, handler)
   }
+  // The subscription itself goes back to the shared registry: when nothing else holds it (the
+  // web hooks released it, or never acquired it) this is what actually leaves the channel.
+  if (attachment.held !== undefined) releaseChannel(attachment.held)
   attachments.delete(wireName)
 }
 
@@ -402,17 +410,24 @@ function unbind(wireName: string): void {
  * bounding the gap to {@link RECONCILE_MS}. The cost of the gap is itself bounded: the engine
  * pulls every table on its 60 second loop regardless, so a missed hint delays a row, it does
  * not lose one.
+ *
+ * Since the hooks moved to `lib/channelRegistry.ts` the bridge holds its `always`/`user`
+ * channels through the same registry, so a hook's release no longer tears them down; the timer
+ * stays as the backstop for an Echo instance that was replaced underneath an attachment.
  */
 function reconcile(): void {
   const echo = getEcho()
   if (!echo) {
     // Echo is torn down on logout (`disconnectEcho` nulls the instance). Every channel object
-    // went with it; holding stale references would defeat the identity check above.
-    attachments.clear()
+    // went with it; holding stale references would defeat the identity check above, and the
+    // registry holds must be returned too or the next Echo would be handed the dead channels.
+    for (const wireName of [...attachments.keys()]) unbind(wireName)
     return
   }
 
-  const userId = useAuthStore.getState().user?.id ?? null
+  // Not `user?.id`: the server refuses `private-user.{id}` while a password change is forced
+  // (`backend/routes/channels.php`), and the shared web hooks gate on the same selector.
+  const userId = personalChannelUserId(useAuthStore.getState()) ?? null
 
   for (const spec of REALTIME_CHANNELS) {
     if (spec.mode === 'attach') {
@@ -425,9 +440,17 @@ function reconcile(): void {
     }
     const wireName = spec.mode === 'user' ? concreteName(spec.channel, userId as number) : spec.channel
     dropTemplate(spec.channel, wireName)
-    const channel = echo.private(bareName(wireName)) as unknown as ListenableChannel
-    if (attachments.get(wireName)?.channel === channel) continue
-    bind(channel, spec.channel, wireName)
+    // Through the registry, not `echo.private()`: the hold is counted, so a web hook releasing
+    // the channel cannot tear it down under the bridge, and the bridge releasing it (eligibility
+    // ended, logout) leaves it when nobody else holds it. Still current = the connector still
+    // has the very object this attachment bound to.
+    const current = attachments.get(wireName)
+    if (current && current.channel === (echo.connector.channels[wireName] as unknown)) continue
+    if (current) unbind(wireName)
+    const bare = bareName(wireName)
+    const channel = acquireChannel(bare) as unknown as ListenableChannel | null
+    if (!channel) continue
+    bind(channel, spec.channel, wireName, bare)
   }
 }
 
@@ -479,7 +502,9 @@ export function startRealtimeBridge(): () => void {
     // also covers "Echo was already connected when the bridge started".
     stopConnectionListener = onConnectionStateChange(() => reconcile())
     stopAuthListener = useAuthStore.subscribe((state, previous) => {
-      if (state.user?.id !== previous.user?.id) reconcile()
+      // The id alone does not change when a forced password change completes; the selector
+      // does (undefined -> id), and that is when the personal channel may first be joined.
+      if (personalChannelUserId(state) !== personalChannelUserId(previous)) reconcile()
     })
     reconcileTimer = setInterval(reconcile, RECONCILE_MS)
     reconcile()

@@ -15,7 +15,7 @@
 import { useEffect } from 'react'
 import { acquireChannel, releaseChannel } from '../../../lib/channelRegistry'
 import { toast } from '../../../components/ui'
-import { useAuthStore } from '../../auth/store'
+import { usePersonalChannelUserId } from '../../auth/personalChannel'
 import { router } from '../../../router'
 import i18n, { getIntlLocale } from '../../../i18n'
 import type { TaskReminderEvent } from '../types'
@@ -31,7 +31,7 @@ function formatDueAt(iso: string): string {
 }
 
 export function useTaskReminders() {
-  const userId = useAuthStore((state) => state.user?.id)
+  const userId = usePersonalChannelUserId()
 
   useEffect(() => {
     if (!userId) return

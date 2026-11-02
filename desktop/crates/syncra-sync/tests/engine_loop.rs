@@ -308,6 +308,59 @@ async fn restore_session_revalidates_the_stored_token() {
     assert!(h.engine.status().online);
 }
 
+/// A completed password change reaches the session's top-level `must_change_password`.
+///
+/// The webview gates `/change-password` on that flag and `GET /api/me` is answered from the
+/// session, so refreshing only `user` left the change forced again on the next read, the next
+/// cancelled logout and the next restart.
+#[tokio::test]
+async fn restore_session_takes_the_password_flag_from_the_fresh_user_document() {
+    let h = Harness::start_bare().await;
+    wiremock::Mock::given(wiremock::matchers::method("POST"))
+        .and(wiremock::matchers::path("/api/auth/device"))
+        .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(json!({
+            "token": "token-for-1",
+            "token_id": 10,
+            "user": { "id": 1, "name": "Test", "email": "a@example.com", "must_change_password": true },
+            "must_change_password": true,
+            "abilities": ["desktop"]
+        })))
+        .mount(&h.server)
+        .await;
+    let mut manifest = manifest_body(GRANTED, 1);
+    manifest["user"] =
+        json!({ "id": 1, "name": "Test", "email": "a@example.com", "must_change_password": false });
+    mount_manifest(&h.server, manifest).await;
+
+    let session = h
+        .engine
+        .login("a@example.com", "secret", device_info())
+        .await
+        .expect("login");
+    assert!(session.must_change_password);
+
+    let restored = h
+        .engine
+        .restore_session()
+        .await
+        .expect("restore")
+        .expect("session");
+    assert!(!restored.must_change_password);
+    assert!(!h.engine.session().expect("held").must_change_password);
+
+    // And what a restart reads back.
+    let stored: String = h
+        .raw_conn()
+        .query_row(
+            "SELECT value FROM desktop_settings WHERE key = 'session.payload'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("stored session");
+    let stored: serde_json::Value = serde_json::from_str(&stored).expect("json");
+    assert_eq!(stored["must_change_password"], json!(false));
+}
+
 /// With no token there is nothing to restore, and that is not an error.
 #[tokio::test]
 async fn restore_session_without_a_token_returns_none() {
