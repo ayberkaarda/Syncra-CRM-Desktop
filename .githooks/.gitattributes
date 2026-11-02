@@ -1,0 +1,2 @@
+# Hooks must keep LF endings or sh fails on checkout with autocrlf.
+* text eol=lf

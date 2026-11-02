@@ -1,0 +1,9 @@
+#!/bin/sh
+# Reject commit messages that carry contributor trailers or tool/AI traces.
+. "$(dirname -- "$0")/lib.sh"
+
+if ! check_message "$1" "commit message"; then
+	echo "commit-msg: rejected. Commits must carry only the owner's identity (see .githooks/README.md)." >&2
+	exit 1
+fi
+exit 0
