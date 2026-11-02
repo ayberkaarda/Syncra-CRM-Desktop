@@ -1,6 +1,6 @@
 [package]
 name = "syncra-desktop"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 # Deliberately the latest stable, not the dependency floor. `cargo metadata --locked` over the
 # 696 packages this workspace resolves reports 515 declared `rust-version`s, and the highest is
