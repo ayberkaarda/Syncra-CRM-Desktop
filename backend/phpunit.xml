@@ -23,6 +23,12 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
         <!--
+            predis is the client the project declares (composer.json, .env.example);
+            the phpredis extension is not required. Without a reachable Redis server
+            tests/Support/FakesRedisWhenUnavailable swaps in an in-memory fake.
+        -->
+        <env name="REDIS_CLIENT" value="predis"/>
+        <!--
             Tests run against a DEDICATED database. RefreshDatabase truncates /
             re-migrates whatever DB_DATABASE points at, so it must never be the
             development database `syncra_crm`.
