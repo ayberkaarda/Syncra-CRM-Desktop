@@ -1,0 +1,61 @@
+#!/bin/sh
+# Reject pushes of trace-named branches and of commits that carry a foreign
+# identity, a contributor trailer or a trace term in the message.
+. "$(dirname -- "$0")/lib.sh"
+
+remote=$1
+owner=$(git config user.email)
+if [ -z "$owner" ]; then
+	echo "pre-push: user.email is not configured; refusing to push." >&2
+	exit 1
+fi
+
+re=$(trace_regex)
+rc=0
+tmp="${TMPDIR:-/tmp}/trace-pre-push.$$"
+trap 'rm -f "$tmp" "$tmp.list"' EXIT INT TERM
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+	for ref in "$local_ref" "$remote_ref"; do
+		name=${ref#refs/heads/}
+		name=${name#refs/tags/}
+		if printf '%s\n' "$name" | grep -qiE -e "$re"; then
+			echo "pre-push: ref name '$name' contains a trace term [$(terms_in_line "$name")]." >&2
+			rc=1
+		fi
+	done
+
+	# Deletion: nothing to check.
+	case $local_sha in *[!0]*) ;; *) continue ;; esac
+
+	case $remote_sha in
+	*[!0]*) known=yes ;;
+	*) known=no ;;
+	esac
+	if [ $known = yes ] && git cat-file -e "$remote_sha^{commit}" 2> /dev/null; then
+		git rev-list "$remote_sha..$local_sha" > "$tmp.list"
+	else
+		git rev-list "$local_sha" --not --remotes="$remote" > "$tmp.list"
+	fi
+
+	while read -r c; do
+		ae=$(git log -1 --format=%ae "$c")
+		ce=$(git log -1 --format=%ce "$c")
+		short=$(git rev-parse --short "$c")
+		if ! printf '%s\n' "$ae" | grep -qixF -e "$owner"; then
+			echo "pre-push: $short: author email '$ae' is not user.email '$owner'." >&2
+			rc=1
+		fi
+		if ! printf '%s\n' "$ce" | grep -qixF -e "$owner"; then
+			echo "pre-push: $short: committer email '$ce' is not user.email '$owner'." >&2
+			rc=1
+		fi
+		git log -1 --format=%B "$c" > "$tmp"
+		check_message "$tmp" "pre-push: $short message" || rc=1
+	done < "$tmp.list"
+done
+
+if [ $rc -ne 0 ]; then
+	echo "pre-push: rejected (see .githooks/README.md)." >&2
+fi
+exit $rc

@@ -1,0 +1,18 @@
+# Commit-trace terms. One POSIX extended regex per line, matched case-insensitively.
+# A "w:" prefix means word-bounded: the term must not be preceded or followed by
+# a letter or digit (so "astra" does not hit "fastrand", "opus" not "opuscule").
+# Lines starting with "#" and blank lines are ignored.
+claude
+anthropic
+w:codex
+w:astra
+w:gpt
+w:opus
+w:sonnet
+w:haiku
+copilot
+w:cursor[[:space:]_-]*ai
+chatgpt
+openai
+w:(llm|ai)[[:space:]_-]+generated
+generated[[:space:]]+with

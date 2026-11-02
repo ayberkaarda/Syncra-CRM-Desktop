@@ -1,0 +1,57 @@
+#!/bin/sh
+# Scan the ADDED lines of the staged diff for tool/AI trace terms.
+# Lines containing the marker "trace-ok" are skipped.
+. "$(dirname -- "$0")/lib.sh"
+
+tmp="${TMPDIR:-/tmp}/trace-pre-commit.$$"
+trap 'rm -f "$tmp" "$tmp.hits"' EXIT INT TERM
+
+# Emit "path<TAB>line<TAB>content" for every added line.
+git -c core.quotepath=false diff --cached --no-color --no-ext-diff --no-renames \
+	--src-prefix=a/ --dst-prefix=b/ -U0 --diff-filter=ACM -- \
+	':(exclude,glob)**/package-lock.json' \
+	':(exclude,glob)**/npm-shrinkwrap.json' \
+	':(exclude,glob)**/yarn.lock' \
+	':(exclude,glob)**/pnpm-lock.yaml' \
+	':(exclude,glob)**/composer.lock' \
+	':(exclude,glob)**/Cargo.lock' \
+	':(exclude,glob)**/vendor/**' \
+	':(exclude,glob)**/node_modules/**' \
+	':(exclude,glob)**/target/**' \
+	':(exclude,glob).githooks/**' |
+{
+	mode=header
+	file=
+	n=0
+	while IFS= read -r line; do
+		case $mode:$line in
+		*:"diff --git "*) mode=header ;;
+		header:"+++ b/"*) file=${line#+++ b/} ;;
+		*:@@*)
+			mode=hunk
+			n=${line#*+}
+			n=${n%% *}
+			n=${n%%,*}
+			;;
+		hunk:+*)
+			printf '%s\t%s\t%s\n' "$file" "$n" "${line#+}"
+			n=$((n + 1))
+			;;
+		esac
+	done
+} > "$tmp"
+
+re=$(trace_regex)
+grep -iE -e "$re" "$tmp" | grep -v 'trace-ok' > "$tmp.hits"
+
+rc=0
+tab=$(printf '\t')
+while IFS="$tab" read -r f n content; do
+	printf '%s:%s: trace term [%s]: %s\n' "$f" "$n" "$(terms_in_line "$content")" "$content" >&2
+	rc=1
+done < "$tmp.hits"
+
+if [ $rc -ne 0 ]; then
+	echo "pre-commit: rejected. Remove the trace, or mark a line that legitimately discusses it with 'trace-ok' (see .githooks/README.md)." >&2
+fi
+exit $rc
