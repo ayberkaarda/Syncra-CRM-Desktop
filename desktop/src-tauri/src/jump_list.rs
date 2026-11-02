@@ -580,7 +580,18 @@ mod windows_impl {
     where
         F: FnOnce() -> windows::core::Result<()> + Send + 'static,
     {
+        // One shell list per application id, one writer at a time. Two overlapping
+        // `CommitList` calls (a `record_opened` racing the startup rebuild, or parallel tests)
+        // collide on the shell's single destinations file with `ERROR_ALREADY_EXISTS`
+        // (0x800700B7). A poisoned lock only means an earlier worker panicked; the list itself
+        // is the shell's, so the next caller may proceed.
+        static SHELL_LIST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
         std::thread::spawn(move || {
+            let _serialized = SHELL_LIST_LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+
             // SAFETY: this thread has just been created and has no apartment yet, so this call
             // establishes one and the matching `CoUninitialize` below tears down that same one.
             unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()? };

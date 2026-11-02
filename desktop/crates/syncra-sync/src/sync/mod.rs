@@ -1693,11 +1693,15 @@ impl SyncEngine {
     /// contents, outbox, conflicts and the keychain token.
     fn handle_deactivated(&self, token_gen: u64) -> Result<()> {
         let service = self.inner.cfg.read().unwrap().keychain_service.clone();
-        {
+        let token_id = {
             let conn = self.db()?;
             if self.token_gen() != token_gen {
                 return Ok(());
             }
+            // Read under the same lock as the check above, before the session is cleared:
+            // this is the session the rejected token belonged to, and the webview uses it to
+            // tell this event apart from a sign-in that happened after it.
+            let token_id = self.session().map(|s| s.token_id);
             self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
             self.advance_epoch();
             self.advance_token_gen();
@@ -1707,8 +1711,9 @@ impl SyncEngine {
             *self.inner.token.write().unwrap() = None;
             *self.inner.session.write().unwrap() = None;
             *self.inner.manifest.lock().unwrap() = None;
-        }
-        self.emit(EngineEvent::AuthLost);
+            token_id
+        };
+        self.emit(EngineEvent::AuthLost { token_id });
         self.refresh_status()?;
         Ok(())
     }
@@ -1717,11 +1722,13 @@ impl SyncEngine {
     /// in resumes exactly where they left off.
     fn handle_auth_lost(&self, token_gen: u64) -> Result<()> {
         let service = self.inner.cfg.read().unwrap().keychain_service.clone();
-        {
+        let token_id = {
             let _conn = self.db()?;
             if self.token_gen() != token_gen {
                 return Ok(());
             }
+            // See `handle_deactivated`: the session the rejected token belonged to.
+            let token_id = self.session().map(|s| s.token_id);
             self.inner.keystore.delete(&service, keystore::KEY_TOKEN)?;
             // The data stays, so only the token generation moves: a pull or push already on
             // the wire still writes into the same user's mirror.
@@ -1729,8 +1736,9 @@ impl SyncEngine {
             *self.inner.token.write().unwrap() = None;
             *self.inner.session.write().unwrap() = None;
             *self.inner.manifest.lock().unwrap() = None;
-        }
-        self.emit(EngineEvent::AuthLost);
+            token_id
+        };
+        self.emit(EngineEvent::AuthLost { token_id });
         Ok(())
     }
 

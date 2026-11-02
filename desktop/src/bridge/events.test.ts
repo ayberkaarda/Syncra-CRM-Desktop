@@ -87,3 +87,23 @@ describe('EngineEventHandlers — O60 shape lock', () => {
     expect(Object.keys(handlers)).toEqual([])
   })
 })
+
+describe('applyEngineEvent — auth_lost', () => {
+  it('hands the lost session\'s token_id to the handler', () => {
+    const { queryClient } = fakeQueryClient()
+    const onAuthLost = vi.fn()
+
+    applyEngineEvent(queryClient, { type: 'auth_lost', token_id: 70 }, { onAuthLost })
+
+    expect(onAuthLost).toHaveBeenCalledWith(70)
+  })
+
+  it('passes null when the engine sent no token_id (older engines)', () => {
+    const { queryClient } = fakeQueryClient()
+    const onAuthLost = vi.fn()
+
+    applyEngineEvent(queryClient, { type: 'auth_lost' }, { onAuthLost })
+
+    expect(onAuthLost).toHaveBeenCalledWith(null)
+  })
+})

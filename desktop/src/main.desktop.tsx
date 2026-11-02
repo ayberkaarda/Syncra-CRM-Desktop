@@ -67,6 +67,8 @@ void subscribeToEngineEvents(queryClient, {
   // `/login` on the next render. `USER_DEACTIVATED` (403) does NOT arrive here — `transport.rs`
   // folds every 403 into `PROTOCOL_ERROR` — and wiring that is KARAR A25 / O1, crate work this
   // strand does not own. Today's behaviour is preserved deliberately.
+  // The event names the lost session's `token_id`; `handleAuthLost` ignores it when the
+  // webview has already moved on to another session.
   onAuthLost: handleAuthLost,
 })
 
