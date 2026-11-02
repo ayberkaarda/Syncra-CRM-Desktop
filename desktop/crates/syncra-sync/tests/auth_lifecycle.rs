@@ -14,6 +14,7 @@ use uuid::Uuid;
 async fn a_401_raises_auth_lost_and_preserves_the_outbox() {
     let h = Harness::start_with_granted(&[]).await;
     h.login().await;
+    let lost = h.engine.session().expect("signed in").token_id;
 
     let mut events = h.engine.subscribe();
 
@@ -41,13 +42,19 @@ async fn a_401_raises_auth_lost_and_preserves_the_outbox() {
     );
     assert!(h.engine.session().is_none());
 
-    let mut saw_auth_lost = false;
+    let mut lost_sessions = Vec::new();
     while let Ok(event) = events.try_recv() {
-        if matches!(event, EngineEvent::AuthLost) {
-            saw_auth_lost = true;
+        if let EngineEvent::AuthLost { token_id } = event {
+            lost_sessions.push(token_id);
         }
     }
-    assert!(saw_auth_lost, "AuthLost must be emitted");
+    // The webview tells this event apart from a later sign-in by the token id, so it has to
+    // name the session that held the rejected token, read before the session was dropped.
+    assert_eq!(
+        lost_sessions,
+        vec![Some(lost)],
+        "AuthLost must be emitted once, naming the lost session"
+    );
 }
 
 /// §5.5: a login by a *different* user wipes the local database.

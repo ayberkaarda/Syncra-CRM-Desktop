@@ -2,6 +2,10 @@ import axios, { AxiosError } from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 import { toast } from '../components/ui'
 import i18n from '../i18n'
+import { currentSessionEpoch } from './sessionEpoch'
+
+/** A request config carrying the sign-in it was sent under (see `SessionStamp`). */
+type StampedConfig = InternalAxiosRequestConfig & { _session?: SessionStamp }
 
 /**
  * How the `api` instance authenticates. `'cookie'`: Laravel Sanctum's SPA session + XSRF cookie
@@ -57,15 +61,56 @@ export function configureHttp(config: HttpAuthConfig) {
   api.defaults.withXSRFToken = config.transport === 'cookie'
 }
 
-// Bearer transport (desktop, later): attaches `Authorization` per request. No-op under the
-// default `'cookie'` transport — inert for web today.
-api.interceptors.request.use((config) => {
-  if (httpConfig.transport === 'bearer') {
-    const token = httpConfig.getBearerToken?.()
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+/**
+ * The sign-in a request was sent under: the session epoch (`lib/sessionEpoch.ts`) and, under
+ * the bearer transport, the token that went out with it (`undefined` when none did).
+ */
+type SessionStamp = { epoch: number; bearer: string | undefined }
+
+function currentStamp(): SessionStamp {
+  return {
+    epoch: currentSessionEpoch(),
+    bearer: httpConfig.transport === 'bearer' ? httpConfig.getBearerToken?.() : undefined,
   }
+}
+
+/**
+ * Whether a failed request still belongs to the sign-in in effect. A request with no stamp
+ * (it never passed the request interceptor) is treated as current, which is the old
+ * behaviour.
+ */
+function belongsToCurrentSession(config: StampedConfig | undefined): boolean {
+  const sent = config?._session
+  if (!sent) return true
+  const now = currentStamp()
+  return sent.epoch === now.epoch && sent.bearer === now.bearer
+}
+
+const SESSION_ENDED = Symbol('sessionEnded')
+
+function markSessionEnded<E extends object>(error: E): E {
+  ;(error as E & { [SESSION_ENDED]?: true })[SESSION_ENDED] = true
+  return error
+}
+
+/**
+ * Whether a rejection came from a request whose sign-in had already ended when it answered.
+ * Such an error says nothing about the session in effect; a caller that would otherwise act
+ * on it (e.g. treat a failed `/api/me` as "signed out") should ask again instead.
+ */
+export function isSessionEndedError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && SESSION_ENDED in error
+}
+
+// Bearer transport (desktop): attaches `Authorization` per request. Under the default
+// `'cookie'` transport only the session stamp is recorded. A 419 retry passes through here
+// again and is stamped anew, because it goes out with whatever credentials are current then.
+api.interceptors.request.use((config) => {
+  const stamp = currentStamp()
+  if (stamp.bearer) {
+    config.headers.Authorization = `Bearer ${stamp.bearer}`
+  }
+  ;(config as StampedConfig)._session = stamp
   return config
 })
 
@@ -83,7 +128,7 @@ export function getCsrfCookie() {
  * once per original request — prevents an infinite retry loop if the
  * backend keeps rejecting the refreshed token.
  */
-type RetriableConfig = InternalAxiosRequestConfig & { _csrfRetried?: boolean }
+type RetriableConfig = StampedConfig & { _csrfRetried?: boolean }
 
 /**
  * Registered by the router bootstrap (see `src/router.tsx`) so the axios
@@ -128,18 +173,32 @@ api.interceptors.response.use(
 
     // 419: CSRF token mismatch/expired — refetch the cookie and retry the
     // original request exactly once.
+    //
+    // Only for a request of the sign-in still in effect, checked before the refetch and
+    // again after it. A replay goes out with the CURRENT cookie: replaying user A's late
+    // `POST /api/logout` after user B signed in would sign B out on the server.
     if (status === 419 && config && !config._csrfRetried) {
+      if (!belongsToCurrentSession(config)) return Promise.reject(markSessionEnded(error))
       config._csrfRetried = true
       await getCsrfCookie()
+      if (!belongsToCurrentSession(config)) return Promise.reject(markSessionEnded(error))
       return api(config)
     }
 
     const onLoginPage = typeof window !== 'undefined' && window.location.pathname === '/login'
 
+    // A request sent under a sign-in that has since ended (logout, another login, a token
+    // swap) says nothing about the current one: its 401 or USER_DEACTIVATED must not sign the
+    // new session out. The error still reaches the caller, marked (`isSessionEndedError`) so
+    // callers that act on auth errors themselves can tell it apart too. Decided BEFORE the
+    // handler runs, because the handler's own `clear()` moves the epoch.
+    const current = belongsToCurrentSession(config)
+    if (!current) markSessionEnded(error)
+
     // 401: session missing/expired — clear auth state and bounce to /login,
     // unless we're already there (avoid a redirect loop).
     if (status === 401) {
-      if (!onLoginPage) {
+      if (!onLoginPage && current) {
         onUnauthorized?.()
       }
       return Promise.reject(error)
@@ -148,7 +207,7 @@ api.interceptors.response.use(
     // 403 + USER_DEACTIVATED: account was deactivated mid-session — clear
     // state, notify the user, and bounce to /login.
     if (status === 403 && code === 'USER_DEACTIVATED') {
-      if (!onLoginPage) {
+      if (!onLoginPage && current) {
         toast.error(i18n.t('errors:accountDeactivated'))
         onUnauthorized?.()
       }

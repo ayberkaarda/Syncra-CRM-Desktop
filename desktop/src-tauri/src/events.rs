@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn other_variants_pass_through_unchanged() {
-        let event = EngineEvent::AuthLost;
+        let event = EngineEvent::AuthLost { token_id: Some(70) };
 
         let plain = serde_json::to_value(&event).expect("serialize");
         let enriched = enrich(&event, true).expect("serialize");

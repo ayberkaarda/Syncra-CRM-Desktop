@@ -207,8 +207,24 @@ export function forgetSession(): void {
 /**
  * `EngineEvent::AuthLost` — the server rejected the token. The outbox survives on the Rust
  * side (§5.5); the webview only has to stop claiming a session.
+ *
+ * `lostTokenId` is the `token_id` of the session the engine dropped. The event travels over a
+ * different channel than the `login` command's answer, so it can arrive after the webview has
+ * already adopted the NEXT session (another user, or the same user with a new token). Only the
+ * session it names is forgotten:
+ *
+ *   * no session held — nothing to protect; the clear is the old behaviour and harmless;
+ *   * `lostTokenId` equals the held session's `token_id` — that session is gone, sign out;
+ *   * anything else, `null` included — the event is about a session this webview no longer
+ *     shows, so it is ignored. `null` means the engine held a token without a session
+ *     document; the engine never adopts one without the other, so a webview that holds a
+ *     session cannot be looking at it.
  */
-export function handleAuthLost(): void {
+export function handleAuthLost(lostTokenId: number | null): void {
+  if (currentSession !== null && currentSession.token_id !== lostTokenId) {
+    console.info('[desktop] ignoring AuthLost for a session that is no longer the current one')
+    return
+  }
   forgetSession()
 }
 
@@ -307,10 +323,16 @@ export async function restoreDesktopSession(): Promise<void> {
  * must not throw the user out of a mirror full of data because a manifest request timed out.
  */
 async function revalidateSession(): Promise<void> {
+  // `restore` can be overtaken: another sign-in lands while its manifest is on the wire, the
+  // old token's 401 comes back, and the engine keeps the NEW session (its token generation
+  // moved) but still answers this call with `AUTH_REQUIRED`. The verdict is about the session
+  // this call started with, so it signs out only if that is still the one held.
+  const startedWith = currentSession?.token_id ?? null
+  const stillCurrent = (): boolean => (currentSession?.token_id ?? null) === startedWith
   try {
     const proven = await invokeRestore()
     if (proven === null) {
-      forgetSession()
+      if (stillCurrent()) forgetSession()
       return
     }
     // Re-read rather than adopting `proven` directly: `restore` returns the refreshed `Session`
@@ -320,7 +342,7 @@ async function revalidateSession(): Promise<void> {
     // first run) can be filled now. A populated one is left alone.
     void startBootstrapIfEmpty()
   } catch (error) {
-    if (errorCodeOf(error) === 'AUTH_REQUIRED') {
+    if (errorCodeOf(error) === 'AUTH_REQUIRED' && stillCurrent()) {
       forgetSession()
     }
     // OFFLINE / HTTP_ERROR / PROTOCOL_ERROR: the adopted session stands.

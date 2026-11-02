@@ -46,7 +46,7 @@ export type EngineEvent =
   | { type: 'status_changed'; status: unknown }
   | { type: 'conflict_added'; id: string }
   | { type: 'storage_warning'; stats: unknown }
-  | { type: 'auth_lost' }
+  | { type: 'auth_lost'; token_id?: number | null }
   | { type: 'protocol_mismatch'; server: number }
 
 /**
@@ -164,7 +164,8 @@ export interface EngineEventHandlers {
   onTablesChanged?: (entities: readonly EntityName[]) => void
   onStatusChanged?: (status: unknown) => void
   onStorageWarning?: (stats: unknown) => void
-  onAuthLost?: () => void
+  /** `tokenId`: the `token_id` of the session the engine lost (`null` if it held none). */
+  onAuthLost?: (tokenId: number | null) => void
   onProtocolMismatch?: (serverVersion: number) => void
 }
 
@@ -206,7 +207,9 @@ export function applyEngineEvent(
       handlers.onStorageWarning?.(event.stats)
       return
     case 'auth_lost':
-      handlers.onAuthLost?.()
+      // Absent from engines that predate the payload; `null` then, which `handleAuthLost` treats
+      // as "not the session you are showing".
+      handlers.onAuthLost?.(event.token_id ?? null)
       return
     case 'protocol_mismatch':
       handlers.onProtocolMismatch?.(event.server)

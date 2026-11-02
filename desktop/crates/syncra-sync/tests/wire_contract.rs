@@ -163,6 +163,7 @@ async fn a_422_is_reported_as_a_validation_failure() {
 async fn a_deactivated_account_wipes_the_local_database() {
     let h = Harness::start().await;
     h.login().await;
+    let lost = h.engine.session().expect("signed in").token_id;
 
     mount_pull(
         &h.server,
@@ -226,13 +227,17 @@ async fn a_deactivated_account_wipes_the_local_database() {
          them"
     );
 
-    let mut saw_auth_lost = false;
+    let mut lost_sessions = Vec::new();
     while let Ok(event) = events.try_recv() {
-        if matches!(event, syncra_sync::EngineEvent::AuthLost) {
-            saw_auth_lost = true;
+        if let syncra_sync::EngineEvent::AuthLost { token_id } = event {
+            lost_sessions.push(token_id);
         }
     }
-    assert!(saw_auth_lost, "the UI still has to be told to sign out");
+    assert_eq!(
+        lost_sessions,
+        vec![Some(lost)],
+        "the UI still has to be told to sign out, and which session went"
+    );
 }
 
 /// The other half of A25, and the reason the two signals cannot be merged: a `403` that is

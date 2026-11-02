@@ -1,12 +1,71 @@
 import { useEffect } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { changePassword, forgotPassword, login, logout, me, updatePreferences } from '../api/authApi'
 import { useAuthStore } from '../store'
-import type { LoginPayload } from '../types'
+import type { LoginPayload, User } from '../types'
 import { connectEcho, disconnectEcho } from '../../../lib/echo'
 import { applyUserLocale } from '../../../i18n'
+import { isSessionEndedError } from '../../../lib/axios'
+import { advanceSessionEpoch, currentSessionEpoch } from '../../../lib/sessionEpoch'
 
 const ME_QUERY_KEY = ['auth', 'me'] as const
+
+/** Bound on re-asking: each attempt only repeats after a sign-in change while it was out. */
+const ME_ATTEMPTS = 3
+
+/**
+ * `GET /api/me`, answered for the sign-in in effect when it settles.
+ *
+ * Bir `/api/me` login sürerken beklemede kalabilir (açılıştaki ilk istek ya da login öncesi
+ * başlamış bir yenileme). Eski oturumun cookie'siyle gitmiş bu istek login'den sonra 401 ile
+ * dönerse interceptor onu düşürür ama hata query'ye yine ulaşır ve `useAuth` efekti
+ * `unauthenticated` yazıp yeni oturumu kapatırdı; 200 ile dönerse eski kullanıcıyı yazardı.
+ * `invalidateQueries` verisi olmayan beklemedeki isteği iptal etmez, aynı promise'i paylaşır.
+ * Bu yüzden: istek sürerken oturum dönemi değiştiyse yanıt (başarı ya da
+ * `isSessionEndedError`) atılır ve soru güncel oturum için yeniden sorulur.
+ */
+export async function fetchCurrentUser(): Promise<User> {
+  for (let attempt = 1; ; attempt += 1) {
+    const epoch = currentSessionEpoch()
+    try {
+      const user = await me()
+      if (currentSessionEpoch() === epoch || attempt >= ME_ATTEMPTS) return user
+    } catch (error) {
+      if (!isSessionEndedError(error) || attempt >= ME_ATTEMPTS) throw error
+    }
+  }
+}
+
+/** What `useAuth` writes into the store once the `me` query settles. */
+export function applyMeResult(result: { ok: true; user: User } | { ok: false }): void {
+  const store = useAuthStore.getState()
+  if (result.ok) {
+    store.setUser(result.user)
+    store.setStatus('authenticated')
+    // Sunucudaki kişisel dil tercihi otoritedir (§1.3) — ama bu tarayıcıda elle
+    // seçilmiş bir dil varsa `applyUserLocale` onu EZMEZ (bkz. i18n/index.ts).
+    void applyUserLocale(result.user.locale)
+    return
+  }
+  // 401 bekleniyor (oturum yok) — başka bir hata da olsa güvenli taraf
+  // kimliksiz kabul etmektir.
+  store.setUser(null)
+  store.setStatus('unauthenticated')
+}
+
+/**
+ * Başarılı login. Her login yeni bir oturumdur — aynı kullanıcı `/login`'den yeniden girse
+ * bile önceki cookie oturumu biter — bu yüzden oturum dönemi kullanıcı kimliğinden bağımsız
+ * olarak burada ilerletilir; önceki oturumdan geç gelen 401/USER_DEACTIVATED artık eşleşmez.
+ */
+export function completeLogin(queryClient: QueryClient, loggedInUser: User): void {
+  advanceSessionEpoch()
+  const store = useAuthStore.getState()
+  store.setUser(loggedInUser)
+  store.setStatus('authenticated')
+  void applyUserLocale(loggedInUser.locale)
+  void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY })
+}
 
 /**
  * Uygulama açılışında `/api/me` çağırır, sonucu auth store'a yazar ve
@@ -17,13 +76,12 @@ export function useAuth() {
   const queryClient = useQueryClient()
   const user = useAuthStore((state) => state.user)
   const status = useAuthStore((state) => state.status)
-  const setUser = useAuthStore((state) => state.setUser)
   const setStatus = useAuthStore((state) => state.setStatus)
   const clear = useAuthStore((state) => state.clear)
 
   const meQuery = useQuery({
     queryKey: ME_QUERY_KEY,
-    queryFn: me,
+    queryFn: fetchCurrentUser,
     retry: false,
     refetchOnWindowFocus: false,
   })
@@ -34,20 +92,13 @@ export function useAuth() {
       return
     }
     if (meQuery.isSuccess) {
-      setUser(meQuery.data)
-      setStatus('authenticated')
-      // Sunucudaki kişisel dil tercihi otoritedir (§1.3) — ama bu tarayıcıda elle
-      // seçilmiş bir dil varsa `applyUserLocale` onu EZMEZ (bkz. i18n/index.ts).
-      void applyUserLocale(meQuery.data.locale)
+      applyMeResult({ ok: true, user: meQuery.data })
       return
     }
     if (meQuery.isError) {
-      // 401 bekleniyor (oturum yok) — başka bir hata da olsa güvenli taraf
-      // kimliksiz kabul etmektir.
-      setUser(null)
-      setStatus('unauthenticated')
+      applyMeResult({ ok: false })
     }
-  }, [meQuery.isLoading, meQuery.isSuccess, meQuery.isError, meQuery.data, setUser, setStatus])
+  }, [meQuery.isLoading, meQuery.isSuccess, meQuery.isError, meQuery.data, setStatus])
 
   // Realtime bağlantının yaşam döngüsü auth durumuna bağlanır: kimlik
   // doğrulandığında (ilk `/api/me`, login, ya da forced-logout sonrası tekrar
@@ -64,12 +115,7 @@ export function useAuth() {
 
   const loginMutation = useMutation({
     mutationFn: (payload: LoginPayload) => login(payload),
-    onSuccess: (loggedInUser) => {
-      setUser(loggedInUser)
-      setStatus('authenticated')
-      void applyUserLocale(loggedInUser.locale)
-      void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY })
-    },
+    onSuccess: (loggedInUser) => completeLogin(queryClient, loggedInUser),
   })
 
   const logoutMutation = useMutation({

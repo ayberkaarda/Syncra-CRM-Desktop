@@ -42,8 +42,19 @@ pub enum EngineEvent {
         stats: StorageStats,
     },
     /// The server rejected the token. The outbox is preserved; a login by the same user
-    /// resumes, a login by a different user wipes the database (§5.5).
-    AuthLost,
+    /// resumes, a login by a different user wipes the database (§5.5). Also raised after
+    /// `403 USER_DEACTIVATED`, which wipes the mirror as well.
+    ///
+    /// The event reaches the webview asynchronously, so by the time it is handled the user
+    /// may already have signed in again. `token_id` names the session that was lost, and the
+    /// webview ignores the event when that is not the session it is showing.
+    AuthLost {
+        /// [`crate::Session::token_id`] of the session whose token was rejected, or `None`
+        /// when the engine held a token without a session document. Absent on the wire means
+        /// `None`, so the payload-less `{"type":"auth_lost"}` of earlier engines still parses.
+        #[serde(default)]
+        token_id: Option<i64>,
+    },
     /// The server speaks a different protocol version; the engine stopped.
     ProtocolMismatch {
         /// Protocol version the server reported.
@@ -78,7 +89,8 @@ mod tests {
                     db_usage_percent: 50,
                 },
             },
-            EngineEvent::AuthLost,
+            EngineEvent::AuthLost { token_id: Some(70) },
+            EngineEvent::AuthLost { token_id: None },
             EngineEvent::ProtocolMismatch { server: 2 },
         ];
         for event in cases {
@@ -99,5 +111,21 @@ mod tests {
             json,
             r#"{"type":"tables_changed","entities":["price_list_item"]}"#
         );
+    }
+
+    /// The shape `desktop/src/bridge/events.ts` reads for `auth_lost`.
+    #[test]
+    fn auth_lost_names_the_lost_session_on_the_wire() {
+        let json = serde_json::to_string(&EngineEvent::AuthLost { token_id: Some(70) }).unwrap();
+        assert_eq!(json, r#"{"type":"auth_lost","token_id":70}"#);
+        let json = serde_json::to_string(&EngineEvent::AuthLost { token_id: None }).unwrap();
+        assert_eq!(json, r#"{"type":"auth_lost","token_id":null}"#);
+    }
+
+    /// The payload-less shape earlier engines emitted still parses.
+    #[test]
+    fn a_payload_less_auth_lost_still_deserializes() {
+        let back: EngineEvent = serde_json::from_str(r#"{"type":"auth_lost"}"#).unwrap();
+        assert_eq!(back, EngineEvent::AuthLost { token_id: None });
     }
 }
